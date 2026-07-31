@@ -139,36 +139,49 @@ install_hooks_config() {
     local template="$KIT_ROOT/core/claude-hooks.json" settings=.claude/settings.json merged
     mkdir -p .claude
     if [ -f "$settings" ] && jq -e . "$settings" >/dev/null 2>&1; then
-        if ! merged=$(jq --argjson extra "$(cat "$template")" '. * $extra' "$settings"); then
+        # hook arrays CONCATENATE — a deep merge (. * $extra) would replace
+        # them and silently drop the repo's own PreToolUse/PostToolUse hooks
+        if ! merged=$(jq --argjson extra "$(cat "$template")" '
+            .hooks.PreToolUse = ((.hooks.PreToolUse // []) + ($extra.hooks.PreToolUse // []))
+            | .hooks.PostToolUse = ((.hooks.PostToolUse // []) + ($extra.hooks.PostToolUse // []))
+        ' "$settings"); then
             warn "Claude settings merge failed — $settings left untouched"
             return 1
         fi
-        printf '%s\n' "$merged" > "$settings"
+        if ! printf '%s\n' "$merged" > "$settings" 2>/dev/null; then
+            warn "$settings is not writable (locked?) — chmod u+w it, rerun init, or merge manually from $template"
+            return 1
+        fi
     elif [ -f "$settings" ]; then
         warn "$settings exists but is not valid JSON — left untouched; merge the hooks manually from $template"
         return 1
     else
-        cp "$template" "$settings"
+        cp "$template" "$settings" || { warn "failed to write $settings"; return 1; }
     fi
     success "Claude hooks wired in $settings"
     mkdir -p .omp/extensions
-    cp "$KIT_ROOT/core/omp/substrate-quality.ts" .omp/extensions/
+    cp "$KIT_ROOT/core/omp/substrate-quality.ts" .omp/extensions/ || { warn "omp extension install failed"; return 1; }
     success "omp extension installed: .omp/extensions/substrate-quality.ts"
 }
 
 install_skills() {
     local s name dest
     [ -d "$KIT_ROOT/skills" ] || return 0
-    mkdir -p .claude/skills
+    if ! mkdir -p .claude/skills 2>/dev/null; then
+        warn ".claude/skills is not a directory — skills not installed; fix the path and rerun init"
+        return 1
+    fi
     for s in "$KIT_ROOT"/skills/*/; do
         [ -d "$s" ] || continue
         name=$(basename "$s")
         dest=".claude/skills/$name"
         if [ -e "$dest" ]; then
             info "skill $name exists — left untouched"
-        else
-            cp -R "$s" "$dest"
+        elif cp -R "$s" "$dest" 2>/dev/null; then
             success "skill installed: $dest"
+        else
+            warn "skill $name install failed — is .claude/skills writable?"
+            return 1
         fi
     done
 }
