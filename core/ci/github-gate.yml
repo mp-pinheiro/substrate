@@ -5,6 +5,7 @@ on:
   pull_request: {}
 permissions:
   contents: read
+  actions: read
 jobs:
   gate:
     runs-on: ubuntu-latest
@@ -21,6 +22,8 @@ jobs:
         run: .substrate/gate.sh
       - name: Audit plan oracles
         if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: '[ ! -d .pi/plans ] || .substrate/audit.sh'
       - name: Scan history for secrets
         uses: gitleaks/gitleaks-action@v2
