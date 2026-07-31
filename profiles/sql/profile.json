@@ -1,0 +1,18 @@
+{
+  "name": "sql",
+  "claims": {
+    ".sql": { "mode": "line", "markers": ["--"], "block": [["/*", "*/"]] },
+    ".sqlfluff": { "mode": "exempt" }
+  },
+  "toolchain": [
+    { "bin": "sqlfluff", "hint": "pipx install sqlfluff" }
+  ],
+  "ci": [
+    "sudo apt-get install -y -qq pipx",
+    "sudo PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install sqlfluff"
+  ],
+  "templates": [{ "src": "sqlfluff.cfg", "dest": ".sqlfluff" }],
+  "checks": ["67-sqlfluff.sh"],
+  "slop_fixtures": ["fixtures/slop.sql"],
+  "check_fixtures": [{ "file": "fixtures/bad-sqlfluff.sql", "fails": "67-sqlfluff.sh" }]
+}
