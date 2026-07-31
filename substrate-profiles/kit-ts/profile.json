@@ -3,8 +3,8 @@
   "claims": {
     ".ts": { "mode": "ast", "ast_lang": "typescript", "markers": ["//"] }
   },
-  "toolchain": [],
+  "toolchain": [{ "bin": "bunx", "hint": "https://bun.sh" }],
   "templates": [],
-  "checks": [],
+  "checks": ["71-kit-tsc.sh"],
   "slop_fixtures": ["fixtures/slop.ts"]
 }
