@@ -3,9 +3,14 @@
   "claims": {
     ".svelte": { "mode": "exempt" }
   },
-  "toolchain": [],
-  "ci": [],
+  "toolchain": [
+    { "bin": "svelte-check", "hint": "bun install -g svelte-check@4 typescript@6 svelte@5 (svelte-check 4 needs typescript 5/6 next to it)" }
+  ],
+  "ci": ["bun install -g svelte-check@4 typescript@6 svelte@5"],
   "templates": [],
-  "checks": [],
-  "slop_fixtures": []
+  "checks": ["73-svelte-check.sh"],
+  "slop_fixtures": [],
+  "check_fixtures": [
+    { "file": "fixtures/bad-svelte", "fails": "73-svelte-check.sh" }
+  ]
 }

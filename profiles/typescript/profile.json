@@ -5,12 +5,23 @@
     ".tsx": { "mode": "ast", "ast_lang": "tsx", "markers": ["//"], "block": [["/*", "*/"]] },
     ".js": { "mode": "ast", "ast_lang": "javascript", "markers": ["//"], "block": [["/*", "*/"]] },
     ".jsx": { "mode": "ast", "ast_lang": "javascript", "markers": ["//"], "block": [["/*", "*/"]] },
-    ".mjs": { "mode": "ast", "ast_lang": "javascript", "markers": ["//"], "block": [["/*", "*/"]] }
+    ".mjs": { "mode": "ast", "ast_lang": "javascript", "markers": ["//"], "block": [["/*", "*/"]] },
+    ".cjs": { "mode": "ast", "ast_lang": "javascript", "markers": ["//"], "block": [["/*", "*/"]] }
   },
-  "toolchain": [{ "bin": "bun", "hint": "https://bun.sh" }],
-  "ci": [],
-  "templates": [{ "src": "tsconfig.json", "dest": "tsconfig.json" }],
-  "checks": ["71-tsc.sh"],
+  "toolchain": [
+    { "bin": "bun", "hint": "https://bun.sh" },
+    { "bin": "depcruise", "hint": "bun install -g dependency-cruiser@18" }
+  ],
+  "ci": ["bun install -g dependency-cruiser@18"],
+  "templates": [
+    { "src": "tsconfig.json", "dest": "tsconfig.json" },
+    { "src": "dependency-cruiser.cjs", "dest": ".dependency-cruiser.cjs" }
+  ],
+  "checks": ["71-tsc.sh", "72-depcruise.sh", "74-constructs.sh"],
   "slop_fixtures": ["fixtures/slop.ts"],
-  "check_fixtures": [{ "file": "fixtures/bad-tsc.ts", "fails": "71-tsc.sh" }]
+  "check_fixtures": [
+    { "file": "fixtures/bad-tsc.ts", "fails": "71-tsc.sh" },
+    { "file": "fixtures/bad-cycle", "fails": "72-depcruise.sh" },
+    { "file": "fixtures/bad-constructs.ts", "fails": "74-constructs.sh" }
+  ]
 }
