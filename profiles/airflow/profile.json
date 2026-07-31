@@ -2,16 +2,19 @@
   "name": "airflow",
   "claims": {},
   "toolchain": [
-    { "bin": "python3", "hint": "https://www.python.org/downloads/" }
+    { "bin": "python3", "hint": "https://www.python.org/downloads/" },
+    { "bin": "lint-imports", "hint": "pipx install import-linter" }
   ],
   "ci": [
     "sudo apt-get install -y -qq python3 python3-pip pipx",
-    "sudo PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install apache-airflow"
+    "sudo PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install apache-airflow",
+    "sudo PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install import-linter"
   ],
-  "templates": [],
-  "checks": ["63-airflow-dags.sh"],
+  "templates": [{ "src": "importlinter", "dest": ".importlinter" }],
+  "checks": ["62-import-linter.sh", "63-airflow-dags.sh"],
   "slop_fixtures": [],
   "check_fixtures": [
-    { "file": "fixtures/bad-dags", "dest": "dags", "fails": "63-airflow-dags.sh" }
+    { "file": "fixtures/bad-dags", "dest": "dags", "fails": "63-airflow-dags.sh" },
+    { "file": "fixtures/bad-layering", "fails": "62-import-linter.sh", "dest": "." }
   ]
 }

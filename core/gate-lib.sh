@@ -92,6 +92,16 @@ profile_files() {
     done < "$INVENTORY"
 }
 
+# profile_files_ext <profile> <.ext> — profile_files narrowed to one extension
+profile_files_ext() {
+    local want="$1" ext="$2" f
+    while IFS= read -r f; do
+        case "$f" in
+            *"$ext") printf '%s\n' "$f" ;;
+        esac
+    done < <(profile_files "$want")
+}
+
 # langmap accessors; empty output = unclaimed. Extension first, then shebang
 # fallback so extensionless executables (bin/*, hooks) stay claimed source.
 lang_entry() {

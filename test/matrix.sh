@@ -100,8 +100,12 @@ for name in "${profiles[@]}"; do
                 echo "own-check oracle FAILED: $fails_check did not reject $bad_rel (rc=$rc)"
                 exit 9
             fi
-            rm -rf "./${bad_dest:?}"
-            git add -A && git commit -qm bad-fixture-removed
+            if [ "$bad_dest" = "." ]; then
+                git reset -q --hard HEAD^
+            else
+                rm -rf "./${bad_dest:?}"
+                git add -A && git commit -qm bad-fixture-removed
+            fi
         done < <(jq -r '(.check_fixtures // [])[] | "\(.file)\t\(.fails)\t\(.dest // "")"' "$pdir/profile.json")
 
         if jq -e '(.checks // []) | length > 0' "$pdir/profile.json" >/dev/null \

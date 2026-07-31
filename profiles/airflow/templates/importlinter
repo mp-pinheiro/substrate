@@ -1,0 +1,19 @@
+# Import contracts (import-linter): https://import-linter.readthedocs.io
+# This template ships inactive. To activate, uncomment the sections below and
+# adjust the package names — the gate check (62-import-linter.sh) runs
+# lint-imports only once root_packages is set.
+#
+# Airflow layering: shared library code must never depend on DAG definitions.
+#
+# [importlinter]
+# root_packages =
+#     lib
+#     dags
+#
+# [importlinter:contract:forbidden]
+# name = lib must not import dags
+# type = forbidden
+# source_modules =
+#     lib
+# forbidden_modules =
+#     dags

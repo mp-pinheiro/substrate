@@ -5,11 +5,7 @@ set -uo pipefail
 source "$SUBSTRATE_DIR/gate-lib.sh"
 
 files=()
-while IFS= read -r f; do
-    case "$f" in
-        *.py) files+=("$f") ;;
-    esac
-done < <(profile_files python)
+mapfile -t files < <(profile_files_ext python .py)
 
 [ ${#files[@]} -gt 0 ] || exit 0
 

@@ -1,0 +1,12 @@
+[importlinter]
+root_packages =
+    lib
+    dags
+
+[importlinter:contract:forbidden]
+name = lib must not import dags
+type = forbidden
+source_modules =
+    lib
+forbidden_modules =
+    dags
