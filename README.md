@@ -54,7 +54,9 @@ test/matrix.sh       # every profile, scratch-repo oracle
 
 ## Account pin (this repo lives under the work org)
 
-On a fresh clone: `cp .env.example .env` — the zsh dotenv plugin sources it on
-cd, pins `gh` to the org account via `GH_TOKEN`, and self-heals the repo-local
-git credential helper (pure-env, no `gh` in the credential path). The global
-active gh account is never touched.
+Fresh clone: `cp .env.example .env`. The zsh dotenv plugin exports
+`GH_CONFIG_DIR` on cd, so `gh` here uses the secondary account (`~/.config/gh-secondary`,
+seeded once via `cp -r ~/.config/gh ~/.config/gh-secondary` + `gh auth switch` inside
+it) while the global active account is never touched. Pushes use the
+`github-secondary` SSH key via the gitdir-scoped include in `~/.gitconfig` — no
+tokens in the push path at all.
