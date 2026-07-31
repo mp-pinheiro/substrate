@@ -139,11 +139,13 @@ install_hooks_config() {
     local template="$KIT_ROOT/core/claude-hooks.json" settings=.claude/settings.json merged
     mkdir -p .claude
     if [ -f "$settings" ] && jq -e . "$settings" >/dev/null 2>&1; then
-        # hook arrays CONCATENATE — a deep merge (. * $extra) would replace
-        # them and silently drop the repo's own PreToolUse/PostToolUse hooks
+        # hook arrays CONCATENATE (deep merge would replace them, dropping the
+        # repo's own hooks) but stay idempotent: existing .substrate/ groups
+        # are dropped before appending, so re-runs self-heal instead of growing
         if ! merged=$(jq --argjson extra "$(cat "$template")" '
-            .hooks.PreToolUse = ((.hooks.PreToolUse // []) + ($extra.hooks.PreToolUse // []))
-            | .hooks.PostToolUse = ((.hooks.PostToolUse // []) + ($extra.hooks.PostToolUse // []))
+            def keep: map(select([.hooks[]?.command // ""] | any(test("\\.substrate/hooks/")) | not));
+            .hooks.PreToolUse = (((.hooks.PreToolUse // []) | keep) + ($extra.hooks.PreToolUse // []))
+            | .hooks.PostToolUse = (((.hooks.PostToolUse // []) | keep) + ($extra.hooks.PostToolUse // []))
         ' "$settings"); then
             warn "Claude settings merge failed — $settings left untouched"
             return 1

@@ -18,6 +18,7 @@ Mechanism: `## Acceptance` items are `- [ ] claim :: verify-command`. A checked 
 ## Acceptance
 
 ### Tracking machinery
+- [x] init hooks merge is idempotent :: test/init-idempotent-test.sh
 - [x] tracking check rejects committed-with-open-work plans :: CI=1 test/matrix.sh base 2>&1 | grep -q '15-tracking.sh rejected bad-plan.md'
 - [x] audit fails on regressed checked claims :: test/audit-test.sh
 - [x] audit wired into CI :: grep -q 'audit' .github/workflows/substrate-gate.yml
