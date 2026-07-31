@@ -10,6 +10,7 @@ executables=()
 fragments=()
 zsh_files=()
 while IFS= read -r f; do
+    scan_target "$f" || continue
     entry=$(lang_entry "$f")
     [ -n "$entry" ] || continue
     [ "$(jq -r '.profile' <<< "$entry")" = "shell" ] || continue

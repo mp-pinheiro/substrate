@@ -8,6 +8,7 @@ source "$SUBSTRATE_DIR/gate-lib.sh"
 
 rc=0
 while IFS= read -r f; do
+    unscanned_match "$f" && continue
     case "$f" in
         *.json)
             if ! jq -e . "$f" >/dev/null 2>&1; then
@@ -20,6 +21,7 @@ done < "$INVENTORY"
 
 if have yq; then
     while IFS= read -r f; do
+        unscanned_match "$f" && continue
         case "$f" in
             *.yml|*.yaml)
                 if ! yq eval '.' "$f" >/dev/null 2>&1; then

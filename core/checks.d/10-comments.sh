@@ -8,7 +8,7 @@ source "$SUBSTRATE_DIR/gate-lib.sh"
 
 files=()
 while IFS= read -r f; do
-    claimed "$f" && files+=("$f")
+    scan_target "$f" && files+=("$f")
 done < "$INVENTORY"
 [ ${#files[@]} -eq 0 ] && exit 0
 

@@ -43,6 +43,29 @@ inv_glob() {
     done < "$INVENTORY"
 }
 
+# unscanned ledger: scanning checks consult scan_target, never claimed alone —
+# a ledgered file is excluded from EVERY scanner, or the ledger is a lie
+_UNSCANNED_LOADED=0
+declare -a _UNSCANNED=()
+unscanned_match() {
+    if [ "$_UNSCANNED_LOADED" -eq 0 ]; then
+        mapfile -t _UNSCANNED < <(jq -r '(.unscanned // [])[]' "$CONFIG")
+        _UNSCANNED_LOADED=1
+    fi
+    local g
+    for g in ${_UNSCANNED[@]+"${_UNSCANNED[@]}"}; do
+        # shellcheck disable=SC2254 # globs are the contract here
+        case "$1" in
+            $g) return 0 ;;
+        esac
+    done
+    return 1
+}
+
+scan_target() {
+    claimed "$1" && ! unscanned_match "$1"
+}
+
 # langmap accessors; empty output = unclaimed. Extension first, then shebang
 # fallback so extensionless executables (bin/*, hooks) stay claimed source.
 lang_entry() {
