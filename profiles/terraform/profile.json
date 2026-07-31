@@ -15,10 +15,11 @@
     "curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | sudo bash"
   ],
   "templates": [{ "src": "tflint.hcl", "dest": ".tflint.hcl" }],
-  "checks": ["68-terraform-fmt.sh", "69-tflint.sh"],
+  "checks": ["68-terraform-fmt.sh", "69-tflint.sh", "70-terraform-validate.sh"],
   "slop_fixtures": ["fixtures/slop.tf"],
   "check_fixtures": [
     { "file": "fixtures/bad-fmt.tf", "fails": "68-terraform-fmt.sh" },
-    { "file": "fixtures/bad-tflint.tf", "fails": "69-tflint.sh" }
+    { "file": "fixtures/bad-tflint.tf", "fails": "69-tflint.sh" },
+    { "file": "fixtures/bad-validate.tf", "fails": "70-terraform-validate.sh" }
   ]
 }

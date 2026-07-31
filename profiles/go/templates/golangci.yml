@@ -7,3 +7,24 @@ linters:
     - staticcheck
     - errorlint
     - wrapcheck
+    - forbidigo
+    - depguard
+  settings:
+    forbidigo:
+      forbid:
+        - pattern: ^fmt\.Print(f|ln)?$
+          msg: use the repo logger instead of fmt.Print*
+        - pattern: ^panic$
+          msg: do not panic in library code — return an error
+    depguard:
+      rules:
+        no-pkg-errors:
+          deny:
+            - pkg: github.com/pkg/errors
+              desc: use stdlib errors + fmt %w wrapping
+  exclusions:
+    rules:
+      - path: (^|/)main\.go$
+        linters:
+          - forbidigo
+        text: do not panic
