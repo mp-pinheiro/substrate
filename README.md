@@ -55,8 +55,16 @@ test/matrix.sh       # every profile, scratch-repo oracle
 ## Account pin (this repo lives under the work org)
 
 Fresh clone: `cp .env.example .env`. The zsh dotenv plugin exports
-`GH_CONFIG_DIR` on cd, so `gh` here uses the secondary account (`~/.config/gh-secondary`,
-seeded once via `cp -r ~/.config/gh ~/.config/gh-secondary` + `gh auth switch` inside
-it) while the global active account is never touched. Pushes use the
-`github-secondary` SSH key via the gitdir-scoped include in `~/.gitconfig` — no
-tokens in the push path at all.
+`GH_CONFIG_DIR` on cd, so `gh` in this repo uses the secondary account while the
+global active account is never touched. Seed the pinned dir once with a fresh
+login (never by copying the personal config):
+
+    export GH_CONFIG_DIR=~/.config/gh-secondary
+    gh auth login    # secondary-user only; this dir never sees the personal token
+
+Re-auth after token rotation the same way — WITH the pin set — or the pinned
+dir goes stale while the global one updates.
+
+Pushes don't use tokens at all: the gitdir-scoped include in `~/.gitconfig`
+loads `.gitconfig-secondary`, whose insteadOf rewrites origin to the
+`github-secondary` SSH key. Verify with: `git ls-remote --get-url origin`.
