@@ -21,9 +21,15 @@ pair() {
     fi
 }
 
-for f in gate.sh gate-lib.sh check-comments.sh comment-ratchet.sh selftest.sh; do
+for f in gate.sh gate-lib.sh check-comments.sh comment-ratchet.sh selftest.sh audit.sh; do
     pair "core/$f" "$SUBSTRATE_DIR/$f"
 done
+if [ -f ".omp/extensions/substrate-quality.ts" ]; then
+    pair "core/omp/substrate-quality.ts" ".omp/extensions/substrate-quality.ts"
+fi
+if [ -f "profiles/airflow/checks.d/62-import-linter.sh" ]; then
+    pair "profiles/python/checks.d/62-import-linter.sh" "profiles/airflow/checks.d/62-import-linter.sh"
+fi
 for f in core/hooks/*.sh; do
     [ -f "$f" ] && pair "$f" "$SUBSTRATE_DIR/hooks/$(basename "$f")"
 done

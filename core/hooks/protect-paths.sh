@@ -17,6 +17,10 @@ if [ -f "$CONFIG" ] && ! jq -e . "$CONFIG" >/dev/null 2>&1; then
     echo "blocked: substrate.json is corrupt — fix it before writing anything else" >&2
     exit 2
 fi
+if [ -f "$CONFIG" ] && ! jq -e '(.contracts // []) | all((.name | type == "string") and (.regen | type == "string") and (.paths | type == "array"))' "$CONFIG" >/dev/null 2>&1; then
+    echo "blocked: substrate.json contracts entries need name/regen/paths — fix the config" >&2
+    exit 2
+fi
 
 abs="$path"
 case "$abs" in
@@ -75,5 +79,17 @@ if [ -f "$CONFIG" ]; then
                 exit 2 ;;
         esac
     done < <(jq -r '(.protected_paths // [])[]' "$CONFIG")
+    # contract paths are literal files or directories, not globs — the drift
+    # check diffs the same strings, so both consumers share one semantic
+    while IFS= read -r g; do
+        [ -n "$g" ] || continue
+        for candidate in "$rel" "$real"; do
+            case "$candidate" in
+                "$g" | "$g"/*)
+                    echo "blocked: $candidate is generated from a contract — edit the contract source; the gate regenerates (substrate.json contracts)" >&2
+                    exit 2 ;;
+            esac
+        done
+    done < <(jq -r '(.contracts // [])[] | (.paths // [])[]' "$CONFIG")
 fi
 exit 0

@@ -33,21 +33,41 @@ function globToRegExp(glob: string): RegExp {
 	return new RegExp(`^${out}$`);
 }
 
-type Config = { ok: boolean; missing: boolean; protectedGlobs: RegExp[] };
+type Config = {
+	ok: boolean;
+	missing: boolean;
+	protectedGlobs: RegExp[];
+	contractPaths: string[];
+	contractsInvalid: boolean;
+};
 
 function loadConfig(cwd: string): Config {
 	let raw: string;
 	try {
 		raw = readFileSync(resolve(cwd, "substrate.json"), "utf8");
 	} catch {
-		return { ok: true, missing: true, protectedGlobs: [] };
+		return { ok: true, missing: true, protectedGlobs: [], contractPaths: [], contractsInvalid: false };
 	}
 	try {
 		const cfg = JSON.parse(raw);
 		const globs = Array.isArray(cfg.protected_paths) ? cfg.protected_paths : [];
-		return { ok: true, missing: false, protectedGlobs: globs.map(globToRegExp) };
+		const contracts = Array.isArray(cfg.contracts) ? cfg.contracts : [];
+		const contractsInvalid = contracts.some(
+			(c: { name?: unknown; regen?: unknown; paths?: unknown }) =>
+				!c || typeof c.name !== "string" || typeof c.regen !== "string" || !Array.isArray(c.paths),
+		);
+		const contractPaths: string[] = contracts.flatMap((c: { paths?: string[] }) =>
+			Array.isArray(c.paths) ? c.paths : [],
+		);
+		return {
+			ok: true,
+			missing: false,
+			protectedGlobs: globs.map(globToRegExp),
+			contractPaths,
+			contractsInvalid,
+		};
 	} catch {
-		return { ok: false, missing: false, protectedGlobs: [] };
+		return { ok: false, missing: false, protectedGlobs: [], contractPaths: [], contractsInvalid: false };
 	}
 }
 
@@ -66,6 +86,12 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 		const cfg = loadConfig(ctx.cwd);
 		if (!cfg.ok) {
 			return { block: true, reason: "blocked: substrate.json is corrupt — fix it before writing anything else" };
+		}
+		if (cfg.contractsInvalid) {
+			return {
+				block: true,
+				reason: "blocked: substrate.json contracts entries need name/regen/paths — fix the config",
+			};
 		}
 
 		const abs = resolve(ctx.cwd, path);
@@ -106,6 +132,14 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 		for (const re of cfg.protectedGlobs) {
 			if (re.test(rel) || re.test(real)) {
 				return { block: true, reason: `blocked: ${rel} is protected by substrate.json protected_paths` };
+			}
+		}
+		for (const p of cfg.contractPaths) {
+			if (rel === p || rel.startsWith(`${p}/`) || real === p || real.startsWith(`${p}/`)) {
+				return {
+					block: true,
+					reason: `blocked: ${rel} is generated from a contract — edit the contract source; the gate regenerates (substrate.json contracts)`,
+				};
 			}
 		}
 	});
