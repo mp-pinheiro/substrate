@@ -94,7 +94,7 @@ seed_config() {
         profiles: $profiles,
         inventory: "auto",
         unscanned: [
-            "*.md", "**/*.md", "*.json", "**/*.json", "*.txt", "*.lock", "*.toml",
+            "*.md", "**/*.md", "*.txt", "*.lock", "*.toml",
             "LICENSE*", "VERSION", ".gitignore", ".gitattributes", ".gitmodules",
             "*.png", "*.svg", "*.jpg", "*.csv", "Dockerfile*", "Makefile", "justfile",
             ".substrate/**", ".omp/extensions/substrate-quality.ts"
