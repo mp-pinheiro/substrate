@@ -76,6 +76,22 @@ scan_source() {
     [ "$(jq -r '.mode' <<< "$e")" != "exempt" ]
 }
 
+# profile_files <profile> [ast_lang] — scan_source inventory entries claimed by
+# the profile (optionally narrowed to one grammar), one per line
+profile_files() {
+    local want="$1" lang="${2:-}" f entry
+    while IFS= read -r f; do
+        scan_source "$f" || continue
+        entry=$(lang_entry "$f")
+        [ -n "$entry" ] || continue
+        [ "$(jq -r '.profile' <<< "$entry")" = "$want" ] || continue
+        if [ -n "$lang" ]; then
+            [ "$(jq -r '.ast_lang // empty' <<< "$entry")" = "$lang" ] || continue
+        fi
+        printf '%s\n' "$f"
+    done < "$INVENTORY"
+}
+
 # langmap accessors; empty output = unclaimed. Extension first, then shebang
 # fallback so extensionless executables (bin/*, hooks) stay claimed source.
 lang_entry() {
