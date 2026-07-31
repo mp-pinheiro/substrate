@@ -139,9 +139,8 @@ install_hooks_config() {
     local template="$KIT_ROOT/core/claude-hooks.json" settings=.claude/settings.json merged
     mkdir -p .claude
     if [ -f "$settings" ] && jq -e . "$settings" >/dev/null 2>&1; then
-        # hook arrays CONCATENATE (deep merge would replace them, dropping the
-        # repo's own hooks) but stay idempotent: existing .substrate/ groups
-        # are dropped before appending, so re-runs self-heal instead of growing
+        # hook arrays concatenate (deep merge would drop repo-owned hooks) yet
+        # stay idempotent: .substrate/ groups are dropped before re-appending
         if ! merged=$(jq --argjson extra "$(cat "$template")" '
             def keep: map(select([.hooks[]?.command // ""] | any(test("\\.substrate/hooks/")) | not));
             .hooks.PreToolUse = (((.hooks.PreToolUse // []) | keep) + ($extra.hooks.PreToolUse // []))
@@ -242,11 +241,12 @@ cmd_init() {
         seed_config "$(printf '%s\n' "${profiles[@]}" | jq -Rn '[inputs]')"
         success "substrate.json seeded — review the unscanned ledger"
     fi
-    install_templates "${profiles[@]}"
-    install_ci "${profiles[@]}"
-    install_hooks_config || true
-    install_skills
-    install_recipe
+    local init_rc=0
+    install_templates "${profiles[@]}" || init_rc=1
+    install_ci "${profiles[@]}" || init_rc=1
+    install_hooks_config || init_rc=1
+    install_skills || init_rc=1
+    install_recipe || init_rc=1
 
     cat <<'EOF'
 
@@ -257,6 +257,10 @@ next steps (in order):
   4. positive control: add a slop comment to a source file, rerun, MUST go red; revert
   5. substrate selftest                    # full negative battery (includes slop injection)
 EOF
+    if [ "$init_rc" -ne 0 ]; then
+        warn "init INCOMPLETE — fix the warnings above and rerun init (a repo without write-time hooks drifts silently)"
+        exit 1
+    fi
 }
 
 cmd_update() {

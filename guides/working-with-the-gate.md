@@ -78,3 +78,7 @@ The gate fails closed. Infrastructure failures (check exit >= 2) are their own l
 ```
 
 Fix the tool (`substrate doctor` names what's missing and where to get it), not the check. If you ever see a green gate you don't trust, break something on purpose — `substrate selftest` does exactly that, systematically: slop injection must go red, a shimmed-broken tool must go red, a corrupt baseline must hard-exit.
+
+## Harness hook timing
+
+Write-time hooks arm when a session starts: installing or updating the kit mid-session leaves the running harness on the old hooks until restart. The deterministic backstops are `just gate` before push and CI — treat in-session hooks as fast feedback, not the only net.

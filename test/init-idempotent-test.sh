@@ -28,4 +28,10 @@ count2=$(jq '[(.hooks.PreToolUse // [])[], (.hooks.PostToolUse // [])[]] | lengt
 [ "$count1" = "$count2" ] || fail "hook groups grew on re-run ($count1 -> $count2)"
 grep -q 'my-own-hook.sh' .claude/settings.json || fail "repo-owned hook dropped by re-run"
 
-printf 'init-idempotent-test: hooks stable at %s groups across re-runs\n' "$count1"
+chmod 444 .claude/settings.json
+if env -u CI "$KIT_ROOT/bin/substrate" init --profile shell >/dev/null 2>&1; then
+    fail "init exited 0 with an unwritable settings file (partial install must not read as success)"
+fi
+chmod 644 .claude/settings.json
+
+printf 'init-idempotent-test: hooks stable at %s groups, locked-settings init fails loudly\n' "$count1"
