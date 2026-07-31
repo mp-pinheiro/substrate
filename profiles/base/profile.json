@@ -2,10 +2,12 @@
   "name": "base",
   "claims": {
     ".yml": { "mode": "line", "markers": ["#"] },
-    ".yaml": { "mode": "line", "markers": ["#"] }
+    ".yaml": { "mode": "line", "markers": ["#"] },
+    ".json": { "mode": "exempt" }
   },
   "toolchain": [],
   "templates": [],
   "checks": [],
-  "slop_fixtures": ["fixtures/slop.yml"]
+  "slop_fixtures": ["fixtures/slop.yml"],
+  "check_fixtures": [{ "file": "fixtures/bad.json", "fails": "40-data-validity.sh" }]
 }

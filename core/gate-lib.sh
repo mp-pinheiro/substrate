@@ -66,6 +66,16 @@ scan_target() {
     claimed "$1" && ! unscanned_match "$1"
 }
 
+# style scanners (comments, duplication, budgets) skip exempt-mode claims —
+# exempt means another tool owns the file's style, not that it may not parse
+scan_source() {
+    local e
+    e=$(lang_entry "$1")
+    [ -n "$e" ] || return 1
+    unscanned_match "$1" && return 1
+    [ "$(jq -r '.mode' <<< "$e")" != "exempt" ]
+}
+
 # langmap accessors; empty output = unclaimed. Extension first, then shebang
 # fallback so extensionless executables (bin/*, hooks) stay claimed source.
 lang_entry() {

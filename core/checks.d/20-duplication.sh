@@ -9,7 +9,7 @@ require_bin_ci bunx "install bun: https://bun.sh" || exit 0
 
 files=()
 while IFS= read -r f; do
-    scan_target "$f" && files+=("$f")
+    scan_source "$f" && files+=("$f")
 done < "$INVENTORY"
 [ ${#files[@]} -eq 0 ] && exit 0
 

@@ -16,7 +16,7 @@ fi
 max=0
 max_file=""
 while IFS= read -r f; do
-    scan_target "$f" || continue
+    scan_source "$f" || continue
     lines=$(wc -l < "$f") || die_infra "wc failed on $f"
     if [ "$lines" -gt "$max" ]; then
         max=$lines

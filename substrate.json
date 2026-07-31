@@ -7,11 +7,9 @@
   ],
   "inventory": "auto",
   "unscanned": [
-    "**/*.json",
     "**/*.md",
     "*.csv",
     "*.jpg",
-    "*.json",
     "*.lock",
     "*.md",
     "*.png",
