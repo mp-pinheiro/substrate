@@ -20,7 +20,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh label create substrate-report --force --description "substrate maintenance queue" --color 5319e7
-          n=$(gh issue list --label substrate-report --state open --json number --jq '.[0].number // empty')
+          n=$(gh issue list --state open --json number,title --jq '[.[] | select(.title == "substrate maintenance queue")][0].number // empty')
           if [ -n "$n" ]; then
             gh issue edit "$n" --body-file report.md
           else
