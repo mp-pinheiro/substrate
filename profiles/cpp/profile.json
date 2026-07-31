@@ -10,14 +10,18 @@
     ".clang-format": { "mode": "line", "markers": ["#"] }
   },
   "toolchain": [
-    { "bin": "clang-format", "hint": "https://releases.llvm.org (apt: clang-format)" }
+    { "bin": "clang-format", "hint": "https://releases.llvm.org (apt: clang-format)" },
+    { "bin": "clang-tidy", "hint": "https://releases.llvm.org (apt: clang-tidy)" }
   ],
   "ci": [
     "sudo apt-get update -qq",
-    "sudo apt-get install -y -qq clang-format"
+    "sudo apt-get install -y -qq clang-format clang-tidy"
   ],
   "templates": [{ "src": "clang-format", "dest": ".clang-format" }],
-  "checks": ["79-clang-format.sh"],
+  "checks": ["72-clang-tidy.sh", "79-clang-format.sh"],
   "slop_fixtures": ["fixtures/slop.cpp"],
-  "check_fixtures": [{ "file": "fixtures/bad-format.cpp", "fails": "79-clang-format.sh" }]
+  "check_fixtures": [
+    { "file": "fixtures/bad-format.cpp", "fails": "79-clang-format.sh" },
+    { "file": "fixtures/bad-tidy", "dest": ".", "fails": "72-clang-tidy.sh" }
+  ]
 }

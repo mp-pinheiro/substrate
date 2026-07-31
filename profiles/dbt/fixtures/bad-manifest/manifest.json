@@ -1,0 +1,10 @@
+{
+  "nodes": {
+    "model.substrate_bad.orders": {
+      "resource_type": "model",
+      "original_file_path": "models/orders.sql",
+      "config": { "materialized": "incremental" },
+      "description": ""
+    }
+  }
+}

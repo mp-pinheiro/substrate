@@ -5,14 +5,24 @@
     ".luacheckrc": { "mode": "line", "markers": ["--"] }
   },
   "toolchain": [
-    { "bin": "luacheck", "hint": "https://github.com/lunarmodules/luacheck#installation (apt: lua-check)" }
+    { "bin": "luacheck", "hint": "https://github.com/lunarmodules/luacheck#installation (apt: lua-check)" },
+    { "bin": "stylua", "hint": "prebuilt binary — https://github.com/JohnnyMorganz/StyLua/releases" }
   ],
   "ci": [
     "sudo apt-get update -qq",
-    "sudo apt-get install -y -qq lua-check"
+    "sudo apt-get install -y -qq lua-check unzip",
+    "curl -sSfL -o /tmp/stylua.zip https://github.com/JohnnyMorganz/StyLua/releases/download/v2.5.2/stylua-linux-x86_64.zip",
+    "sudo unzip -o -q /tmp/stylua.zip -d /usr/local/bin",
+    "sudo chmod +x /usr/local/bin/stylua"
   ],
-  "templates": [{ "src": "luacheckrc", "dest": ".luacheckrc" }],
-  "checks": ["78-luacheck.sh"],
+  "templates": [
+    { "src": "luacheckrc", "dest": ".luacheckrc" },
+    { "src": "stylua.toml", "dest": ".stylua.toml" }
+  ],
+  "checks": ["77-stylua.sh", "78-luacheck.sh"],
   "slop_fixtures": ["fixtures/slop.lua"],
-  "check_fixtures": [{ "file": "fixtures/bad-luacheck.lua", "fails": "78-luacheck.sh" }]
+  "check_fixtures": [
+    { "file": "fixtures/bad-luacheck.lua", "fails": "78-luacheck.sh" },
+    { "file": "fixtures/bad-stylua.lua", "fails": "77-stylua.sh" }
+  ]
 }

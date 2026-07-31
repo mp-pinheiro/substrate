@@ -1,0 +1,7 @@
+[
+  {
+    "directory": ".",
+    "command": "clang++ -std=c++17 -c bad-tidy.cpp",
+    "file": "bad-tidy.cpp"
+  }
+]

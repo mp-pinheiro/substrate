@@ -10,7 +10,10 @@
     "sudo PIPX_HOME=/opt/pipx pipx inject dbt-core dbt-duckdb"
   ],
   "templates": [],
-  "checks": ["65-dbt-parse.sh"],
+  "checks": ["65-dbt-parse.sh", "66-dbt-manifest.sh"],
   "slop_fixtures": [],
-  "check_fixtures": [{ "file": "fixtures/bad-dbt", "dest": ".", "fails": "65-dbt-parse.sh" }]
+  "check_fixtures": [
+    { "file": "fixtures/bad-manifest", "dest": "target", "fails": "66-dbt-manifest.sh" },
+    { "file": "fixtures/bad-dbt", "dest": ".", "fails": "65-dbt-parse.sh" }
+  ]
 }
