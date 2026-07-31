@@ -18,6 +18,7 @@
     { "file": "fixtures/bad.json", "fails": "40-data-validity.sh" },
     { "file": "fixtures/bad-workflow.yml", "fails": "59-actionlint.sh", "dest": ".github/workflows/substrate-matrix-bad.yml" },
     { "file": "fixtures/bad-plan.md", "fails": "15-tracking.sh", "dest": ".pi/plans/substrate-matrix-bad.md" },
-    { "file": "fixtures/bad-superseded.md", "fails": "15-tracking.sh", "dest": ".pi/plans/substrate-matrix-bad2.md" }
+    { "file": "fixtures/bad-superseded.md", "fails": "15-tracking.sh", "dest": ".pi/plans/substrate-matrix-bad2.md" },
+    { "file": "fixtures/bad-committed-empty.md", "fails": "15-tracking.sh", "dest": ".pi/plans/substrate-matrix-bad3.md" }
   ]
 }

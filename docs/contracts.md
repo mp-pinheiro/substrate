@@ -104,7 +104,7 @@ Ordering: core checks 05–59, profile checks 60–79, repo-local checks 80–99
 
 The durable home for research, decisions, and acceptance — pipeline attrition (research → plan → tasks → done-claims, each hop lossy) is gated, not hoped away. Adopted from processes that don't lose knowledge: one stateful artifact per initiative (Rust tracking issues, K8s KEPs, Oxide RFDs), machine-gated progression (kepval/PRR-blocking analogs), append-only lifecycle (supersede, never delete), and docs that converge to reality or die in CI (doctest analog: executable acceptance).
 
-- Every plan carries exactly one `state: draft|active|committed|superseded|abandoned` line. Committed = every acceptance item checked. Superseded requires a `superseded-by: <where>` pointer and abandoned a `reason:` line — terminal states carry obligations too; frozen history is never deleted.
+- Every plan carries exactly one `state: draft|active|committed|superseded|abandoned` line. Committed = every acceptance item checked; committed with zero items requires an explicit `acceptance: none — <reason>` waiver. Superseded requires a `superseded-by: <where>` pointer and abandoned a `reason:` line — terminal states carry obligations; frozen history is never deleted.
 - `## Acceptance` items are `- [ ] <claim> :: <verify-command>` — the claim's oracle, run from the repo root. A checked box is a locked claim.
 - `15-tracking.sh` (every gate, fast): state line valid, items well-formed, active plans have oracles, committed plans have no unchecked items.
 - `substrate audit` (CI, heavy): runs every oracle; `[x]`-regression or a failing committed plan is red. Green pending items print "check the box".
