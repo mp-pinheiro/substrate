@@ -13,14 +13,26 @@ jobs:
         with:
           fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
-      - name: Install substrate toolchain
-        run: |
-          bun install -g @ast-grep/cli jscpd
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq shellcheck zsh
+      - name: Install core toolchain
+        run: bun install -g @ast-grep/cli jscpd
+      - name: Install active profile toolchains
+        run: test/ci-toolchain.sh --active
       - name: Run gate
-        run: CI=1 .substrate/gate.sh
+        run: .substrate/gate.sh
       - name: Scan history for secrets
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  profile-matrix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+      - name: Install core toolchain
+        run: bun install -g @ast-grep/cli jscpd
+      - name: Install every profile toolchain
+        run: test/ci-toolchain.sh
+      - name: Run profile matrix
+        run: test/matrix.sh
+      - name: Hostile-HOME determinism oracle
+        run: test/hostile-home.sh

@@ -18,7 +18,7 @@ jobs:
           bun install -g @ast-grep/cli jscpd
           # substrate:profile-toolchain
       - name: Run gate
-        run: CI=1 .substrate/gate.sh
+        run: .substrate/gate.sh
       - name: Scan history for secrets
         uses: gitleaks/gitleaks-action@v2
         env:
