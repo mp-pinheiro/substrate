@@ -53,7 +53,7 @@ Mechanism: `## Acceptance` items are `- [ ] claim :: verify-command`. A checked 
 
 ### Proof on remote
 - [x] kit repo has a remote :: git remote get-url origin >/dev/null 2>&1
-- [x] Actions gate green on latest completed run :: gh run list --status completed --limit 1 --json conclusion --jq '.[0].conclusion' | grep -qx success
+- [x] Actions CI has a green run :: gh run list --status success --limit 1 --json conclusion --jq '.[0].conclusion' | grep -qx success
 
 ## Deferred (each with a reason — a state, not silence)
 
