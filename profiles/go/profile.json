@@ -1,0 +1,24 @@
+{
+  "name": "go",
+  "claims": {
+    ".go": { "mode": "ast", "ast_lang": "go", "markers": ["//"], "block": [["/*", "*/"]] },
+    ".mod": { "mode": "line", "markers": ["//"] },
+    ".sum": { "mode": "exempt" }
+  },
+  "toolchain": [
+    { "bin": "go", "hint": "https://go.dev/doc/install" },
+    { "bin": "golangci-lint", "hint": "https://golangci-lint.run/welcome/install/" }
+  ],
+  "ci": [
+    "sudo apt-get update -qq",
+    "sudo apt-get install -y -qq golang-go",
+    "curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sudo sh -s -- -b /usr/local/bin"
+  ],
+  "templates": [{ "src": "golangci.yml", "dest": ".golangci.yml" }],
+  "checks": ["75-go-build.sh", "76-golangci.sh"],
+  "slop_fixtures": ["fixtures/slop.go"],
+  "check_fixtures": [
+    { "file": "fixtures/bad-vet.go", "fails": "75-go-build.sh" },
+    { "file": "fixtures/bad-lint.go", "fails": "76-golangci.sh" }
+  ]
+}
