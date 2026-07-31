@@ -76,12 +76,12 @@ scan_source() {
     [ "$(jq -r '.mode' <<< "$e")" != "exempt" ]
 }
 
-# profile_files <profile> [ast_lang] — scan_source inventory entries claimed by
-# the profile (optionally narrowed to one grammar), one per line
+# profile_files <profile> [ast_lang] [predicate=scan_source] — claimed inventory
+# entries, one per line; scan_target keeps exempt-mode claims in scope.
 profile_files() {
-    local want="$1" lang="${2:-}" f entry
+    local want="$1" lang="${2:-}" pred="${3:-scan_source}" f entry
     while IFS= read -r f; do
-        scan_source "$f" || continue
+        "$pred" "$f" || continue
         entry=$(lang_entry "$f")
         [ -n "$entry" ] || continue
         [ "$(jq -r '.profile' <<< "$entry")" = "$want" ] || continue

@@ -19,7 +19,7 @@ while IFS= read -r f; do
     else
         zsh_files+=("$f")
     fi
-done < <(profile_files shell)
+done < <(profile_files shell "" scan_target)
 
 rc=0
 
