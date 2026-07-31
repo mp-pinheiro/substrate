@@ -5,7 +5,8 @@ on:
   pull_request: {}
 permissions:
   contents: read
-  actions: read
+  actions: write
+  issues: read
 jobs:
   gate:
     runs-on: ubuntu-latest

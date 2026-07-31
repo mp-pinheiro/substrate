@@ -1,0 +1,28 @@
+name: substrate-report
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch: {}
+permissions:
+  contents: read
+  issues: write
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+      - name: Run maintenance report
+        run: |
+          { echo '```'; .substrate/report.sh; echo '```'; } > report.md
+      - name: Upsert maintenance queue issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create substrate-report --force --description "substrate maintenance queue" --color 5319e7
+          n=$(gh issue list --label substrate-report --state open --json number --jq '.[0].number // empty')
+          if [ -n "$n" ]; then
+            gh issue edit "$n" --body-file report.md
+          else
+            gh issue create --title "substrate maintenance queue" --label substrate-report --body-file report.md
+          fi

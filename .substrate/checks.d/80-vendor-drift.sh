@@ -21,7 +21,7 @@ pair() {
     fi
 }
 
-for f in gate.sh gate-lib.sh check-comments.sh comment-ratchet.sh selftest.sh audit.sh; do
+for f in gate.sh gate-lib.sh check-comments.sh comment-ratchet.sh selftest.sh audit.sh report.sh; do
     pair "core/$f" "$SUBSTRATE_DIR/$f"
 done
 if [ -f ".omp/extensions/substrate-quality.ts" ]; then

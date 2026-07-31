@@ -61,7 +61,8 @@ vendor_core() {
     mkdir -p "$staging/checks.d" "$staging/hooks" "$staging/profiles"
     cp "$KIT_ROOT"/core/gate.sh "$KIT_ROOT"/core/gate-lib.sh \
        "$KIT_ROOT"/core/check-comments.sh "$KIT_ROOT"/core/comment-ratchet.sh \
-       "$KIT_ROOT"/core/selftest.sh "$KIT_ROOT"/core/audit.sh "$staging/" || die "vendor copy failed: core scripts"
+       "$KIT_ROOT"/core/selftest.sh "$KIT_ROOT"/core/audit.sh \
+       "$KIT_ROOT"/core/report.sh "$staging/" || die "vendor copy failed: core scripts"
     cp "$KIT_ROOT"/core/hooks/*.sh "$staging/hooks/" || die "vendor copy failed: hooks"
     cp "$KIT_ROOT"/core/checks.d/*.sh "$staging/checks.d/" || die "vendor copy failed: core checks"
     cp "$KIT_ROOT"/VERSION "$staging/VERSION" || die "vendor copy failed: VERSION"
@@ -133,6 +134,11 @@ install_ci() {
         fi
     done < "$KIT_ROOT/core/ci/github-gate.yml"
     success "CI workflow installed: $out"
+    if [ ! -f .github/workflows/substrate-report.yml ]; then
+        cp "$KIT_ROOT/core/ci/github-report.yml" .github/workflows/substrate-report.yml \
+            && success "report schedule installed: .github/workflows/substrate-report.yml" \
+            || warn "report schedule install failed"
+    fi
 }
 
 install_hooks_config() {
@@ -206,13 +212,29 @@ install_templates() {
 
 install_recipe() {
     if [ -f justfile ]; then
-        grep -q '.substrate/gate.sh' justfile || printf '\ngate *ARGS:\n    .substrate/gate.sh {{ARGS}}\n' >> justfile
+        if grep -q '.substrate/gate.sh' justfile; then
+            success "gate recipe wired (just gate)"
+        elif grep -qE '^gate[ :]' justfile; then
+            warn "justfile already owns a 'gate' recipe — point it at .substrate/gate.sh yourself (appending would redefine the recipe and break just entirely)"
+            return 1
+        else
+            printf '\ngate *ARGS:\n    .substrate/gate.sh {{ARGS}}\n' >> justfile
+            success "gate recipe wired (just gate)"
+        fi
     elif [ -f Makefile ]; then
-        grep -q '.substrate/gate.sh' Makefile || printf '\ngate:\n\t.substrate/gate.sh\n' >> Makefile
+        if grep -q '.substrate/gate.sh' Makefile; then
+            success "gate target wired (make gate)"
+        elif grep -qE '^gate:' Makefile; then
+            warn "Makefile already owns a 'gate' target — point it at .substrate/gate.sh yourself"
+            return 1
+        else
+            printf '\ngate:\n\t.substrate/gate.sh\n' >> Makefile
+            success "gate target wired (make gate)"
+        fi
     else
         printf 'gate *ARGS:\n    .substrate/gate.sh {{ARGS}}\n' > justfile
+        success "gate recipe wired (just gate)"
     fi
-    success "gate recipe wired (just gate)"
 }
 
 cmd_init() {
@@ -378,65 +400,6 @@ cmd_doctor() {
     done
     info "kit $(cat "$KIT_ROOT/VERSION"), vendored $(cat .substrate/VERSION 2>/dev/null || echo none)"
 }
-
-report_duplication() {
-    printf '\n-- duplication clusters (jscpd --min-tokens 35, worst 10 by lines)\n'
-    if ! command -v bunx >/dev/null 2>&1; then
-        printf 'skipped: bunx not found (install bun: https://bun.sh)\n'
-        return 0
-    fi
-    local dir
-    dir=$(mktemp -d)
-    bunx --yes jscpd --min-tokens 35 --reporters json --output "$dir" --silent \
-        --ignore "**/.git/**,**/.jj/**,**/.substrate/**,**/node_modules/**" . >/dev/null 2>&1
-    if ! jq -e . "$dir/jscpd-report.json" >/dev/null 2>&1; then
-        printf 'skipped: jscpd produced no report\n'
-        rm -rf "$dir"
-        return 0
-    fi
-    jq -r '"total duplication: \(.statistics.total.percentage // 0)% across \(.statistics.total.clones // 0) clones",
-        (.duplicates | sort_by(-.lines) | .[0:10][]
-         | "\(.firstFile.name):\(.firstFile.start)-\(.firstFile.end) <-> \(.secondFile.name):\(.secondFile.start)-\(.secondFile.end) — \(.lines) duplicated lines — extract the shared shape")' \
-        "$dir/jscpd-report.json"
-    rm -rf "$dir"
-}
-
-report_dead_code() {
-    printf '\n-- dead code candidates\n'
-    local pyfiles=() f
-    while IFS= read -r f; do
-        [ -n "$f" ] && pyfiles+=("$f")
-    done < <(git ls-files '*.py' 2>/dev/null)
-    if [ ${#pyfiles[@]} -eq 0 ]; then
-        printf 'no python files tracked\n'
-    elif command -v vulture >/dev/null 2>&1; then
-        vulture ${pyfiles[@]+"${pyfiles[@]}"} || true
-    else
-        printf 'skipped: vulture not found (pipx install vulture) — %s python files unscanned\n' "${#pyfiles[@]}"
-    fi
-    if [ -f package.json ]; then
-        printf 'candidate: knip for dead exports (package.json present; knip is repo-config-dependent, report-only by design)\n'
-    fi
-}
-
-report_ratchet() {
-    printf '\n-- ratchet tightening candidates (baseline metrics, desc)\n'
-    if ! jq -e . substrate-baseline.json >/dev/null 2>&1; then
-        printf 'skipped: no substrate-baseline.json (run the gate, then --update-baseline)\n'
-        return 0
-    fi
-    jq -r '.metrics | to_entries | sort_by(-.value)[] | "\(.key) = \(.value)"' substrate-baseline.json
-    printf 'run the gate: improved metrics print a lock-in hint; tighten with --update-baseline\n'
-}
-
-cmd_report() {
-    printf '== substrate report: maintenance queue (advisory — never fails)\n'
-    report_duplication
-    report_dead_code
-    report_ratchet
-    exit 0
-}
-
 case "${1:-}" in
     init)     shift; cmd_init "$@" ;;
     gate)     shift; [ -x .substrate/gate.sh ] || die "no .substrate here — run: substrate init"; exec .substrate/gate.sh "$@" ;;
@@ -452,6 +415,6 @@ case "${1:-}" in
     update)   shift; cmd_update "$@" ;;
     selftest) shift; [ -x .substrate/selftest.sh ] || die "no .substrate here — run: substrate init"; exec .substrate/selftest.sh "$@" ;;
     audit)    shift; [ -x .substrate/audit.sh ] || die "no .substrate here — run: substrate init"; exec .substrate/audit.sh "$@" ;;
-    report)   shift; cmd_report "$@" ;;
+    report)   shift; [ -x .substrate/report.sh ] || die "no .substrate here — run: substrate init"; exec .substrate/report.sh "$@" ;;
     *) usage ;;
 esac
