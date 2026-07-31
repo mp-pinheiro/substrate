@@ -19,6 +19,9 @@ jobs:
           # substrate:profile-toolchain
       - name: Run gate
         run: .substrate/gate.sh
+      - name: Audit plan oracles
+        if: github.event_name == 'push'
+        run: '[ ! -d .pi/plans ] || .substrate/audit.sh'
       - name: Scan history for secrets
         uses: gitleaks/gitleaks-action@v2
         env:

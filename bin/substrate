@@ -20,6 +20,8 @@ usage: substrate <command> [args]
   doctor                                    config, langmap freshness, toolchain
   update [--apply] [--force]                re-vendor .substrate/ from the kit
   selftest                                  sandboxed negative-test battery
+  audit [plan.md ...]                       execute plan acceptance oracles
+  report                                    advisory maintenance queue (always exits 0)
 EOF
     exit 2
 }
@@ -59,7 +61,7 @@ vendor_core() {
     mkdir -p "$staging/checks.d" "$staging/hooks" "$staging/profiles"
     cp "$KIT_ROOT"/core/gate.sh "$KIT_ROOT"/core/gate-lib.sh \
        "$KIT_ROOT"/core/check-comments.sh "$KIT_ROOT"/core/comment-ratchet.sh \
-       "$KIT_ROOT"/core/selftest.sh "$staging/" || die "vendor copy failed: core scripts"
+       "$KIT_ROOT"/core/selftest.sh "$KIT_ROOT"/core/audit.sh "$staging/" || die "vendor copy failed: core scripts"
     cp "$KIT_ROOT"/core/hooks/*.sh "$staging/hooks/" || die "vendor copy failed: hooks"
     cp "$KIT_ROOT"/core/checks.d/*.sh "$staging/checks.d/" || die "vendor copy failed: core checks"
     cp "$KIT_ROOT"/VERSION "$staging/VERSION" || die "vendor copy failed: VERSION"
@@ -97,7 +99,7 @@ seed_config() {
             "*.md", "**/*.md", "*.txt", "*.lock", "*.toml",
             "LICENSE*", "VERSION", ".gitignore", ".gitattributes", ".gitmodules",
             "*.png", "*.svg", "*.jpg", "*.csv", "Dockerfile*", "Makefile", "justfile",
-            ".substrate/**", ".omp/extensions/substrate-quality.ts"
+            ".substrate/**", ".omp/extensions/substrate-quality.ts", ".importlinter"
         ],
         protected_paths: [],
         comment: { allow_tags: ["SAFETY:", "WHY:", "PERF:", "HACK:"] },
@@ -152,6 +154,23 @@ install_hooks_config() {
     mkdir -p .omp/extensions
     cp "$KIT_ROOT/core/omp/substrate-quality.ts" .omp/extensions/
     success "omp extension installed: .omp/extensions/substrate-quality.ts"
+}
+
+install_skills() {
+    local s name dest
+    [ -d "$KIT_ROOT/skills" ] || return 0
+    mkdir -p .claude/skills
+    for s in "$KIT_ROOT"/skills/*/; do
+        [ -d "$s" ] || continue
+        name=$(basename "$s")
+        dest=".claude/skills/$name"
+        if [ -e "$dest" ]; then
+            info "skill $name exists — left untouched"
+        else
+            cp -R "$s" "$dest"
+            success "skill installed: $dest"
+        fi
+    done
 }
 
 install_templates() {
@@ -211,6 +230,7 @@ cmd_init() {
     install_templates "${profiles[@]}"
     install_ci "${profiles[@]}"
     install_hooks_config || true
+    install_skills
     install_recipe
 
     cat <<'EOF'
@@ -260,6 +280,11 @@ cmd_update() {
     fi
 
     vendor_core "${profiles[@]}"
+    if [ -f .omp/extensions/substrate-quality.ts ]; then
+        cp "$KIT_ROOT/core/omp/substrate-quality.ts" .omp/extensions/substrate-quality.ts \
+            || die "failed to refresh installed omp extension"
+        info "refreshed .omp/extensions/substrate-quality.ts"
+    fi
     success "re-vendored .substrate at kit $kit_v (config, baseline, templates untouched)"
 }
 
@@ -302,6 +327,64 @@ cmd_doctor() {
     info "kit $(cat "$KIT_ROOT/VERSION"), vendored $(cat .substrate/VERSION 2>/dev/null || echo none)"
 }
 
+report_duplication() {
+    printf '\n-- duplication clusters (jscpd --min-tokens 35, worst 10 by lines)\n'
+    if ! command -v bunx >/dev/null 2>&1; then
+        printf 'skipped: bunx not found (install bun: https://bun.sh)\n'
+        return 0
+    fi
+    local dir
+    dir=$(mktemp -d)
+    bunx --yes jscpd --min-tokens 35 --reporters json --output "$dir" --silent \
+        --ignore "**/.git/**,**/.jj/**,**/.substrate/**,**/node_modules/**" . >/dev/null 2>&1
+    if ! jq -e . "$dir/jscpd-report.json" >/dev/null 2>&1; then
+        printf 'skipped: jscpd produced no report\n'
+        rm -rf "$dir"
+        return 0
+    fi
+    jq -r '"total duplication: \(.statistics.total.percentage // 0)% across \(.statistics.total.clones // 0) clones",
+        (.duplicates | sort_by(-.lines) | .[0:10][]
+         | "\(.firstFile.name):\(.firstFile.start)-\(.firstFile.end) <-> \(.secondFile.name):\(.secondFile.start)-\(.secondFile.end) — \(.lines) duplicated lines — extract the shared shape")' \
+        "$dir/jscpd-report.json"
+    rm -rf "$dir"
+}
+
+report_dead_code() {
+    printf '\n-- dead code candidates\n'
+    local pyfiles=() f
+    while IFS= read -r f; do
+        [ -n "$f" ] && pyfiles+=("$f")
+    done < <(git ls-files '*.py' 2>/dev/null)
+    if [ ${#pyfiles[@]} -eq 0 ]; then
+        printf 'no python files tracked\n'
+    elif command -v vulture >/dev/null 2>&1; then
+        vulture ${pyfiles[@]+"${pyfiles[@]}"} || true
+    else
+        printf 'skipped: vulture not found (pipx install vulture) — %s python files unscanned\n' "${#pyfiles[@]}"
+    fi
+    if [ -f package.json ]; then
+        printf 'candidate: knip for dead exports (package.json present; knip is repo-config-dependent, report-only by design)\n'
+    fi
+}
+
+report_ratchet() {
+    printf '\n-- ratchet tightening candidates (baseline metrics, desc)\n'
+    if ! jq -e . substrate-baseline.json >/dev/null 2>&1; then
+        printf 'skipped: no substrate-baseline.json (run the gate, then --update-baseline)\n'
+        return 0
+    fi
+    jq -r '.metrics | to_entries | sort_by(-.value)[] | "\(.key) = \(.value)"' substrate-baseline.json
+    printf 'run the gate: improved metrics print a lock-in hint; tighten with --update-baseline\n'
+}
+
+cmd_report() {
+    printf '== substrate report: maintenance queue (advisory — never fails)\n'
+    report_duplication
+    report_dead_code
+    report_ratchet
+    exit 0
+}
+
 case "${1:-}" in
     init)     shift; cmd_init "$@" ;;
     gate)     shift; [ -x .substrate/gate.sh ] || die "no .substrate here — run: substrate init"; exec .substrate/gate.sh "$@" ;;
@@ -316,5 +399,7 @@ case "${1:-}" in
     doctor)   shift; cmd_doctor "$@" ;;
     update)   shift; cmd_update "$@" ;;
     selftest) shift; [ -x .substrate/selftest.sh ] || die "no .substrate here — run: substrate init"; exec .substrate/selftest.sh "$@" ;;
+    audit)    shift; [ -x .substrate/audit.sh ] || die "no .substrate here — run: substrate init"; exec .substrate/audit.sh "$@" ;;
+    report)   shift; cmd_report "$@" ;;
     *) usage ;;
 esac

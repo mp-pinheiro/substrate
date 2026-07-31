@@ -36,3 +36,7 @@ jobs:
         run: test/matrix.sh
       - name: Hostile-HOME determinism oracle
         run: test/hostile-home.sh
+      - name: Audit plan oracles
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bin/substrate audit

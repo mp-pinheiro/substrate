@@ -25,6 +25,7 @@ The interfaces every component implements. Change these deliberately — everyth
   "comment": { "allow_tags": ["SAFETY:", "WHY:", "PERF:", "HACK:"] },
   "budgets": { "max_file_lines": 500 },
   "checks": { "disabled": [] },
+  "contracts": [{ "name": "api", "regen": "bun run generate", "paths": ["src/generated"] }],
   "push_gate": true
 }
 ```
@@ -32,6 +33,7 @@ The interfaces every component implements. Change these deliberately — everyth
 - `inventory`: `auto` (jj when `.jj/` exists, else git), `git`, or `jj`. Submodule contents are always excluded.
 - `unscanned`: globs for tracked files no profile claims — a reviewed ledger, not a default. A tracked source file matching neither a profile claim nor `unscanned` FAILS the gate (check `05-unclaimed-source`).
 - `protected_paths`: repo-specific write-blocks; the core always protects the baseline, `.substrate/`, and symlink writes.
+- `contracts`: SSOT drift gates. `45-contract-drift.sh` copies the tracked tree to a scratch dir, runs each `regen` there (the working tree is never mutated), and diffs every `paths` entry — drift is findings, a failing regen is infra-red. `paths` are LITERAL files or directories (not globs); both hooks write-block them ("edit the contract source; the gate regenerates") and fail closed on malformed entries. A missing generator binary (first token of `regen`) skips locally and is fatal under CI, `require_bin_ci`-style.
 
 ## profile.json (`profiles/<name>/profile.json`; repo-local profiles in `<repo>/substrate-profiles/<name>/`)
 
@@ -90,8 +92,21 @@ Ordering: core checks 05–59, profile checks 60–79, repo-local checks 80–99
 - `gate [...]` — run `.substrate/gate.sh` (flags pass through: `--update-baseline`, `--accept-regression`).
 - `doctor` — config validity, langmap freshness (regenerate + compare), toolchain presence per active profile with hints.
 - `update [--apply]` — diff vendored `.substrate/` against the kit version; `--apply` re-vendors. Local `substrate.json`, baseline, templates, repo checks are never touched.
+- `update --apply` also refreshes the installed omp extension copy (`.omp/extensions/substrate-quality.ts`) — `80-vendor-drift` pairs it in the kit repo.
 - `selftest` — sandbox copy of the repo (inventory files only), then: steady must be green (or baseline-pending warns only); per-profile slop fixture injected must go red AND be named in the report; detector tool shimmed to fail must go red with "cannot pass blind"; corrupt baseline must hard-exit. Any deviation = selftest fails.
+- `audit [plan.md ...]` — executes plan acceptance oracles (see Plan tracking). Checked `[x]` items must pass (regression = exit 1); `committed` plans must pass everything; pending `[ ]` items on active plans report without failing.
 
 ## Versioning
 
 `.substrate/VERSION` is stamped at init/update. `substrate update` refuses when the vendored version is newer than the kit (downgrade needs `--force`).
+
+## Plan tracking (`.pi/plans/*.md`)
+
+The durable home for research, decisions, and acceptance — pipeline attrition (research → plan → tasks → done-claims, each hop lossy) is gated, not hoped away. Adopted from processes that don't lose knowledge: one stateful artifact per initiative (Rust tracking issues, K8s KEPs, Oxide RFDs), machine-gated progression (kepval/PRR-blocking analogs), append-only lifecycle (supersede, never delete), and docs that converge to reality or die in CI (doctest analog: executable acceptance).
+
+- Every plan carries exactly one `state: draft|active|committed|superseded|abandoned` line. Committed = every acceptance item checked; superseded/abandoned are frozen history, never deleted.
+- `## Acceptance` items are `- [ ] <claim> :: <verify-command>` — the claim's oracle, run from the repo root. A checked box is a locked claim.
+- `15-tracking.sh` (every gate, fast): state line valid, items well-formed, active plans have oracles, committed plans have no unchecked items.
+- `substrate audit` (CI, heavy): runs every oracle; `[x]`-regression or a failing committed plan is red. Green pending items print "check the box".
+- Trust model: acceptance verify commands EXECUTE in CI — review plan edits as code, not prose. The consumer CI template scopes the audit step to `push` events so fork PRs cannot run arbitrary plan commands on your runner.
+- Convention: commits implementing a plan item reference the plan slug in the message (kernel `Link:` analog — self-contained message first, link for depth).
