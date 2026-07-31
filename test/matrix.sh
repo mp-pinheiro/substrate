@@ -40,7 +40,6 @@ for name in "${profiles[@]}"; do
         git commit -qm seed
 
         "$KIT_ROOT/bin/substrate" init --profile "$name" >/dev/null 2>&1 || { echo "init failed"; exit 9; }
-        jq '.checks.disabled += ["50-gitleaks.sh"] | .checks.disabled |= unique' substrate.json > s.tmp && mv s.tmp substrate.json
         git add -A && git commit -qm init
 
         out=$(.substrate/gate.sh --update-baseline 2>&1)
@@ -55,6 +54,45 @@ for name in "${profiles[@]}"; do
         if [ "$rc" -ne 0 ]; then
             printf '%s\n' "$out"
             echo "selftest failed (rc=$rc)"
+            exit 9
+        fi
+
+        tool_ok=1
+        while IFS= read -r bin; do
+            [ -n "$bin" ] || continue
+            command -v "$bin" >/dev/null 2>&1 || tool_ok=0
+        done < <(jq -r '(.toolchain // [])[].bin' "$pdir/profile.json")
+
+        while IFS=$'\t' read -r bad_rel fails_check; do
+            [ -n "$bad_rel" ] || continue
+            if [ "$tool_ok" -eq 0 ] && [ -z "${CI:-}" ]; then
+                echo "note: toolchain absent — bad-fixture assertion for $fails_check skipped locally (CI enforces)"
+                continue
+            fi
+            src="$pdir/$bad_rel"
+            dest="substrate-matrix-bad-$(basename "$bad_rel")"
+            if [ -d "$src" ]; then
+                cp -R "$src" "$dest"
+            else
+                cp "$src" "$dest"
+            fi
+            git add -A && git commit -qm bad-fixture
+            out=$(.substrate/gate.sh 2>&1)
+            rc=$?
+            if [ "$rc" -ne 0 ] && grep -qF "$fails_check" <<< "$out"; then
+                echo "own-check oracle: $fails_check rejected $(basename "$bad_rel")"
+            else
+                printf '%s\n' "$out"
+                echo "own-check oracle FAILED: $fails_check did not reject $bad_rel (rc=$rc)"
+                exit 9
+            fi
+            rm -rf "$dest"
+            git add -A && git commit -qm bad-fixture-removed
+        done < <(jq -r '(.check_fixtures // [])[] | "\(.file)\t\(.fails)"' "$pdir/profile.json")
+
+        if jq -e '(.checks // []) | length > 0' "$pdir/profile.json" >/dev/null \
+            && ! jq -e '(.check_fixtures // []) | length > 0' "$pdir/profile.json" >/dev/null; then
+            echo "profile ships checks but no check_fixtures — its checks have no oracle"
             exit 9
         fi
     )

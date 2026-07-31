@@ -55,6 +55,7 @@ The interfaces every component implements. Change these deliberately — everyth
 - `templates` are copied by `init` only when `dest` is absent — repo edits win forever after.
 - `slop_fixtures` are native-language files each containing exactly one slop comment; `selftest` injects every one and requires red at the injected path. Include an extensionless shebang fixture when the profile declares `shebang` mappings. A profile without fixtures cannot pass selftest.
 - `shebang` maps interpreter names onto a claim entry (`{"interpreters": ["bash", "sh"], "as": ".sh"}`) so extensionless executables are claimed source, not ledger fodder.
+- `check_fixtures` pair a bad file (or directory) with the check that must reject it: `[{"file": "fixtures/bad-vet.go", "fails": "61-go-vet.sh"}]`. `test/matrix.sh` injects each into a scratch repo and requires the gate red with that check named. A profile that ships checks without check_fixtures fails the matrix — checks without an oracle do not ship. Toolchain-absent machines skip the assertion with a printed note; under `CI` the toolchain is mandatory, so the assertion always runs there.
 
 ## langmap.json (generated into `.substrate/` by init/update; never hand-edited)
 
