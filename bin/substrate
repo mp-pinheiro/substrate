@@ -344,6 +344,19 @@ cmd_doctor() {
         warn "omp extension absent — the omp harness runs ungated (run init)"
     fi
 
+    local c cb
+    for c in checks.d/*.sh; do
+        [ -f "$c" ] || continue
+        cb=$(basename "$c")
+        if [ ! -f ".substrate/checks.d/$cb" ]; then
+            warn "repo check $cb not vendored — it does NOT run; run: substrate update --apply"
+        elif ! cmp -s "$c" ".substrate/checks.d/$cb"; then
+            warn "repo check $cb drifted from its vendored copy — run: substrate update --apply"
+        else
+            success "repo check $cb vendored and current"
+        fi
+    done
+
     local p d bin hint
     for p in "${profiles[@]}"; do
         d=$(profile_dir "$p") || { warn "profile $p not found"; continue; }
