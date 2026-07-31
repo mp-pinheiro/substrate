@@ -57,7 +57,7 @@ Mechanism: `## Acceptance` items are `- [ ] claim :: verify-command`. A checked 
 
 ### Proof on remote
 - [x] kit repo has a remote :: git remote get-url origin >/dev/null 2>&1
-- [x] Actions CI has a green run :: [ -n "${GH_TOKEN:-}" ] || export GH_TOKEN=$(gh auth token -u secondary-user 2>/dev/null); if [ -z "${GH_TOKEN:-}" ]; then [ -z "${CI:-}" ] || exit 1; exit 0; fi; gh run list --status success --limit 1 --json conclusion --jq '.[0].conclusion' | grep -qx success
+- [x] Actions CI has a green run :: if [ -z "${GH_TOKEN:-}" ] && ! gh auth token >/dev/null 2>&1; then [ -z "${CI:-}" ] || exit 1; exit 0; fi; gh run list --status success --limit 1 --json conclusion --jq '.[0].conclusion' | grep -qx success
 
 ## Deferred (each with a reason — a state, not silence)
 
