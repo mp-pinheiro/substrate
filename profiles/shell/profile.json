@@ -1,0 +1,24 @@
+{
+  "name": "shell",
+  "claims": {
+    ".sh": { "mode": "ast", "ast_lang": "bash", "markers": ["#"] },
+    ".bash": { "mode": "ast", "ast_lang": "bash", "markers": ["#"] },
+    ".zsh": { "mode": "line", "markers": ["#"], "heredoc": true },
+    ".zshrc": { "mode": "line", "markers": ["#"], "heredoc": true },
+    ".zprofile": { "mode": "line", "markers": ["#"], "heredoc": true }
+  },
+  "shebang": [
+    { "interpreters": ["bash", "sh", "dash"], "as": ".sh" },
+    { "interpreters": ["zsh"], "as": ".zsh" }
+  ],
+  "toolchain": [
+    { "bin": "shellcheck", "hint": "https://github.com/koalaman/shellcheck#installing (static release needs no sudo)" }
+  ],
+  "ci": [
+    "sudo apt-get update -qq",
+    "sudo apt-get install -y -qq shellcheck zsh"
+  ],
+  "templates": [],
+  "checks": ["60-shellcheck.sh"],
+  "slop_fixtures": ["fixtures/slop.sh", "fixtures/slop-noext"]
+}

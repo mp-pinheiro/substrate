@@ -1,0 +1,10 @@
+{
+  "name": "kit-ts",
+  "claims": {
+    ".ts": { "mode": "ast", "ast_lang": "typescript", "markers": ["//"] }
+  },
+  "toolchain": [],
+  "templates": [],
+  "checks": [],
+  "slop_fixtures": ["fixtures/slop.ts"]
+}

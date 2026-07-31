@@ -1,0 +1,25 @@
+name: substrate-gate
+on:
+  push:
+    branches: [main]
+  pull_request: {}
+permissions:
+  contents: read
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+      - name: Install substrate toolchain
+        run: |
+          bun install -g @ast-grep/cli jscpd
+          # substrate:profile-toolchain
+      - name: Run gate
+        run: CI=1 .substrate/gate.sh
+      - name: Scan history for secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

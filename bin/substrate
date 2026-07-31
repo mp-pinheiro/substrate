@@ -1,0 +1,306 @@
+#!/usr/bin/env bash
+# substrate — deterministic gates for agentic development, installable in any repo.
+# Commands: init, gate, baseline, doctor, update, selftest. See docs/contracts.md.
+set -uo pipefail
+
+KIT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+info()    { printf '\033[0;34m[+]\033[0m %s\n' "$*"; }
+success() { printf '\033[0;32m[ok]\033[0m %s\n' "$*"; }
+warn()    { printf '\033[0;33m[!]\033[0m %s\n' "$*"; }
+die()     { warn "$*"; exit 2; }
+
+usage() {
+    cat <<'EOF'
+usage: substrate <command> [args]
+
+  init --profile a,b [--vcs auto|git|jj]   install the gate into the current repo
+  gate [--update-baseline|--accept-regression]
+  baseline [--update|--accept-regression]
+  doctor                                    config, langmap freshness, toolchain
+  update [--apply] [--force]                re-vendor .substrate/ from the kit
+  selftest                                  sandboxed negative-test battery
+EOF
+    exit 2
+}
+
+profile_dir() {
+    local p="$1"
+    if [ -d "substrate-profiles/$p" ]; then
+        printf '%s\n' "substrate-profiles/$p"
+    elif [ -d "$KIT_ROOT/profiles/$p" ]; then
+        printf '%s\n' "$KIT_ROOT/profiles/$p"
+    else
+        return 1
+    fi
+}
+
+build_langmap() {
+    local out="$1"; shift
+    local pjsons=() p d
+    for p in "$@"; do
+        d=$(profile_dir "$p") || die "unknown profile: $p (kit profiles: $(basename -a "$KIT_ROOT"/profiles/* | tr '\n' ' '))"
+        jq -e . "$d/profile.json" >/dev/null 2>&1 || die "corrupt profile.json for $p"
+        pjsons+=("$d/profile.json")
+    done
+    jq -s 'reduce .[] as $p ({};
+        (reduce ($p.claims | to_entries[]) as $e (.;
+            if has($e.key) then error("duplicate claim \($e.key): profiles \(.[$e.key].profile) and \($p.name)")
+            else .[$e.key] = ($e.value + {profile: $p.name}) end))
+        | .__shebang__ = ((.__shebang__ // []) + [($p.shebang // [])[]
+            | {match: .interpreters, entry: ($p.claims[.as] + {profile: $p.name})}]))' \
+        "${pjsons[@]}" > "$out" \
+        || die "langmap build failed (duplicate claims or corrupt profile.json)"
+}
+
+vendor_core() {
+    local profiles=("$@") p d c
+    rm -rf .substrate
+    mkdir -p .substrate/checks.d .substrate/hooks .substrate/profiles
+    cp "$KIT_ROOT"/core/gate.sh "$KIT_ROOT"/core/gate-lib.sh \
+       "$KIT_ROOT"/core/check-comments.sh "$KIT_ROOT"/core/comment-ratchet.sh \
+       "$KIT_ROOT"/core/selftest.sh .substrate/ || die "vendor copy failed: core scripts"
+    cp "$KIT_ROOT"/core/hooks/*.sh .substrate/hooks/ || die "vendor copy failed: hooks"
+    cp "$KIT_ROOT"/core/checks.d/*.sh .substrate/checks.d/ || die "vendor copy failed: core checks"
+    cp "$KIT_ROOT"/VERSION .substrate/VERSION || die "vendor copy failed: VERSION"
+    for p in "${profiles[@]}"; do
+        d=$(profile_dir "$p") || die "unknown profile: $p"
+        cp -R "$d" ".substrate/profiles/$p"
+        if [ -d "$d/checks.d" ]; then
+            for c in "$d"/checks.d/*.sh; do
+                [ -f "$c" ] && cp "$c" .substrate/checks.d/
+            done
+        fi
+    done
+    build_langmap .substrate/langmap.json "${profiles[@]}"
+    chmod +x .substrate/*.sh .substrate/hooks/*.sh .substrate/checks.d/*.sh
+}
+
+seed_config() {
+    local profiles_json="$1"
+    jq -n --argjson profiles "$profiles_json" '{
+        version: 1,
+        profiles: $profiles,
+        inventory: "auto",
+        unscanned: [
+            "*.md", "**/*.md", "*.json", "**/*.json", "*.txt", "*.lock", "*.toml",
+            "LICENSE*", "VERSION", ".gitignore", ".gitattributes", ".gitmodules",
+            "*.yml", "**/*.yml", "*.yaml", "**/*.yaml",
+            "*.png", "*.svg", "*.jpg", "*.csv", "Dockerfile*", "Makefile", "justfile",
+            ".substrate/**"
+        ],
+        protected_paths: [],
+        comment: { allow_tags: ["SAFETY:", "WHY:", "PERF:", "HACK:"] },
+        budgets: { max_file_lines: 500 },
+        duplication: { min_tokens: 35 },
+        checks: { disabled: [] },
+        push_gate: true
+    }' > substrate.json
+}
+
+install_ci() {
+    local profiles=("$@") p d lines=() l
+    [ -f .github/workflows/substrate-gate.yml ] && { info "CI workflow exists — left untouched"; return 0; }
+    for p in "${profiles[@]}"; do
+        d=$(profile_dir "$p") || continue
+        while IFS= read -r l; do
+            [ -n "$l" ] && lines+=("$l")
+        done < <(jq -r '(.ci // [])[]' "$d/profile.json")
+    done
+    mkdir -p .github/workflows
+    local out=.github/workflows/substrate-gate.yml line trimmed
+    : > "$out"
+    while IFS= read -r line; do
+        trimmed="${line#"${line%%[![:space:]]*}"}"
+        if [ "$trimmed" = "# substrate:profile-toolchain" ]; then
+            for l in ${lines[@]+"${lines[@]}"}; do
+                printf '          %s\n' "$l" >> "$out"
+            done
+        else
+            printf '%s\n' "$line" >> "$out"
+        fi
+    done < "$KIT_ROOT/core/ci/github-gate.yml"
+    success "CI workflow installed: $out"
+}
+
+install_hooks_config() {
+    local template="$KIT_ROOT/core/claude-hooks.json" settings=.claude/settings.json merged
+    mkdir -p .claude
+    if [ -f "$settings" ] && jq -e . "$settings" >/dev/null 2>&1; then
+        if ! merged=$(jq --argjson extra "$(cat "$template")" '. * $extra' "$settings"); then
+            warn "Claude settings merge failed — $settings left untouched"
+            return 1
+        fi
+        printf '%s\n' "$merged" > "$settings"
+    elif [ -f "$settings" ]; then
+        warn "$settings exists but is not valid JSON — left untouched; merge the hooks manually from $template"
+        return 1
+    else
+        cp "$template" "$settings"
+    fi
+    success "Claude hooks wired in $settings"
+    mkdir -p .omp/extensions
+    cp "$KIT_ROOT/core/omp/substrate-quality.ts" .omp/extensions/
+    success "omp extension installed: .omp/extensions/substrate-quality.ts"
+}
+
+install_templates() {
+    local profiles=("$@") p d src dest
+    for p in "${profiles[@]}"; do
+        d=$(profile_dir "$p") || continue
+        while IFS=$'\t' read -r src dest; do
+            [ -n "$src" ] || continue
+            if [ -e "$dest" ]; then
+                info "template $dest exists — left untouched"
+            else
+                mkdir -p "$(dirname "$dest")"
+                cp "$d/templates/$src" "$dest"
+                success "template installed: $dest"
+            fi
+        done < <(jq -r '(.templates // [])[] | "\(.src)\t\(.dest)"' "$d/profile.json")
+    done
+}
+
+install_recipe() {
+    if [ -f justfile ]; then
+        grep -q '.substrate/gate.sh' justfile || printf '\ngate *ARGS:\n    .substrate/gate.sh {{ARGS}}\n' >> justfile
+    elif [ -f Makefile ]; then
+        grep -q '.substrate/gate.sh' Makefile || printf '\ngate:\n\t.substrate/gate.sh\n' >> Makefile
+    else
+        printf 'gate *ARGS:\n    .substrate/gate.sh {{ARGS}}\n' > justfile
+    fi
+    success "gate recipe wired (just gate)"
+}
+
+cmd_init() {
+    local profiles_csv=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --profile) profiles_csv="${2:-}"; shift 2 ;;
+            --vcs) shift 2 ;;
+            *) die "unknown init flag: $1" ;;
+        esac
+    done
+    [ -n "$profiles_csv" ] || die "init requires --profile a,b — kit profiles: $(basename -a "$KIT_ROOT"/profiles/* | tr '\n' ' ')"
+    [ -d .git ] || [ -d .jj ] || die "not a repo root (no .git or .jj here)"
+
+    local profiles=()
+    IFS=',' read -r -a profiles <<< "$profiles_csv"
+
+    vendor_core "${profiles[@]}"
+    if [ -f substrate.json ]; then
+        info "substrate.json exists — left untouched (its profiles list drives update/doctor)"
+    else
+        seed_config "$(printf '%s\n' "${profiles[@]}" | jq -Rn '[inputs]')"
+        success "substrate.json seeded — review the unscanned ledger"
+    fi
+    install_templates "${profiles[@]}"
+    install_ci "${profiles[@]}"
+    install_hooks_config || true
+    install_recipe
+
+    cat <<'EOF'
+
+next steps (in order):
+  1. substrate doctor                      # toolchain + config sanity
+  2. .substrate/gate.sh                    # first run: expect findings + pending baseline
+  3. .substrate/gate.sh --update-baseline  # grandfather current debt (green infra only)
+  4. positive control: add a slop comment to a source file, rerun, MUST go red; revert
+  5. substrate selftest                    # full negative battery (includes slop injection)
+EOF
+}
+
+cmd_update() {
+    local apply=0 force=0 arg
+    for arg in "$@"; do
+        case "$arg" in
+            --apply) apply=1 ;;
+            --force) force=1 ;;
+            *) die "unknown update flag: $arg" ;;
+        esac
+    done
+    [ -d .substrate ] || die "no .substrate here — run: substrate init"
+    jq -e . substrate.json >/dev/null 2>&1 || die "substrate.json missing or corrupt"
+
+    local kit_v vendored_v newest
+    kit_v=$(cat "$KIT_ROOT/VERSION")
+    vendored_v=$(cat .substrate/VERSION 2>/dev/null || echo "0.0.0")
+    newest=$(printf '%s\n%s\n' "$kit_v" "$vendored_v" | sort -V | tail -1)
+    if [ "$newest" != "$kit_v" ] && [ "$force" -ne 1 ]; then
+        die "vendored $vendored_v is newer than kit $kit_v — pass --force to downgrade"
+    fi
+
+    local profiles=()
+    mapfile -t profiles < <(jq -r '.profiles[]' substrate.json)
+    [ ${#profiles[@]} -gt 0 ] || die "substrate.json has no profiles"
+
+    if [ "$apply" -ne 1 ]; then
+        local staging
+        staging=$(mktemp -d)
+        mkdir -p "$staging/repo"
+        (cd "$staging/repo" && vendor_core "${profiles[@]}") || { rm -rf "$staging"; die "staging vendor failed"; }
+        info "diff vendored .substrate vs kit $kit_v (apply with: substrate update --apply):"
+        diff -r .substrate "$staging/repo/.substrate" || true
+        rm -rf "$staging"
+        return 0
+    fi
+
+    vendor_core "${profiles[@]}"
+    success "re-vendored .substrate at kit $kit_v (config, baseline, templates untouched)"
+}
+
+cmd_doctor() {
+    [ -d .substrate ] || die "no .substrate here — run: substrate init"
+    jq -e . substrate.json >/dev/null 2>&1 || die "substrate.json missing or corrupt"
+    success "substrate.json parses"
+
+    local profiles=()
+    mapfile -t profiles < <(jq -r '.profiles[]' substrate.json)
+    local fresh
+    fresh=$(mktemp)
+    build_langmap "$fresh" "${profiles[@]}"
+    if cmp -s "$fresh" .substrate/langmap.json; then
+        success "langmap fresh"
+    else
+        warn "langmap stale vs profiles — run: substrate update --apply"
+    fi
+    rm -f "$fresh"
+
+    local p d bin hint
+    for p in "${profiles[@]}"; do
+        d=$(profile_dir "$p") || { warn "profile $p not found"; continue; }
+        while IFS=$'\t' read -r bin hint; do
+            [ -n "$bin" ] || continue
+            if command -v "$bin" >/dev/null 2>&1; then
+                success "$p: $bin present"
+            else
+                warn "$p: $bin MISSING — $hint"
+            fi
+        done < <(jq -r '(.toolchain // [])[] | "\(.bin)\t\(.hint)"' "$d/profile.json")
+    done
+    for bin in jq ast-grep bunx; do
+        if command -v "$bin" >/dev/null 2>&1; then
+            success "core: $bin present"
+        else
+            warn "core: $bin missing (ast-grep falls back to bunx; bunx needs bun)"
+        fi
+    done
+    info "kit $(cat "$KIT_ROOT/VERSION"), vendored $(cat .substrate/VERSION 2>/dev/null || echo none)"
+}
+
+case "${1:-}" in
+    init)     shift; cmd_init "$@" ;;
+    gate)     shift; [ -x .substrate/gate.sh ] || die "no .substrate here — run: substrate init"; exec .substrate/gate.sh "$@" ;;
+    baseline)
+        shift
+        flag="${1:---update}"
+        case "$flag" in
+            --update) exec .substrate/gate.sh --update-baseline ;;
+            --accept-regression) exec .substrate/gate.sh --accept-regression ;;
+            *) usage ;;
+        esac ;;
+    doctor)   shift; cmd_doctor "$@" ;;
+    update)   shift; cmd_update "$@" ;;
+    selftest) shift; [ -x .substrate/selftest.sh ] || die "no .substrate here — run: substrate init"; exec .substrate/selftest.sh "$@" ;;
+    *) usage ;;
+esac
