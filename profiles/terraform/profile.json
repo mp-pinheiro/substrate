@@ -1,0 +1,24 @@
+{
+  "name": "terraform",
+  "claims": {
+    ".tf": { "mode": "line", "markers": ["#", "//"], "block": [["/*", "*/"]], "heredoc": true },
+    ".tfvars": { "mode": "line", "markers": ["#"], "heredoc": true },
+    ".hcl": { "mode": "line", "markers": ["#", "//"], "block": [["/*", "*/"]], "heredoc": true }
+  },
+  "toolchain": [
+    { "bin": "terraform", "hint": "https://developer.hashicorp.com/terraform/install" },
+    { "bin": "tflint", "hint": "https://github.com/terraform-linters/tflint#installation" }
+  ],
+  "ci": [
+    "curl -sfLo /tmp/tf.zip https://releases.hashicorp.com/terraform/1.9.8/terraform_1.9.8_linux_amd64.zip",
+    "sudo unzip -oq /tmp/tf.zip terraform -d /usr/local/bin",
+    "curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | sudo bash"
+  ],
+  "templates": [{ "src": "tflint.hcl", "dest": ".tflint.hcl" }],
+  "checks": ["68-terraform-fmt.sh", "69-tflint.sh"],
+  "slop_fixtures": ["fixtures/slop.tf"],
+  "check_fixtures": [
+    { "file": "fixtures/bad-fmt.tf", "fails": "68-terraform-fmt.sh" },
+    { "file": "fixtures/bad-tflint.tf", "fails": "69-tflint.sh" }
+  ]
+}
