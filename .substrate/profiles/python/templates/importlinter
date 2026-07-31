@@ -1,0 +1,19 @@
+# Import contracts (import-linter): https://import-linter.readthedocs.io
+# This template ships inactive. To activate, uncomment the sections below and
+# replace `yourpackage` with your real package names — the gate check
+# (62-import-linter.sh) runs lint-imports only once root_packages is set.
+#
+# Working example for a src-less layout (package directory at the repo root,
+# layers listed highest first — lower layers must not import higher ones):
+#
+# [importlinter]
+# root_packages =
+#     yourpackage
+#
+# [importlinter:contract:layers]
+# name = Layered architecture
+# type = layers
+# layers =
+#     yourpackage.api
+#     yourpackage.core
+#     yourpackage.db

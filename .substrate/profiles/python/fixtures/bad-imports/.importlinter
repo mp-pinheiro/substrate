@@ -1,0 +1,10 @@
+[importlinter]
+root_packages =
+    badimports
+
+[importlinter:contract:layers]
+name = Layered architecture
+type = layers
+layers =
+    badimports.api
+    badimports.core

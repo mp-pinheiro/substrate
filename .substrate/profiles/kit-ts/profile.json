@@ -1,0 +1,10 @@
+{
+  "name": "kit-ts",
+  "claims": {
+    ".ts": { "mode": "ast", "ast_lang": "typescript", "markers": ["//"] }
+  },
+  "toolchain": [{ "bin": "bunx", "hint": "https://bun.sh" }],
+  "templates": [],
+  "checks": ["71-kit-tsc.sh"],
+  "slop_fixtures": ["fixtures/slop.ts"]
+}

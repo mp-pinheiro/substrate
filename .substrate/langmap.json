@@ -1,0 +1,120 @@
+{
+  ".yml": {
+    "mode": "line",
+    "markers": [
+      "#"
+    ],
+    "profile": "base"
+  },
+  ".yaml": {
+    "mode": "line",
+    "markers": [
+      "#"
+    ],
+    "profile": "base"
+  },
+  ".json": {
+    "mode": "exempt",
+    "profile": "base"
+  },
+  "__shebang__": [
+    {
+      "match": [
+        "python",
+        "python3"
+      ],
+      "entry": {
+        "mode": "ast",
+        "ast_lang": "python",
+        "markers": [
+          "#"
+        ],
+        "profile": "python"
+      }
+    },
+    {
+      "match": [
+        "bash",
+        "sh",
+        "dash"
+      ],
+      "entry": {
+        "mode": "ast",
+        "ast_lang": "bash",
+        "markers": [
+          "#"
+        ],
+        "profile": "shell"
+      }
+    },
+    {
+      "match": [
+        "zsh"
+      ],
+      "entry": {
+        "mode": "line",
+        "markers": [
+          "#"
+        ],
+        "heredoc": true,
+        "profile": "shell"
+      }
+    }
+  ],
+  ".ts": {
+    "mode": "ast",
+    "ast_lang": "typescript",
+    "markers": [
+      "//"
+    ],
+    "profile": "kit-ts"
+  },
+  ".py": {
+    "mode": "ast",
+    "ast_lang": "python",
+    "markers": [
+      "#"
+    ],
+    "profile": "python"
+  },
+  ".sh": {
+    "mode": "ast",
+    "ast_lang": "bash",
+    "markers": [
+      "#"
+    ],
+    "profile": "shell"
+  },
+  ".bash": {
+    "mode": "ast",
+    "ast_lang": "bash",
+    "markers": [
+      "#"
+    ],
+    "profile": "shell"
+  },
+  ".zsh": {
+    "mode": "line",
+    "markers": [
+      "#"
+    ],
+    "heredoc": true,
+    "profile": "shell"
+  },
+  ".zshrc": {
+    "mode": "line",
+    "markers": [
+      "#"
+    ],
+    "heredoc": true,
+    "profile": "shell"
+  },
+  ".zprofile": {
+    "mode": "line",
+    "markers": [
+      "#"
+    ],
+    "heredoc": true,
+    "profile": "shell"
+  }
+}

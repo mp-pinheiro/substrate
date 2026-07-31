@@ -1,0 +1,22 @@
+{
+  "name": "base",
+  "claims": {
+    ".yml": { "mode": "line", "markers": ["#"] },
+    ".yaml": { "mode": "line", "markers": ["#"] },
+    ".json": { "mode": "exempt" }
+  },
+  "toolchain": [
+    { "bin": "actionlint", "hint": "https://github.com/rhysd/actionlint (single static binary)" }
+  ],
+  "ci": [
+    "curl -s https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash | bash -s -- latest /usr/local/bin > /dev/null || curl -s https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash | sudo bash -s -- latest /usr/local/bin"
+  ],
+  "templates": [],
+  "checks": ["59-actionlint.sh"],
+  "slop_fixtures": ["fixtures/slop.yml"],
+  "check_fixtures": [
+    { "file": "fixtures/bad.json", "fails": "40-data-validity.sh" },
+    { "file": "fixtures/bad-workflow.yml", "fails": "59-actionlint.sh", "dest": ".github/workflows/substrate-matrix-bad.yml" },
+    { "file": "fixtures/bad-plan.md", "fails": "15-tracking.sh", "dest": ".pi/plans/substrate-matrix-bad.md" }
+  ]
+}
