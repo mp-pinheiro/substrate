@@ -18,6 +18,7 @@
     "*.toml",
     "*.txt",
     ".claude/settings.json",
+    ".env.example",
     ".gitattributes",
     ".gitignore",
     ".gitmodules",

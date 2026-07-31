@@ -51,3 +51,10 @@ just gate            # the kit gates itself (including vendor drift)
 bin/substrate selftest
 test/matrix.sh       # every profile, scratch-repo oracle
 ```
+
+## Account pin (this repo lives under the work org)
+
+On a fresh clone: `cp .env.example .env` — the zsh dotenv plugin sources it on
+cd, pins `gh` to the org account via `GH_TOKEN`, and self-heals the repo-local
+git credential helper (pure-env, no `gh` in the credential path). The global
+active gh account is never touched.
