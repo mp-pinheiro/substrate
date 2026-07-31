@@ -5,7 +5,7 @@ on:
   pull_request: {}
 permissions:
   contents: read
-  actions: write
+  actions: read
   issues: read
 jobs:
   gate:

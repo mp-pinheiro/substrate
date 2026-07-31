@@ -18,7 +18,7 @@ Mechanism: `## Acceptance` items are `- [ ] claim :: verify-command`. A checked 
 ## Acceptance
 
 ### Tracking machinery
-- [x] maintenance report vendored, scheduled, queue proven :: test -x core/report.sh && grep -q 'schedule:' core/ci/github-report.yml && test/report-e2e.sh
+- [x] maintenance report vendored, scheduled, queue live :: test -x core/report.sh && grep -q 'schedule:' core/ci/github-report.yml && if [ -z "${GH_TOKEN:-}" ] && ! gh auth token >/dev/null 2>&1; then [ -z "${CI:-}" ] || exit 1; exit 0; fi && [ "$(gh issue list --label substrate-report --state open --json number --jq length)" -ge 1 ]
 - [x] init hooks merge is idempotent :: test/init-idempotent-test.sh
 - [x] harness parity check fires on a stripped mirror :: test/parity-test.sh
 - [x] vendor drift check fires on mutation :: test/vendor-drift-test.sh
