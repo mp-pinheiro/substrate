@@ -33,7 +33,14 @@ for name in "${profiles[@]}"; do
         printf '# substrate matrix scratch repo\n' > README.md
         for s in "$pdir"/fixtures/clean.* "$pdir"/fixtures/clean-*; do
             [ -f "$s" ] || continue
-            cp "$s" "./$(basename "$s" | cut -c7-)"
+            base=$(basename "$s")
+            case "$base" in
+                clean-*) dest="${base#clean-}" ;;
+                clean.*) dest="sample.${base#clean.}" ;;
+                *) continue ;;
+            esac
+            mkdir -p "$(dirname "./$dest")"
+            cp "$s" "./$dest"
         done
 
         git add -A
@@ -63,18 +70,25 @@ for name in "${profiles[@]}"; do
             command -v "$bin" >/dev/null 2>&1 || tool_ok=0
         done < <(jq -r '(.toolchain // [])[].bin' "$pdir/profile.json")
 
-        while IFS=$'\t' read -r bad_rel fails_check; do
+        while IFS=$'\t' read -r bad_rel fails_check bad_dest; do
             [ -n "$bad_rel" ] || continue
-            if [ "$tool_ok" -eq 0 ] && [ -z "${CI:-}" ]; then
+            if [ "$tool_ok" -eq 0 ]; then
+                if [ -n "${CI:-}" ]; then
+                    echo "own-check oracle CANNOT RUN: toolchain missing in CI for $fails_check — install steps are broken"
+                    exit 9
+                fi
                 echo "note: toolchain absent — bad-fixture assertion for $fails_check skipped locally (CI enforces)"
                 continue
             fi
             src="$pdir/$bad_rel"
-            dest="substrate-matrix-bad-$(basename "$bad_rel")"
+            if [ -z "$bad_dest" ]; then
+                bad_dest="substrate-matrix-bad-$(basename "$bad_rel")"
+            fi
+            mkdir -p "$(dirname "./$bad_dest")" 2>/dev/null || true
             if [ -d "$src" ]; then
-                cp -R "$src" "$dest"
+                cp -R "$src/." "./$bad_dest/" 2>/dev/null || cp -R "$src" "./$bad_dest"
             else
-                cp "$src" "$dest"
+                cp "$src" "./$bad_dest"
             fi
             git add -A && git commit -qm bad-fixture
             out=$(.substrate/gate.sh 2>&1)
@@ -86,9 +100,9 @@ for name in "${profiles[@]}"; do
                 echo "own-check oracle FAILED: $fails_check did not reject $bad_rel (rc=$rc)"
                 exit 9
             fi
-            rm -rf "$dest"
+            rm -rf "./${bad_dest:?}"
             git add -A && git commit -qm bad-fixture-removed
-        done < <(jq -r '(.check_fixtures // [])[] | "\(.file)\t\(.fails)"' "$pdir/profile.json")
+        done < <(jq -r '(.check_fixtures // [])[] | "\(.file)\t\(.fails)\t\(.dest // "")"' "$pdir/profile.json")
 
         if jq -e '(.checks // []) | length > 0' "$pdir/profile.json" >/dev/null \
             && ! jq -e '(.check_fixtures // []) | length > 0' "$pdir/profile.json" >/dev/null; then

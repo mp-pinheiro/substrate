@@ -31,7 +31,10 @@ for f in core/checks.d/*.sh; do
     [ -f "$f" ] && pair "$f" "$SUBSTRATE_DIR/checks.d/$(basename "$f")"
 done
 for f in profiles/*/checks.d/*.sh substrate-profiles/*/checks.d/*.sh checks.d/*.sh; do
-    [ -f "$f" ] && pair "$f" "$SUBSTRATE_DIR/checks.d/$(basename "$f")"
+    [ -f "$f" ] || continue
+    vendored="$SUBSTRATE_DIR/checks.d/$(basename "$f")"
+    [ -f "$vendored" ] || continue
+    pair "$f" "$vendored"
 done
 
 exit "$rc"
