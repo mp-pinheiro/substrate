@@ -5,9 +5,17 @@
     ".yaml": { "mode": "line", "markers": ["#"] },
     ".json": { "mode": "exempt" }
   },
-  "toolchain": [],
+  "toolchain": [
+    { "bin": "actionlint", "hint": "https://github.com/rhysd/actionlint (single static binary)" }
+  ],
+  "ci": [
+    "curl -s https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash | bash -s -- latest /usr/local/bin > /dev/null || curl -s https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash | sudo bash -s -- latest /usr/local/bin"
+  ],
   "templates": [],
-  "checks": [],
+  "checks": ["59-actionlint.sh"],
   "slop_fixtures": ["fixtures/slop.yml"],
-  "check_fixtures": [{ "file": "fixtures/bad.json", "fails": "40-data-validity.sh" }]
+  "check_fixtures": [
+    { "file": "fixtures/bad.json", "fails": "40-data-validity.sh" },
+    { "file": "fixtures/bad-workflow.yml", "fails": "59-actionlint.sh", "dest": ".github/workflows/substrate-matrix-bad.yml" }
+  ]
 }

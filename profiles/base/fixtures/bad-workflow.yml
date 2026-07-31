@@ -1,0 +1,11 @@
+name: broken
+on:
+  push: {}
+jobs:
+  broken:
+    runs-on: ubuntu-latest
+    steps:
+      - name: duplicate and merged step
+        run: echo one
+        run: echo two
+        uses: actions/checkout@v5
