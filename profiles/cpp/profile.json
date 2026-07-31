@@ -1,0 +1,23 @@
+{
+  "name": "cpp",
+  "claims": {
+    ".cpp": { "mode": "ast", "ast_lang": "cpp", "markers": ["//"], "block": [["/*", "*/"]] },
+    ".cc": { "mode": "ast", "ast_lang": "cpp", "markers": ["//"], "block": [["/*", "*/"]] },
+    ".cxx": { "mode": "ast", "ast_lang": "cpp", "markers": ["//"], "block": [["/*", "*/"]] },
+    ".hpp": { "mode": "ast", "ast_lang": "cpp", "markers": ["//"], "block": [["/*", "*/"]] },
+    ".hh": { "mode": "ast", "ast_lang": "cpp", "markers": ["//"], "block": [["/*", "*/"]] },
+    ".h": { "mode": "ast", "ast_lang": "cpp", "markers": ["//"], "block": [["/*", "*/"]] },
+    ".clang-format": { "mode": "line", "markers": ["#"] }
+  },
+  "toolchain": [
+    { "bin": "clang-format", "hint": "https://releases.llvm.org (apt: clang-format)" }
+  ],
+  "ci": [
+    "sudo apt-get update -qq",
+    "sudo apt-get install -y -qq clang-format"
+  ],
+  "templates": [{ "src": "clang-format", "dest": ".clang-format" }],
+  "checks": ["79-clang-format.sh"],
+  "slop_fixtures": ["fixtures/slop.cpp"],
+  "check_fixtures": [{ "file": "fixtures/bad-format.cpp", "fails": "79-clang-format.sh" }]
+}

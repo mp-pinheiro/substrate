@@ -1,0 +1,18 @@
+{
+  "name": "lua",
+  "claims": {
+    ".lua": { "mode": "ast", "ast_lang": "lua", "markers": ["--"] },
+    ".luacheckrc": { "mode": "line", "markers": ["--"] }
+  },
+  "toolchain": [
+    { "bin": "luacheck", "hint": "https://github.com/lunarmodules/luacheck#installation (apt: lua-check)" }
+  ],
+  "ci": [
+    "sudo apt-get update -qq",
+    "sudo apt-get install -y -qq lua-check"
+  ],
+  "templates": [{ "src": "luacheckrc", "dest": ".luacheckrc" }],
+  "checks": ["78-luacheck.sh"],
+  "slop_fixtures": ["fixtures/slop.lua"],
+  "check_fixtures": [{ "file": "fixtures/bad-luacheck.lua", "fails": "78-luacheck.sh" }]
+}
