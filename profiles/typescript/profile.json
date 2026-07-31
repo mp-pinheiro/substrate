@@ -1,0 +1,16 @@
+{
+  "name": "typescript",
+  "claims": {
+    ".ts": { "mode": "ast", "ast_lang": "typescript", "markers": ["//"], "block": [["/*", "*/"]] },
+    ".tsx": { "mode": "ast", "ast_lang": "tsx", "markers": ["//"], "block": [["/*", "*/"]] },
+    ".js": { "mode": "ast", "ast_lang": "javascript", "markers": ["//"], "block": [["/*", "*/"]] },
+    ".jsx": { "mode": "ast", "ast_lang": "javascript", "markers": ["//"], "block": [["/*", "*/"]] },
+    ".mjs": { "mode": "ast", "ast_lang": "javascript", "markers": ["//"], "block": [["/*", "*/"]] }
+  },
+  "toolchain": [{ "bin": "bun", "hint": "https://bun.sh" }],
+  "ci": [],
+  "templates": [{ "src": "tsconfig.json", "dest": "tsconfig.json" }],
+  "checks": ["71-tsc.sh"],
+  "slop_fixtures": ["fixtures/slop.ts"],
+  "check_fixtures": [{ "file": "fixtures/bad-tsc.ts", "fails": "71-tsc.sh" }]
+}

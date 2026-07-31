@@ -1,0 +1,11 @@
+{
+  "name": "svelte",
+  "claims": {
+    ".svelte": { "mode": "exempt" }
+  },
+  "toolchain": [],
+  "ci": [],
+  "templates": [],
+  "checks": [],
+  "slop_fixtures": []
+}
