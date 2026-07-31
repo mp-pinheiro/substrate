@@ -1,0 +1,10 @@
+{
+  "metrics": {
+    "comments:core/check-comments.sh": 3,
+    "comments:profiles/shell/fixtures/slop-noext": 1,
+    "comments:profiles/shell/fixtures/slop.sh": 1,
+    "comments:substrate-profiles/kit-ts/fixtures/slop.ts": 1,
+    "dup_pct": 7.12041884816754,
+    "max_file_lines": 413
+  }
+}

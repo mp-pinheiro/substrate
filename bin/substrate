@@ -54,26 +54,37 @@ build_langmap() {
 }
 
 vendor_core() {
-    local profiles=("$@") p d c
-    rm -rf .substrate
-    mkdir -p .substrate/checks.d .substrate/hooks .substrate/profiles
+    local profiles=("$@") p d c staging=.substrate.new
+    rm -rf "$staging"
+    mkdir -p "$staging/checks.d" "$staging/hooks" "$staging/profiles"
     cp "$KIT_ROOT"/core/gate.sh "$KIT_ROOT"/core/gate-lib.sh \
        "$KIT_ROOT"/core/check-comments.sh "$KIT_ROOT"/core/comment-ratchet.sh \
-       "$KIT_ROOT"/core/selftest.sh .substrate/ || die "vendor copy failed: core scripts"
-    cp "$KIT_ROOT"/core/hooks/*.sh .substrate/hooks/ || die "vendor copy failed: hooks"
-    cp "$KIT_ROOT"/core/checks.d/*.sh .substrate/checks.d/ || die "vendor copy failed: core checks"
-    cp "$KIT_ROOT"/VERSION .substrate/VERSION || die "vendor copy failed: VERSION"
+       "$KIT_ROOT"/core/selftest.sh "$staging/" || die "vendor copy failed: core scripts"
+    cp "$KIT_ROOT"/core/hooks/*.sh "$staging/hooks/" || die "vendor copy failed: hooks"
+    cp "$KIT_ROOT"/core/checks.d/*.sh "$staging/checks.d/" || die "vendor copy failed: core checks"
+    cp "$KIT_ROOT"/VERSION "$staging/VERSION" || die "vendor copy failed: VERSION"
     for p in "${profiles[@]}"; do
         d=$(profile_dir "$p") || die "unknown profile: $p"
-        cp -R "$d" ".substrate/profiles/$p"
+        cp -R "$d" "$staging/profiles/$p" || die "vendor copy failed: profile $p"
         if [ -d "$d/checks.d" ]; then
             for c in "$d"/checks.d/*.sh; do
-                [ -f "$c" ] && cp "$c" .substrate/checks.d/
+                [ -f "$c" ] && { cp "$c" "$staging/checks.d/" || die "vendor copy failed: $c"; }
             done
         fi
     done
-    build_langmap .substrate/langmap.json "${profiles[@]}"
-    chmod +x .substrate/*.sh .substrate/hooks/*.sh .substrate/checks.d/*.sh
+    if [ -d checks.d ]; then
+        for c in checks.d/*.sh; do
+            [ -f "$c" ] && { cp "$c" "$staging/checks.d/" || die "vendor copy failed: repo-local $c"; }
+        done
+    fi
+    build_langmap "$staging/langmap.json" "${profiles[@]}"
+    chmod +x "$staging"/*.sh "$staging"/hooks/*.sh "$staging"/checks.d/*.sh
+    rm -rf .substrate.old
+    if [ -d .substrate ]; then
+        mv .substrate .substrate.old || die "vendor swap failed: could not set aside old copy"
+    fi
+    mv "$staging" .substrate || die "vendor swap failed — previous copy preserved at .substrate.old"
+    rm -rf .substrate.old
 }
 
 seed_config() {
@@ -87,7 +98,7 @@ seed_config() {
             "LICENSE*", "VERSION", ".gitignore", ".gitattributes", ".gitmodules",
             "*.yml", "**/*.yml", "*.yaml", "**/*.yaml",
             "*.png", "*.svg", "*.jpg", "*.csv", "Dockerfile*", "Makefile", "justfile",
-            ".substrate/**"
+            ".substrate/**", ".omp/extensions/substrate-quality.ts"
         ],
         protected_paths: [],
         comment: { allow_tags: ["SAFETY:", "WHY:", "PERF:", "HACK:"] },
