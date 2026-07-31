@@ -50,6 +50,14 @@ for plan in "$PLANS"/*.md; do
         printf '%s — committed plan with %d unchecked item(s): a committed plan claims done\n' "$rel" "$unchecked"
         rc=1
     fi
+    if [ "$state" = "superseded" ] && ! grep -q '^superseded-by: .' "$plan"; then
+        printf '%s — superseded plan needs a "superseded-by: <where>" pointer (a state without a link is silence)\n' "$rel"
+        rc=1
+    fi
+    if [ "$state" = "abandoned" ] && ! grep -q '^reason: .' "$plan"; then
+        printf '%s — abandoned plan needs a "reason:" line\n' "$rel"
+        rc=1
+    fi
 done
 [ "$found" -eq 1 ] || exit 0
 exit "$rc"
