@@ -1,7 +1,7 @@
 {
   "metrics": {
     "comments:core/check-comments.sh": 3,
-    "dup_pct": 6.762804574838389,
+    "dup_pct": 5.997693194925029,
     "max_file_lines": 413
   }
 }

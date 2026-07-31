@@ -2,8 +2,9 @@
   "version": 1,
   "profiles": [
     "base",
-    "shell",
-    "kit-ts"
+    "kit-ts",
+    "python",
+    "shell"
   ],
   "inventory": "auto",
   "unscanned": [
@@ -17,7 +18,6 @@
     "*.toml",
     "*.txt",
     ".gitattributes",
-    ".github/workflows/substrate-gate.yml",
     ".gitignore",
     ".gitmodules",
     ".substrate/**",
@@ -27,7 +27,9 @@
     "VERSION",
     "justfile",
     "profiles/*/fixtures/**",
-    "substrate-profiles/*/fixtures/**"
+    "profiles/*/templates/**",
+    "substrate-profiles/*/fixtures/**",
+    "substrate-profiles/*/templates/**"
   ],
   "protected_paths": [],
   "comment": {
