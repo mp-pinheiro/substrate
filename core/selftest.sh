@@ -70,7 +70,11 @@ for pjson in .substrate/profiles/*/profile.json; do
     pname=$(jq -r '.name' "$pjson")
     fixtures=$(jq -r '(.slop_fixtures // [])[]' "$pjson")
     if [ -z "$fixtures" ]; then
-        bad "profile $pname has no slop_fixtures — cannot prove the comment gate bites"
+        if jq -e '[.claims // {} | to_entries[] | select(.value.mode != "exempt")] | length > 0' "$pjson" >/dev/null; then
+            bad "profile $pname claims scannable files but has no slop_fixtures — cannot prove the comment gate bites"
+        else
+            note "profile $pname claims no scannable files — slop injection n/a"
+        fi
         continue
     fi
     while IFS= read -r fixture_rel; do

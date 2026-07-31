@@ -30,16 +30,11 @@ for name in "${profiles[@]}"; do
         git config user.email substrate@localhost
         git config user.name substrate
 
-        found_clean=0
+        printf '# substrate matrix scratch repo\n' > README.md
         for s in "$pdir"/fixtures/clean.* "$pdir"/fixtures/clean-*; do
             [ -f "$s" ] || continue
             cp "$s" "./$(basename "$s" | cut -c7-)"
-            found_clean=1
         done
-        if [ "$found_clean" -eq 0 ]; then
-            echo "no fixtures/clean.* sample — the scratch repo would be empty"
-            exit 9
-        fi
 
         git add -A
         git commit -qm seed
