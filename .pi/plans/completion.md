@@ -1,5 +1,5 @@
 # Plan: substrate completion — 100% on all four pillars
-state: active
+state: committed
 
 Supersedes the completion scope of `~/dotfiles/.pi/plans/substrate-kit.md` (kept as historical anchor + audit trail). This file is the tracked, gated artifact of record: `15-tracking.sh` enforces its shape at every gate; `substrate audit` executes every oracle below; CI runs both.
 
@@ -52,8 +52,8 @@ Mechanism: `## Acceptance` items are `- [ ] claim :: verify-command`. A checked 
 - [x] guides ported kit-generic :: test -f guides/README.md && test -f guides/daily-workflow.md
 
 ### Proof on remote
-- [ ] kit repo has a remote :: git remote get-url origin >/dev/null 2>&1
-- [ ] Actions gate green on latest completed run :: gh run list --status completed --limit 1 --json conclusion --jq '.[0].conclusion' | grep -qx success
+- [x] kit repo has a remote :: git remote get-url origin >/dev/null 2>&1
+- [x] Actions gate green on latest completed run :: gh run list --status completed --limit 1 --json conclusion --jq '.[0].conclusion' | grep -qx success
 
 ## Deferred (each with a reason — a state, not silence)
 
