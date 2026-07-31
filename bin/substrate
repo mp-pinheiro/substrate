@@ -96,7 +96,6 @@ seed_config() {
         unscanned: [
             "*.md", "**/*.md", "*.json", "**/*.json", "*.txt", "*.lock", "*.toml",
             "LICENSE*", "VERSION", ".gitignore", ".gitattributes", ".gitmodules",
-            "*.yml", "**/*.yml", "*.yaml", "**/*.yaml",
             "*.png", "*.svg", "*.jpg", "*.csv", "Dockerfile*", "Makefile", "justfile",
             ".substrate/**", ".omp/extensions/substrate-quality.ts"
         ],
@@ -195,8 +194,12 @@ cmd_init() {
     [ -n "$profiles_csv" ] || die "init requires --profile a,b — kit profiles: $(basename -a "$KIT_ROOT"/profiles/* | tr '\n' ' ')"
     [ -d .git ] || [ -d .jj ] || die "not a repo root (no .git or .jj here)"
 
-    local profiles=()
-    IFS=',' read -r -a profiles <<< "$profiles_csv"
+    local profiles=(base)
+    local requested=() p
+    IFS=',' read -r -a requested <<< "$profiles_csv"
+    for p in "${requested[@]}"; do
+        [ "$p" = "base" ] || profiles+=("$p")
+    done
 
     vendor_core "${profiles[@]}"
     if [ -f substrate.json ]; then

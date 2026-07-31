@@ -1,0 +1,11 @@
+{
+  "name": "base",
+  "claims": {
+    ".yml": { "mode": "line", "markers": ["#"] },
+    ".yaml": { "mode": "line", "markers": ["#"] }
+  },
+  "toolchain": [],
+  "templates": [],
+  "checks": [],
+  "slop_fixtures": ["fixtures/slop.yml"]
+}

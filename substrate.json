@@ -1,6 +1,7 @@
 {
   "version": 1,
   "profiles": [
+    "base",
     "shell",
     "kit-ts"
   ],
@@ -8,8 +9,6 @@
   "unscanned": [
     "**/*.json",
     "**/*.md",
-    "**/*.yaml",
-    "**/*.yml",
     "*.csv",
     "*.jpg",
     "*.json",
@@ -19,9 +18,8 @@
     "*.svg",
     "*.toml",
     "*.txt",
-    "*.yaml",
-    "*.yml",
     ".gitattributes",
+    ".github/workflows/substrate-gate.yml",
     ".gitignore",
     ".gitmodules",
     ".substrate/**",
