@@ -46,10 +46,10 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
-      - name: Install core toolchain
-        run: bun install -g @ast-grep/cli jscpd
-      - name: Install active profile toolchains
-        run: test/ci-toolchain.sh --active
+      - name: Install core + all profile toolchains
+        run: |
+          bun install -g @ast-grep/cli jscpd
+          test/ci-toolchain.sh
       - name: Audit plan oracles
         env:
           GH_TOKEN: ${{ github.token }}
