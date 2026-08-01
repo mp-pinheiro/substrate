@@ -42,7 +42,7 @@ jobs:
         run: test/hostile-home.sh ${{ matrix.profile }}
   audit:
     runs-on: ubuntu-latest
-    needs: [gate]
+    needs: [gate, profile-matrix]
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2

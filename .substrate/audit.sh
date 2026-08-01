@@ -36,11 +36,11 @@ for plan in "${plans[@]}"; do
     esac
 
     printf '=== %s (%s)\n' "$plan" "$state"
-    pass=0 pending=0 regressed=0 unverifiable=0 in_acceptance=0
-    # Each oracle runs in its own repo copy so concurrent gate/selftest/matrix
-    # runs can't corrupt each other's state.
-    max_jobs=${SUBSTRATE_AUDIT_JOBS:-$(nproc 2>/dev/null || echo 4)}
-    [ "$max_jobs" -lt 1 ] && max_jobs=1
+    pass=0 pending=0 regressed=0 unverifiable=0 delegated=0 in_acceptance=0
+    # On CI, matrix oracles delegate to the profile-matrix job (needs:
+    # [gate, profile-matrix] guarantees all passed before this runs).
+    delegate_matrix=0
+    [ -n "${GITHUB_RUN_ID:-}" ] && delegate_matrix=1
     items=()
     while IFS= read -r line; do
         case "$line" in
@@ -55,19 +55,34 @@ for plan in "${plans[@]}"; do
         items+=("$line")
     done < "$plan"
 
-    n=${#items[@]}
+    # Partition: delegate matrix oracles on CI, keep the rest active
+    active=()
+    for ((i = 0; i < ${#items[@]}; i++)); do
+        rest="${items[$i]:6}"
+        cmd="${rest#* :: }"
+        if [ "$delegate_matrix" -eq 1 ] && [[ "$cmd" == *"test/matrix.sh"* ]]; then
+            printf '  [~~] %s — DELEGATED (profile-matrix CI)\n' "${rest%% :: *}"
+            delegated=$((delegated + 1))
+        else
+            active+=("${items[$i]}")
+        fi
+    done
+
+    n=${#active[@]}
     if [ "$n" -eq 0 ]; then
-        printf '  audit: %d passing, %d pending, %d regressed, %d unverifiable\n' "$pass" "$pending" "$regressed" "$unverifiable"
+        printf '  audit: %d passing, %d pending, %d regressed, %d unverifiable, %d delegated\n' "$pass" "$pending" "$regressed" "$unverifiable" "$delegated"
         [ "$regressed" -eq 0 ] || overall_rc=1
         continue
     fi
 
+    max_jobs=${SUBSTRATE_AUDIT_JOBS:-$(nproc 2>/dev/null || echo 4)}
+    [ "$max_jobs" -lt 1 ] && max_jobs=1
     out_files=()
     rc_files=()
     wds=()
     running=0
     for ((i = 0; i < n; i++)); do
-        rest="${items[$i]:6}"
+        rest="${active[$i]:6}"
         cmd="${rest#* :: }"
         out_files[$i]=$(mktemp)
         rc_files[$i]=$(mktemp)
@@ -84,7 +99,7 @@ for plan in "${plans[@]}"; do
     for ((i = 0; i < n; i++)); do
         while [ ! -s "${rc_files[$i]}" ]; do sleep 0.1; done
         cmd_rc=$(cat "${rc_files[$i]}")
-        line="${items[$i]}"
+        line="${active[$i]}"
         box="${line:3:1}"
         rest="${line:6}"
         claim="${rest%% :: *}"
@@ -111,7 +126,7 @@ for plan in "${plans[@]}"; do
         fi
     done
     wait 2>/dev/null
-    printf '  audit: %d passing, %d pending, %d regressed, %d unverifiable\n' "$pass" "$pending" "$regressed" "$unverifiable"
+    printf '  audit: %d passing, %d pending, %d regressed, %d unverifiable, %d delegated\n' "$pass" "$pending" "$regressed" "$unverifiable" "$delegated"
     [ "$regressed" -eq 0 ] || overall_rc=1
 done
 exit "$overall_rc"
