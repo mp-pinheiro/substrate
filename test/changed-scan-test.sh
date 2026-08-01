@@ -96,8 +96,23 @@ mkdir -p "$T/jj-repo"
     jj commit -m 'chore: rename settled' >/dev/null 2>&1
     mv components lib
     printf '# we narrate inside the moved dir\n# and we narrate once more\n' >> lib/renamed.sh
-    jj diff --summary --no-pager | grep -q '{.* => .*}' || fail "jj emitted no directory-rename summary — prefix-brace parser untested"
-    run_scan "$err"
+    mkdir -p "$T/jj-summary-bin"
+    cat > "$T/jj-summary-bin/jj" <<'SH'
+#!/usr/bin/env bash
+set -uo pipefail
+[ "$#" -eq 3 ] || exit 2
+[ "$1" = diff ] || exit 2
+[ "$2" = --summary ] || exit 2
+[ "$3" = --no-pager ] || exit 2
+printf 'R {components => lib}/renamed.sh\n'
+SH
+    chmod +x "$T/jj-summary-bin/jj"
+    (
+        export PATH="$T/jj-summary-bin:$PATH"
+        run_scan "$err"
+    )
+    rc=$?
+    [ "$rc" -eq 2 ] || fail "jj: prefix-brace scan exited $rc, want 2: $(cat "$err")"
     grep -q 'lib/renamed.sh' "$err" || fail "jj: dir-renamed path not resolved from prefix-brace summary: $(cat "$err")"
     rm -f "$err"
 ) || exit 1
