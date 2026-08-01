@@ -53,4 +53,5 @@ jobs:
       - name: Audit plan oracles
         env:
           GH_TOKEN: ${{ github.token }}
+          SUBSTRATE_AUDIT_JOBS: '4'
         run: bin/substrate audit
