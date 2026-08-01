@@ -32,6 +32,14 @@ grep -q 'no maintenance report — run: substrate report --write' <<< "$out" \
 [ -f substrate-report.md ] || fail "substrate-report.md not written"
 head -n1 substrate-report.md | grep -qE '^generated: [0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]{8}Z$' \
     || fail "generated header malformed: $(head -n1 substrate-report.md)"
+grep -q '^# Substrate maintenance report$' substrate-report.md \
+    || fail "report heading missing"
+grep -q '^## Duplicate code$' substrate-report.md \
+    || fail "duplication heading missing"
+grep -q '^## Possible dead code$' substrate-report.md \
+    || fail "dead-code heading missing"
+grep -q '^## Baseline limits$' substrate-report.md \
+    || fail "baseline heading missing"
 
 out=$(env -u CI .substrate/gate.sh --update-baseline 2>&1) \
     || fail "gate not green with fresh report: $out"

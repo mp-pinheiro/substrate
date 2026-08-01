@@ -63,10 +63,12 @@ push blocked: fix the failing gate checks first
 
 The `review` skill runs the gate, reads the diff, and reports findings only with `file:line` citations — tool-grounded, not vibes. Use it before pushing anything you wouldn't want to debug later.
 
-## Weekly: the maintenance queue
+## Daily maintenance report
+
+GitHub refreshes the open `substrate-report` issue every day at 06:00 UTC. Run the same report locally whenever you want a current view:
 
 ```sh
 substrate report
 ```
 
-Advisory, always exits 0: worst duplication clusters (jscpd), dead-code candidates (vulture / knip), and baseline metrics ripe for tightening. Paste items straight into tasks.
+The report is advisory. It separates duplicate-code candidates, possible dead code, and baseline limits, and it never fails the gate.

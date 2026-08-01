@@ -1,7 +1,7 @@
 name: substrate-report
 on:
   schedule:
-    - cron: '0 6 * * 1'
+    - cron: '0 6 * * *'
   workflow_dispatch: {}
 permissions:
   contents: read
@@ -18,11 +18,12 @@ jobs:
       - name: Upsert maintenance queue issue
         env:
           GH_TOKEN: ${{ github.token }}
+          REPORT_TITLE: "Substrate maintenance report: cleanup candidates"
         run: |
           gh label create substrate-report --force --description "substrate maintenance queue" --color 5319e7
           n=$(gh api "repos/{owner}/{repo}/issues?labels=substrate-report&state=open" --jq '.[0].number // empty')
           if [ -n "$n" ]; then
-            gh issue edit "$n" --body-file report.md
+            gh issue edit "$n" --title "$REPORT_TITLE" --body-file report.md
           else
-            gh issue create --title "substrate maintenance queue" --label substrate-report --body-file report.md
+            gh issue create --title "$REPORT_TITLE" --label substrate-report --body-file report.md
           fi

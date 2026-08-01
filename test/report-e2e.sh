@@ -15,17 +15,35 @@ if [ -z "${GH_TOKEN:-}" ] && ! gh auth token >/dev/null 2>&1; then
     exit 0
 fi
 
+before=$(gh run list --workflow substrate-report --limit 1 --json databaseId --jq '.[0].databaseId // empty' 2>/dev/null)
 gh workflow run substrate-report >/dev/null 2>&1 || {
     printf 'report-e2e: dispatch failed (needs actions:write)\n' >&2
     exit 1
 }
 for _ in $(seq 1 36); do
     sleep 5
-    status=$(gh run list --workflow substrate-report --limit 1 --json status --jq '.[0].status' 2>/dev/null)
-    [ "$status" = "completed" ] && break
+    run=$(gh run list --workflow substrate-report --limit 1 --json databaseId,status,conclusion --jq '.[0]' 2>/dev/null)
+    run_id=$(jq -r '.databaseId // empty' <<< "$run")
+    status=$(jq -r '.status // empty' <<< "$run")
+    [ -n "$run_id" ] && [ "$run_id" != "$before" ] && [ "$status" = "completed" ] && break
 done
-[ "$status" = "completed" ] || { printf 'report-e2e: run never completed\n' >&2; exit 1; }
+if [ -z "$run_id" ] || [ "$run_id" = "$before" ] || [ "$status" != "completed" ]; then
+    printf 'report-e2e: new run never completed\n' >&2
+    exit 1
+fi
+conclusion=$(jq -r '.conclusion // empty' <<< "$run")
+[ "$conclusion" = "success" ] || { printf 'report-e2e: run failed (%s)\n' "$conclusion" >&2; exit 1; }
 
-count=$(gh issue list --label substrate-report --state open --json number --jq 'length')
-[ "${count:-0}" -ge 1 ] || { printf 'report-e2e: no maintenance queue issue after run\n' >&2; exit 1; }
-printf 'report-e2e: queue issue present after dispatched run\n'
+issue=$(gh issue list --label substrate-report --state open --limit 1 --json number,title,body --jq '.[0]')
+[ "$issue" != "null" ] || { printf 'report-e2e: no maintenance queue issue after run\n' >&2; exit 1; }
+if [ -n "${CI:-}" ]; then
+    title=$(jq -r '.title' <<< "$issue")
+    body=$(jq -r '.body' <<< "$issue")
+    [ "$title" = "Substrate maintenance report: cleanup candidates" ] \
+        || { printf 'report-e2e: issue title stale (%s)\n' "$title" >&2; exit 1; }
+    grep -q '^# Substrate maintenance report$' <<< "$body" \
+        || { printf 'report-e2e: issue body heading missing\n' >&2; exit 1; }
+    grep -q '^## Duplicate code$' <<< "$body" \
+        || { printf 'report-e2e: issue body sections missing\n' >&2; exit 1; }
+fi
+printf 'report-e2e: queue issue present after successful dispatch\n'
