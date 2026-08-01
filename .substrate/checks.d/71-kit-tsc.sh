@@ -42,7 +42,7 @@ run_tsc() {
     done
     jq --args '.files = $ARGS.positional' "${abs_files[@]}" < "$tmp/tsconfig.json" > "$tmp/t2.json" \
         && mv "$tmp/t2.json" "$tmp/tsconfig.json"
-    out=$(bunx --bun tsc -p "$tmp/tsconfig.json" 2>&1)
+    out=$(bunx --bun -p typescript@6.0.3 tsc -p "$tmp/tsconfig.json" 2>&1)
     rc=$?
     [ "$rc" -eq 0 ] && return 0
     printf '%s\n' "$out"

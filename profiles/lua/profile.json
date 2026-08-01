@@ -12,6 +12,7 @@
     "sudo apt-get update -qq",
     "sudo apt-get install -y -qq lua-check unzip",
     "curl -sSfL -o /tmp/stylua.zip https://github.com/JohnnyMorganz/StyLua/releases/download/v2.5.2/stylua-linux-x86_64.zip",
+    "echo 'bcb0d855e91f102f28a370e850f8566b3b44b79e6274d806ea5246837c0fd5ab  /tmp/stylua.zip' | sha256sum -c -",
     "sudo unzip -o -q /tmp/stylua.zip -d /usr/local/bin",
     "sudo chmod +x /usr/local/bin/stylua"
   ],

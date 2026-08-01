@@ -1,2 +1,8 @@
 .env
+.env.*
+!.env.example
+*.key
+*.p12
+*.pem
+*.pfx
 substrate-report.md

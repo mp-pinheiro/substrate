@@ -10,9 +10,12 @@
     { "bin": "tflint", "hint": "https://github.com/terraform-linters/tflint#installation" }
   ],
   "ci": [
-    "curl -sfLo /tmp/tf.zip https://releases.hashicorp.com/terraform/1.9.8/terraform_1.9.8_linux_amd64.zip",
-    "sudo unzip -oq /tmp/tf.zip terraform -d /usr/local/bin",
-    "curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | sudo bash"
+    "curl -sSfLo /tmp/terraform.zip https://releases.hashicorp.com/terraform/1.9.8/terraform_1.9.8_linux_amd64.zip",
+    "echo '186e0145f5e5f2eb97cbd785bc78f21bae4ef15119349f6ad4fa535b83b10df8  /tmp/terraform.zip' | sha256sum -c -",
+    "sudo unzip -oq /tmp/terraform.zip terraform -d /usr/local/bin",
+    "curl -sSfLo /tmp/tflint.zip https://github.com/terraform-linters/tflint/releases/download/v0.64.0/tflint_linux_amd64.zip",
+    "echo 'cca9d13e2e1d7a2c627af60ff899a3c9b74212899416aeb96ec764d2ef954537  /tmp/tflint.zip' | sha256sum -c -",
+    "sudo unzip -oq /tmp/tflint.zip tflint -d /usr/local/bin"
   ],
   "templates": [{ "src": "tflint.hcl", "dest": ".tflint.hcl" }],
   "checks": ["68-terraform-fmt.sh", "69-tflint.sh", "70-terraform-validate.sh"],

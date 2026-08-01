@@ -10,9 +10,9 @@
   },
   "toolchain": [
     { "bin": "bun", "hint": "https://bun.sh" },
-    { "bin": "depcruise", "hint": "bun install -g dependency-cruiser@18" }
+    { "bin": "depcruise", "hint": "bun install -g dependency-cruiser@18.1.0" }
   ],
-  "ci": ["bun install -g dependency-cruiser@18"],
+  "ci": ["bun install -g dependency-cruiser@18.1.0"],
   "templates": [
     { "src": "tsconfig.json", "dest": "tsconfig.json" },
     { "src": "dependency-cruiser.cjs", "dest": ".dependency-cruiser.cjs" }

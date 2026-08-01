@@ -13,7 +13,7 @@ fi
 require_bin_ci bun "profile toolchain — https://bun.sh" || exit 0
 
 errf=$(mktemp)
-out=$(bunx --yes -p typescript tsc --noEmit 2>"$errf")
+out=$(bunx --yes -p typescript@6.0.3 tsc --noEmit 2>"$errf")
 rc=$?
 err=$(cat "$errf")
 rm -f "$errf"

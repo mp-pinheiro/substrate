@@ -14,7 +14,7 @@ SG=()
 if have ast-grep; then
     SG=(ast-grep)
 elif have bunx; then
-    SG=(bunx --yes @ast-grep/cli)
+    SG=(bunx --yes @ast-grep/cli@0.45.0)
 elif [ -n "${CI:-}" ]; then
     die_infra "ast-grep unavailable in CI (install @ast-grep/cli or bun) — cannot pass blind"
 else

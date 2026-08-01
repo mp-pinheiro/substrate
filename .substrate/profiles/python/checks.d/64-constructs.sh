@@ -14,7 +14,7 @@ SG=()
 if have ast-grep; then
     SG=(ast-grep)
 elif have bunx; then
-    SG=(bunx --yes @ast-grep/cli)
+    SG=(bunx --yes @ast-grep/cli@0.45.0)
 else
     die_infra "ast-grep unavailable (install ast-grep, or bun for bunx) — cannot scan constructs blind"
 fi

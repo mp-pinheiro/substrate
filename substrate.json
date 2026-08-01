@@ -21,6 +21,7 @@
     ".gitattributes",
     ".gitignore",
     ".gitmodules",
+    ".github/CODEOWNERS",
     ".importlinter",
     ".omp/**",
     ".substrate/**",
@@ -34,7 +35,20 @@
     "substrate-profiles/*/fixtures/**",
     "substrate-profiles/*/templates/**"
   ],
-  "protected_paths": [],
+  "protected_paths": [
+    ".env*",
+    "**/.env*",
+    "*.key",
+    "**/*.key",
+    "*.p12",
+    "**/*.p12",
+    "*.pem",
+    "**/*.pem",
+    "*.pfx",
+    "**/*.pfx",
+    "secrets/**",
+    "**/secrets/**"
+  ],
   "comment": {
     "allow_tags": [
       "SAFETY:",

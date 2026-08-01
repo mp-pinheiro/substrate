@@ -4,9 +4,9 @@
     ".svelte": { "mode": "exempt" }
   },
   "toolchain": [
-    { "bin": "svelte-check", "hint": "bun install -g svelte-check@4 typescript@6 svelte@5 (svelte-check 4 needs typescript 5/6 next to it)" }
+    { "bin": "svelte-check", "hint": "bun install -g svelte-check@4.7.4 typescript@6.0.3 svelte@5.56.8" }
   ],
-  "ci": ["bun install -g svelte-check@4 typescript@6 svelte@5"],
+  "ci": ["bun install -g svelte-check@4.7.4 typescript@6.0.3 svelte@5.56.8"],
   "templates": [],
   "checks": ["73-svelte-check.sh"],
   "slop_fixtures": [],

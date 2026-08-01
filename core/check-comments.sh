@@ -43,7 +43,7 @@ resolve_sg() {
     if command -v ast-grep >/dev/null 2>&1; then
         SG=(ast-grep)
     elif command -v bunx >/dev/null 2>&1; then
-        SG=(bunx --yes @ast-grep/cli)
+        SG=(bunx --yes @ast-grep/cli@0.45.0)
     fi
 }
 

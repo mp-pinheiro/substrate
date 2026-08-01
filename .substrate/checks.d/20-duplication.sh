@@ -9,13 +9,17 @@ source "$SUBSTRATE_DIR/gate-lib.sh"
 if command -v jscpd >/dev/null 2>&1; then
     JSCPD=(jscpd)
 else
-    require_bin_ci bunx "install bun: https://bun.sh (or: bun install -g jscpd)" || exit 0
-    JSCPD=(bunx --yes jscpd)
+    require_bin_ci bunx "install bun: https://bun.sh (or: bun install -g jscpd@5.0.14)" || exit 0
+    JSCPD=(bunx --yes jscpd@5.0.14)
 fi
 
 files=()
+# Managed files are generated mirrors; their canonical source remains in scope.
 while IFS= read -r f; do
-    scan_source "$f" && files+=("$f")
+    scan_source "$f" || continue
+    IFS= read -r first < "$f" || first=""
+    [ "$first" = "# substrate-managed" ] && continue
+    files+=("$f")
 done < "$INVENTORY"
 [ ${#files[@]} -eq 0 ] && exit 0
 

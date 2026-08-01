@@ -15,9 +15,9 @@
   "ci": [
     "sudo apt-get update -qq",
     "sudo apt-get install -y -qq python3 python3-pip pipx",
-    "sudo PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install ruff",
-    "sudo PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install import-linter",
-    "sudo PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install vulture"
+    "sudo PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install ruff==0.16.1",
+    "sudo PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install import-linter==2.13",
+    "sudo PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install vulture==2.16"
   ],
   "templates": [
     { "src": "ruff.toml", "dest": "ruff.toml" },

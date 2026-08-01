@@ -14,9 +14,9 @@ report_duplication() {
     if command -v jscpd >/dev/null 2>&1; then
         JSCPD=(jscpd)
     elif command -v bunx >/dev/null 2>&1; then
-        JSCPD=(bunx --yes jscpd)
+        JSCPD=(bunx --yes jscpd@5.0.14)
     else
-        printf "Status: not scanned. Install \`jscpd\` with \`bun install -g jscpd\`.\n"
+        printf "Status: not scanned. Install \`jscpd\` with \`bun install -g jscpd@5.0.14\`.\n"
         return 0
     fi
     local dir percentage clones shown

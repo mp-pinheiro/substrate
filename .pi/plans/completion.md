@@ -1,7 +1,7 @@
 # Plan: substrate completion — 100% on all four pillars
 state: committed
 
-Supersedes the completion scope of `~/dotfiles/.pi/plans/substrate-kit.md` (kept as historical anchor + audit trail). This file is the tracked, gated artifact of record: `15-tracking.sh` enforces its shape at every gate; `substrate audit` executes every oracle below; CI runs both.
+Supersedes an earlier private prototype plan. This file is the tracked, gated artifact of record: `15-tracking.sh` enforces its shape at every gate; `substrate audit` executes every oracle below; CI runs both.
 
 ## Research (decisions carried, kernel-style: self-contained here, links for depth)
 

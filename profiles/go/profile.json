@@ -12,7 +12,8 @@
   "ci": [
     "sudo apt-get update -qq",
     "sudo apt-get install -y -qq golang-go",
-    "curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sudo sh -s -- -b /usr/local/bin"
+    "curl -sSfL -o /tmp/install-golangci-lint.sh https://raw.githubusercontent.com/golangci/golangci-lint/c0d3ddc9cf3faa61a4e378e879ece580256d76e5/install.sh",
+    "sudo sh /tmp/install-golangci-lint.sh -b /usr/local/bin v2.12.2"
   ],
   "templates": [{ "src": "golangci.yml", "dest": ".golangci.yml" }],
   "checks": ["75-go-build.sh", "76-golangci.sh"],

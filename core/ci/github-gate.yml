@@ -3,6 +3,9 @@ on:
   push:
     branches: [main]
   pull_request: {}
+concurrency:
+  group: substrate-gate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
   actions: read
@@ -10,17 +13,22 @@ permissions:
 jobs:
   gate:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
-      - uses: oven-sh/setup-bun@v2
-      - uses: taiki-e/install-action@v2
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          tool: jj-cli
+          bun-version: 1.3.14
+      - uses: taiki-e/install-action@1beb33eee6d086258184383af9a538940be190ed # v2
+        with:
+          tool: jj-cli@0.43.0
+          fallback: none
       - name: Install substrate toolchain
         run: |
-          bun install -g @ast-grep/cli jscpd
+          bun install -g @ast-grep/cli@0.45.0 jscpd@5.0.14
           # substrate:profile-toolchain
       - name: Run gate
         run: .substrate/gate.sh
@@ -30,6 +38,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: '[ ! -d .pi/plans ] || .substrate/audit.sh'
       - name: Scan history for secrets
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@dcedce43c6f43de0b836d1fe38946645c9c638dc # v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

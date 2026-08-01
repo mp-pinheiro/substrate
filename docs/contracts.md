@@ -44,7 +44,10 @@ The interfaces every component implements. Change these deliberately — everyth
     ".go": { "mode": "ast", "ast_lang": "go", "markers": ["//"] }
   },
   "toolchain": [{ "bin": "golangci-lint", "hint": "https://golangci-lint.run/usage/install" }],
-  "ci": ["curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b $(go env GOPATH)/bin"],
+  "ci": [
+    "curl -sSfL -o /tmp/install-golangci-lint.sh https://raw.githubusercontent.com/golangci/golangci-lint/c0d3ddc9cf3faa61a4e378e879ece580256d76e5/install.sh",
+    "sh /tmp/install-golangci-lint.sh -b $(go env GOPATH)/bin v2.12.2"
+  ],
   "templates": [{ "src": "golangci.yml", "dest": ".golangci.yml" }],
   "checks": ["60-golangci.sh"],
   "slop_fixture": "fixtures/slop.go"

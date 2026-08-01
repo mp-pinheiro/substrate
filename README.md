@@ -1,15 +1,22 @@
 # substrate
+[![substrate gate](https://github.com/mp-pinheiro/substrate/actions/workflows/substrate-gate.yml/badge.svg)](https://github.com/mp-pinheiro/substrate/actions/workflows/substrate-gate.yml)
 
 Deterministic quality gates for agentic development, installable in any repo. Rules live in tools that reject bad changes — at write time (harness hooks), commit/push time, and merge time (gate + CI) — because prompt instructions decay and models imitate whatever the tree already contains.
 
 Born from a working prototype in a dotfiles repo; every design rule here was bought with a real failure there. The full rationale: [`docs/contracts.md`](docs/contracts.md).
 
+This project is not affiliated with Parity Technologies or its Substrate blockchain framework.
+
 ## Install the kit
 
 ```sh
-git clone <this repo> ~/git/substrate
+git clone https://github.com/mp-pinheiro/substrate.git ~/git/substrate
 export PATH="$HOME/git/substrate/bin:$PATH"
 ```
+
+## Requirements
+
+Substrate currently supports Linux. It expects Bash, Git, `jq`, `yq`, Bun, and gitleaks; profile-specific tools vary. Run `substrate doctor` for the exact dependencies required by the selected profiles. Jujutsu is optional.
 
 ## Scaffold a repo
 
@@ -53,3 +60,11 @@ just gate            # the kit gates itself (including vendor drift)
 bin/substrate selftest
 test/matrix.sh       # every profile, scratch-repo oracle
 ```
+
+## Contributing and security
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) before opening a pull request. Report vulnerabilities privately as described in [`SECURITY.md`](SECURITY.md).
+
+## License
+
+Substrate is licensed under the [GNU General Public License v3.0 only](LICENSE).
