@@ -31,5 +31,8 @@
     { "file": "fixtures/bad-vulture.py", "fails": "63-vulture.sh" },
     { "file": "fixtures/bad-constructs.py", "fails": "64-constructs.sh" },
     { "file": "fixtures/bad-imports", "fails": "62-import-linter.sh", "dest": "." }
-  ]
+  ],
+  "lsp": {
+    "ruff": { "bin": "ruff", "hint": "pipx install ruff (or: uv tool install ruff)" }
+  }
 }

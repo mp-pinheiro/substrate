@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
 # Copy/paste detection over claimed source files (jscpd). Ratcheted via dup_pct.
-# bunx absent locally = loud skip; absent in CI = fatal (toolchain broken).
+# Local jscpd binary preferred (offline-safe); bunx fallback fetches on a cold
+# cache — absent locally = loud skip, absent in CI = fatal (toolchain broken).
 set -uo pipefail
 # shellcheck source=../gate-lib.sh
 source "$SUBSTRATE_DIR/gate-lib.sh"
 
-require_bin_ci bunx "install bun: https://bun.sh" || exit 0
+if command -v jscpd >/dev/null 2>&1; then
+    JSCPD=(jscpd)
+else
+    require_bin_ci bunx "install bun: https://bun.sh (or: bun install -g jscpd)" || exit 0
+    JSCPD=(bunx --yes jscpd)
+fi
 
 files=()
 while IFS= read -r f; do
@@ -17,7 +23,7 @@ min_tokens=$(cfg '.duplication.min_tokens')
 [ -n "$min_tokens" ] || min_tokens=35
 
 report_dir=$(mktemp -d)
-out=$(bunx --yes jscpd --min-tokens "$min_tokens" --reporters json --output "$report_dir" "${files[@]}" 2>&1)
+out=$("${JSCPD[@]}" --min-tokens "$min_tokens" --reporters json --output "$report_dir" "${files[@]}" 2>&1)
 rc=$?
 pct=$(jq -r '.statistics.total.percentage // 0' "$report_dir/jscpd-report.json" 2>/dev/null)
 rm -rf "$report_dir"

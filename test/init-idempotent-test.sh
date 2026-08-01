@@ -5,6 +5,8 @@
 set -uo pipefail
 
 KIT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# scratch inits must never touch the live user harness (~/.claude, ~/.omp)
+export SUBSTRATE_NO_USER_HARNESS=1
 
 fail() { printf 'init-idempotent-test FAIL: %s\n' "$1" >&2; exit 1; }
 

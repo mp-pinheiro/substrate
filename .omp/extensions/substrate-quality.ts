@@ -98,6 +98,10 @@ function toolPath(input: Record<string, unknown>): string {
 }
 
 export default function substrateQuality(pi: ExtensionAPI): void {
+	// both copies (project + user) load in one process; vendor-drift keeps them byte-identical, so first registration wins
+	const g = globalThis as typeof globalThis & { __substrateQualityLoaded?: boolean };
+	if (g.__substrateQualityLoaded) return;
+	g.__substrateQualityLoaded = true;
 	pi.setLabel("Substrate gates");
 
 	// mirrors: protect-paths.sh
@@ -223,24 +227,36 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 		};
 	});
 
-	// mirrors: comment-ratchet-posttool.sh
+	// mirrors: changed-files-scan.sh — every tool not on this read-only list is scanned, so unknown tools stay covered
+	const READ_ONLY_TOOLS: Record<string, true> = {
+		read: true,
+		grep: true,
+		glob: true,
+		todo: true,
+		hub: true,
+		ask: true,
+		web_search: true,
+		lsp: true,
+	};
 	pi.on("tool_result", async (event, ctx) => {
-		if (event.toolName !== "write" && event.toolName !== "edit") return;
-		if (event.isError) return;
+		if (READ_ONLY_TOOLS[event.toolName]) return;
 		const path = toolPath(event.input);
-		if (!path) return;
-		const proc = Bun.spawnSync([".substrate/comment-ratchet.sh", path], {
-			cwd: ctx.cwd,
+		const root = findGateRoot(path ? dirname(resolve(ctx.cwd, path)) : ctx.cwd);
+		if (!root) return;
+		// pre-cutover vendored copies lack the hook — never throw ENOENT machine-wide
+		if (!existsSync(join(root, ".substrate", "hooks", "changed-files-scan.sh"))) return;
+		const proc = Bun.spawnSync([".substrate/hooks/changed-files-scan.sh"], {
+			cwd: root,
 			stdout: "pipe",
 			stderr: "pipe",
 		});
 		if (proc.exitCode === 0) return;
-		const report = new TextDecoder().decode(proc.stdout).trim();
+		const report = new TextDecoder().decode(proc.stderr).trim();
 		if (!report) return;
 		return {
 			content: [
 				...event.content,
-				{ type: "text", text: `\n[comment ratchet — fix before proceeding]\n${report}` },
+				{ type: "text", text: `\n[substrate — fix before proceeding]\n${report}` },
 			],
 		};
 	});

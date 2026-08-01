@@ -30,11 +30,11 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Write|Edit",
+        "matcher": "Bash|Write|Edit|MultiEdit|NotebookEdit|Task",
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/.substrate/hooks/comment-ratchet-posttool.sh\""
+            "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/.substrate/hooks/changed-files-scan.sh\""
           }
         ]
       }

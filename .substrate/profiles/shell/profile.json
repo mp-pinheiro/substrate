@@ -21,5 +21,8 @@
   "templates": [],
   "checks": ["60-shellcheck.sh"],
   "slop_fixtures": ["fixtures/slop.sh", "fixtures/slop-noext"],
-  "check_fixtures": [{ "file": "fixtures/bad-shellcheck.sh", "fails": "60-shellcheck.sh" }]
+  "check_fixtures": [{ "file": "fixtures/bad-shellcheck.sh", "fails": "60-shellcheck.sh" }],
+  "lsp": {
+    "bashls": { "bin": "bash-language-server", "hint": "bun install -g bash-language-server" }
+  }
 }

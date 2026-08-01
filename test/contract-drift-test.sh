@@ -6,6 +6,8 @@
 set -uo pipefail
 
 KIT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# scratch inits must never touch the live user harness (~/.claude, ~/.omp)
+export SUBSTRATE_NO_USER_HARNESS=1
 
 fail() { printf 'contract-drift-test FAIL: %s\n' "$1" >&2; exit 1; }
 
@@ -22,7 +24,7 @@ chmod +x gen.sh
 mkdir -p gen/sub
 printf 'v1\n' > gen/out.txt
 printf 'n1\n' > gen/sub/nested.txt
-jq '.contracts = [{"name": "demo", "regen": "./gen.sh", "paths": ["gen"]}] | .unscanned += ["gen/**", "gen.sh", "*.md"]' \
+jq '.contracts = [{"name": "demo", "regen": "./gen.sh", "paths": ["gen"]}] | .unscanned += ["gen/**", "gen.sh", "*.md"] | .report.max_age_days = 0' \
     substrate.json > s.tmp && mv s.tmp substrate.json
 git add -A
 git commit -qm seed

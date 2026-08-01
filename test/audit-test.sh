@@ -41,5 +41,29 @@ state: active
 - [ ] open work :: false
 EOF
 "$T/.substrate/audit.sh" >/dev/null 2>&1 || fail "active plan with pending item wrongly failed the audit"
+rm "$T/.pi/plans/pending.md"
 
-printf 'audit-test: 3 cases green\n'
+cat > "$T/.pi/plans/offline.md" <<'EOF'
+# Plan: unverifiable case
+state: committed
+## Acceptance
+- [x] local thing :: true
+- [x] remote thing :: exit 3
+EOF
+out=$("$T/.substrate/audit.sh" 2>&1)
+rc=$?
+[ "$rc" -eq 0 ] || fail "unverifiable oracle failed the audit (rc=$rc): $out"
+grep -q '\[--\] remote thing — UNVERIFIABLE' <<< "$out" || fail "unverifiable item not marked [--]: $out"
+grep -q '1 unverifiable' <<< "$out" || fail "unverifiable count missing from summary: $out"
+rm "$T/.pi/plans/offline.md"
+
+cat > "$T/.pi/plans/mixed.md" <<'EOF'
+# Plan: unverifiable does not mask regression
+state: committed
+## Acceptance
+- [x] remote thing :: exit 3
+- [x] broke :: false
+EOF
+"$T/.substrate/audit.sh" >/dev/null 2>&1 && fail "regression masked by unverifiable sibling"
+
+printf 'audit-test: 5 cases green\n'

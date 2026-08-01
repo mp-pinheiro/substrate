@@ -23,5 +23,8 @@
     { "file": "fixtures/bad-tsc.ts", "fails": "71-tsc.sh" },
     { "file": "fixtures/bad-cycle", "fails": "72-depcruise.sh" },
     { "file": "fixtures/bad-constructs.ts", "fails": "74-constructs.sh" }
-  ]
+  ],
+  "lsp": {
+    "typescript-language-server": { "bin": "typescript-language-server", "hint": "bun install -g typescript-language-server typescript" }
+  }
 }

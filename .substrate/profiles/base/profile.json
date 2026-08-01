@@ -20,5 +20,9 @@
     { "file": "fixtures/bad-plan.md", "fails": "15-tracking.sh", "dest": ".pi/plans/substrate-matrix-bad.md" },
     { "file": "fixtures/bad-superseded.md", "fails": "15-tracking.sh", "dest": ".pi/plans/substrate-matrix-bad2.md" },
     { "file": "fixtures/bad-committed-empty.md", "fails": "15-tracking.sh", "dest": ".pi/plans/substrate-matrix-bad3.md" }
-  ]
+  ],
+  "lsp": {
+    "yamlls": { "bin": "yaml-language-server", "hint": "bun install -g yaml-language-server" },
+    "vscode-json-language-server": { "bin": "vscode-json-language-server", "hint": "bun install -g vscode-langservers-extracted" }
+  }
 }

@@ -38,11 +38,11 @@ cp -R .substrate "$SANDBOX/.substrate"
 cd "$SANDBOX" || exit 2
 export SUBSTRATE_FILE_LIST="$LIST"
 
-# the sandbox has no .git, so the history scan cannot run — disable it
-# visibly rather than letting it fail for the wrong reason
-jq '.checks.disabled += ["50-gitleaks.sh"] | .checks.disabled |= unique' substrate.json > substrate.json.tmp \
+# the sandbox has no .git (history scan impossible) and no report artifact
+# (wall-clock state, not machinery) — disable both visibly
+jq '.checks.disabled += ["50-gitleaks.sh"] | .checks.disabled |= unique | .report.max_age_days = 0' substrate.json > substrate.json.tmp \
     && mv substrate.json.tmp substrate.json
-note "sandbox: 50-gitleaks.sh disabled (no .git in sandbox)"
+note "sandbox: 50-gitleaks.sh disabled (no .git), report cadence opted out (no artifact)"
 
 GATE=.substrate/gate.sh
 

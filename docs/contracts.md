@@ -82,7 +82,7 @@ Ordering: core checks 05–59, profile checks 60–79, repo-local checks 80–99
 ## Hook contract
 
 - `hooks/protect-paths.sh` — PreToolUse(Write|Edit) stdin JSON; blocks: any symlink write (message names the target), baseline, `.substrate/`, `CLAUDE.md`/governance, `protected_paths` globs. Exit 2 = blocked.
-- `hooks/comment-ratchet-posttool.sh` — PostToolUse(Write|Edit); runs the comment checker on the touched file; exit 2 with report when the file exceeds its baseline metric; detector exit >=2 also exits 2 (infra failure must not read as pass).
+- `hooks/changed-files-scan.sh` — PostToolUse(Bash|Write|Edit|MultiEdit|NotebookEdit|Task); scans every changed path in the working tree (jj diff or git status), not the tool's declared target, so bash/eval writes are covered; runs the comment ratchet per changed scannable file (pass-only memo in `$TMPDIR`) and flags `protected_paths` writes the write-time hook could not intercept. Report on stderr, exit 2 = blocking feedback.
 - `hooks/gate-before-push.sh` — PreToolUse(Bash) matching the repo's push command; runs the gate; exit 2 with report on red.
 - `omp/quality.ts` — same three behaviors via ExtensionAPI `tool_call`/`tool_result`, reading `substrate.json` + `langmap.json` directly (Bun `JSON.parse`); subprocesses via `Bun.spawnSync`.
 

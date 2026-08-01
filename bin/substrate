@@ -37,6 +37,9 @@ profile_dir() {
     fi
 }
 
+# shellcheck source=../core/install-lib.sh
+source "$KIT_ROOT/core/install-lib.sh"
+
 build_langmap() {
     local out="$1"; shift
     local pjsons=() p d
@@ -62,7 +65,7 @@ vendor_core() {
     cp "$KIT_ROOT"/core/gate.sh "$KIT_ROOT"/core/gate-lib.sh \
        "$KIT_ROOT"/core/check-comments.sh "$KIT_ROOT"/core/comment-ratchet.sh \
        "$KIT_ROOT"/core/selftest.sh "$KIT_ROOT"/core/audit.sh \
-       "$KIT_ROOT"/core/report.sh "$staging/" || die "vendor copy failed: core scripts"
+       "$KIT_ROOT"/core/report.sh "$KIT_ROOT"/core/gated-push.sh "$staging/" || die "vendor copy failed: core scripts"
     cp "$KIT_ROOT"/core/hooks/*.sh "$staging/hooks/" || die "vendor copy failed: hooks"
     cp "$KIT_ROOT"/core/checks.d/*.sh "$staging/checks.d/" || die "vendor copy failed: core checks"
     cp "$KIT_ROOT"/VERSION "$staging/VERSION" || die "vendor copy failed: VERSION"
@@ -100,142 +103,19 @@ seed_config() {
             "*.md", "**/*.md", "*.txt", "*.lock", "*.toml",
             "LICENSE*", "VERSION", ".gitignore", ".gitattributes", ".gitmodules",
             "*.png", "*.svg", "*.jpg", "*.csv", "Dockerfile*", "Makefile", "justfile",
-            ".substrate/**", ".omp/extensions/substrate-quality.ts", ".importlinter"
+            ".substrate/**", ".omp/**", ".importlinter",
+            "substrate-report.md"
         ],
         protected_paths: [],
         comment: { allow_tags: ["SAFETY:", "WHY:", "PERF:", "HACK:"] },
         budgets: { max_file_lines: 500 },
         duplication: { min_tokens: 35 },
+        report: { max_age_days: 14 },
         checks: { disabled: [] },
         push_gate: true
     }' > substrate.json
 }
 
-install_ci() {
-    local profiles=("$@") p d lines=() l
-    [ -f .github/workflows/substrate-gate.yml ] && { info "CI workflow exists — left untouched"; return 0; }
-    for p in "${profiles[@]}"; do
-        d=$(profile_dir "$p") || continue
-        while IFS= read -r l; do
-            [ -n "$l" ] && lines+=("$l")
-        done < <(jq -r '(.ci // [])[]' "$d/profile.json")
-    done
-    mkdir -p .github/workflows
-    local out=.github/workflows/substrate-gate.yml line trimmed
-    : > "$out"
-    while IFS= read -r line; do
-        trimmed="${line#"${line%%[![:space:]]*}"}"
-        if [ "$trimmed" = "# substrate:profile-toolchain" ]; then
-            for l in ${lines[@]+"${lines[@]}"}; do
-                printf '          %s\n' "$l" >> "$out"
-            done
-        else
-            printf '%s\n' "$line" >> "$out"
-        fi
-    done < "$KIT_ROOT/core/ci/github-gate.yml"
-    success "CI workflow installed: $out"
-    if [ ! -f .github/workflows/substrate-report.yml ]; then
-        cp "$KIT_ROOT/core/ci/github-report.yml" .github/workflows/substrate-report.yml \
-            && success "report schedule installed: .github/workflows/substrate-report.yml" \
-            || warn "report schedule install failed"
-    fi
-}
-
-install_hooks_config() {
-    local template="$KIT_ROOT/core/claude-hooks.json" settings=.claude/settings.json merged
-    mkdir -p .claude
-    if [ -f "$settings" ] && jq -e . "$settings" >/dev/null 2>&1; then
-        # hook arrays concatenate (deep merge would drop repo-owned hooks) yet
-        # stay idempotent: .substrate/ groups are dropped before re-appending
-        if ! merged=$(jq --argjson extra "$(cat "$template")" '
-            def keep: map(select([.hooks[]?.command // ""] | any(test("\\.substrate/hooks/")) | not));
-            .hooks.PreToolUse = (((.hooks.PreToolUse // []) | keep) + ($extra.hooks.PreToolUse // []))
-            | .hooks.PostToolUse = (((.hooks.PostToolUse // []) | keep) + ($extra.hooks.PostToolUse // []))
-        ' "$settings"); then
-            warn "Claude settings merge failed — $settings left untouched"
-            return 1
-        fi
-        if ! printf '%s\n' "$merged" > "$settings" 2>/dev/null; then
-            warn "$settings is not writable (locked?) — chmod u+w it, rerun init, or merge manually from $template"
-            return 1
-        fi
-    elif [ -f "$settings" ]; then
-        warn "$settings exists but is not valid JSON — left untouched; merge the hooks manually from $template"
-        return 1
-    else
-        cp "$template" "$settings" || { warn "failed to write $settings"; return 1; }
-    fi
-    success "Claude hooks wired in $settings"
-    mkdir -p .omp/extensions
-    cp "$KIT_ROOT/core/omp/substrate-quality.ts" .omp/extensions/ || { warn "omp extension install failed"; return 1; }
-    success "omp extension installed: .omp/extensions/substrate-quality.ts"
-}
-
-install_skills() {
-    local s name dest
-    [ -d "$KIT_ROOT/skills" ] || return 0
-    if ! mkdir -p .claude/skills 2>/dev/null; then
-        warn ".claude/skills is not a directory — skills not installed; fix the path and rerun init"
-        return 1
-    fi
-    for s in "$KIT_ROOT"/skills/*/; do
-        [ -d "$s" ] || continue
-        name=$(basename "$s")
-        dest=".claude/skills/$name"
-        if [ -e "$dest" ]; then
-            info "skill $name exists — left untouched"
-        elif cp -R "$s" "$dest" 2>/dev/null; then
-            success "skill installed: $dest"
-        else
-            warn "skill $name install failed — is .claude/skills writable?"
-            return 1
-        fi
-    done
-}
-
-install_templates() {
-    local profiles=("$@") p d src dest
-    for p in "${profiles[@]}"; do
-        d=$(profile_dir "$p") || continue
-        while IFS=$'\t' read -r src dest; do
-            [ -n "$src" ] || continue
-            if [ -e "$dest" ]; then
-                info "template $dest exists — left untouched"
-            else
-                mkdir -p "$(dirname "$dest")"
-                cp "$d/templates/$src" "$dest"
-                success "template installed: $dest"
-            fi
-        done < <(jq -r '(.templates // [])[] | "\(.src)\t\(.dest)"' "$d/profile.json")
-    done
-}
-
-install_recipe() {
-    if [ -f justfile ]; then
-        if grep -q '.substrate/gate.sh' justfile; then
-            success "gate recipe wired (just gate)"
-        elif grep -qE '^gate[ :]' justfile; then
-            warn "justfile already owns a 'gate' recipe — point it at .substrate/gate.sh yourself (appending would redefine the recipe and break just entirely)"
-            return 1
-        else
-            printf '\ngate *ARGS:\n    .substrate/gate.sh {{ARGS}}\n' >> justfile
-            success "gate recipe wired (just gate)"
-        fi
-    elif [ -f Makefile ]; then
-        if grep -q '.substrate/gate.sh' Makefile; then
-            success "gate target wired (make gate)"
-        elif grep -qE '^gate:' Makefile; then
-            warn "Makefile already owns a 'gate' target — point it at .substrate/gate.sh yourself"
-            return 1
-        else
-            printf '\ngate:\n\t.substrate/gate.sh\n' >> Makefile
-            success "gate target wired (make gate)"
-        fi
-    else
-        printf 'gate *ARGS:\n    .substrate/gate.sh {{ARGS}}\n' > justfile
-        success "gate recipe wired (just gate)"
-    fi
-}
 
 cmd_init() {
     local profiles_csv=""
@@ -267,6 +147,9 @@ cmd_init() {
     install_templates "${profiles[@]}" || init_rc=1
     install_ci "${profiles[@]}" || init_rc=1
     install_hooks_config || init_rc=1
+    install_user_harness || init_rc=1
+    install_vcs_hooks || init_rc=1
+    install_lsp_config "${profiles[@]}" || init_rc=1
     install_skills || init_rc=1
     install_recipe || init_rc=1
     wire_jj || init_rc=1
@@ -284,31 +167,6 @@ EOF
         warn "init INCOMPLETE — fix the warnings above and rerun init (a repo without write-time hooks drifts silently)"
         exit 1
     fi
-}
-
-wire_jj() {
-    [ -d .jj ] || return 0
-    command -v jj >/dev/null 2>&1 || { warn ".jj present but jj not installed — jj wiring skipped"; return 1; }
-    if [ ! -f docs/jj-workflow.md ]; then
-        mkdir -p docs
-        cp "$KIT_ROOT/core/jj-workflow.md" docs/jj-workflow.md && success "jj workflow doc installed: docs/jj-workflow.md"
-    fi
-    local trunk=main
-    if jj bookmark list 2>/dev/null | grep -q '^master:' && ! jj bookmark list 2>/dev/null | grep -q '^main:'; then
-        trunk=master
-    fi
-    jj config get aliases.tug >/dev/null 2>&1 \
-        || jj config set --user aliases.tug '["bookmark", "advance", "--to", "@-"]'
-    jj config set --repo experimental-advance-branches.enabled-branches "[\"$trunk\"]"
-    if ! jj bookmark list 2>/dev/null | grep -q "^$trunk:"; then
-        jj bookmark create "$trunk" -r @- 2>/dev/null \
-            && success "trunk bookmark $trunk created at @-" \
-            || warn "no $trunk bookmark yet — create it after the first commit: jj bookmark create $trunk -r @-"
-    fi
-    if jj bookmark list --all-remotes 2>/dev/null | grep -q "^$trunk@origin:"; then
-        jj bookmark track "$trunk" --remote=origin 2>/dev/null || true
-    fi
-    success "jj tug wired ($trunk auto-advance; --repo config is machine-local, rerun init per clone)"
 }
 
 cmd_update() {
@@ -352,6 +210,8 @@ cmd_update() {
             || die "failed to refresh installed omp extension"
         info "refreshed .omp/extensions/substrate-quality.ts"
     fi
+    install_user_harness \
+        || warn "user-level harness refresh failed — a stale user copy may win the load race; run: substrate init"
     success "re-vendored .substrate at kit $kit_v (config, baseline, templates untouched)"
 }
 
@@ -391,6 +251,29 @@ cmd_doctor() {
     else
         warn "omp extension absent — the omp harness runs ungated (run init)"
     fi
+    if [ -f "$HOME/.omp/agent/extensions/substrate-quality.ts" ]; then
+        if cmp -s "$HOME/.omp/agent/extensions/substrate-quality.ts" "$KIT_ROOT/core/omp/substrate-quality.ts"; then
+            success "user-level omp extension current"
+        else
+            warn "user-level omp extension stale — run: substrate init"
+        fi
+    else
+        warn "no user-level omp extension — sessions rooted outside this repo are unguarded"
+    fi
+    info "harness hooks arm at session start — restart your agent after init/update"
+
+    local key lbin lhint p d
+    for p in "${profiles[@]}"; do
+        d=$(profile_dir "$p") || continue
+        while IFS=$'\t' read -r key lbin lhint; do
+            [ -n "$key" ] || continue
+            if command -v "$lbin" >/dev/null 2>&1; then
+                success "lsp $key: $lbin present"
+            else
+                info "lsp $key: $lbin absent — inline diagnostics unavailable; install: $lhint"
+            fi
+        done < <(jq -r '(.lsp // {}) | to_entries[] | "\(.key)\t\(.value.bin)\t\(.value.hint)"' "$d/profile.json")
+    done
 
     local c cb
     for c in checks.d/*.sh; do
@@ -436,6 +319,18 @@ cmd_doctor() {
             success "core: $bin present"
         else
             warn "core: $bin missing (ast-grep falls back to bunx; bunx needs bun)"
+        fi
+    done
+    local pkg
+    for bin in ast-grep jscpd; do
+        case "$bin" in
+            ast-grep) pkg="@ast-grep/cli" ;;
+            *) pkg="$bin" ;;
+        esac
+        if command -v "$bin" >/dev/null 2>&1; then
+            success "$bin: local binary (offline-safe)"
+        else
+            warn "$bin: bunx fallback — gate fetches from npm on a cold cache (breaks offline); install with: bun install -g $pkg"
         fi
     done
     info "kit $(cat "$KIT_ROOT/VERSION"), vendored $(cat .substrate/VERSION 2>/dev/null || echo none)"

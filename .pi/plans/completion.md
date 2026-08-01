@@ -20,7 +20,7 @@ Mechanism: `## Acceptance` items are `- [ ] claim :: verify-command`. A checked 
 ### Tracking machinery
 - [x] jj workflow hooks ship with a firing battery :: test/jj-hooks-test.sh
 - [x] init wires jj tug and ships the workflow doc :: grep -q 'wire_jj' bin/substrate && grep -q 'enforce-jj' core/claude-hooks.json && test -f core/jj-workflow.md
-- [x] maintenance report vendored, scheduled, queue live :: test -x core/report.sh || exit 1; grep -q 'schedule:' core/ci/github-report.yml || exit 1; if [ -z "${GH_TOKEN:-}" ] && ! gh auth token >/dev/null 2>&1; then [ -z "${CI:-}" ] || exit 1; exit 0; fi; [ "$(gh api "repos/{owner}/{repo}/issues?labels=substrate-report&state=open" --jq length)" -ge 1 ]
+- [x] maintenance report vendored, scheduled, queue live :: test -x core/report.sh || exit 1; grep -q 'schedule:' core/ci/github-report.yml || exit 1; if [ -z "${GH_TOKEN:-}" ] && ! gh auth token >/dev/null 2>&1; then [ -z "${CI:-}" ] || exit 1; exit 3; fi; n=$(gh api "repos/{owner}/{repo}/issues?labels=substrate-report&state=open" --jq length 2>/dev/null) || exit 3; [ "${n:-0}" -ge 1 ]
 - [x] init hooks merge is idempotent :: test/init-idempotent-test.sh
 - [x] harness parity check fires on a stripped mirror :: test/parity-test.sh
 - [x] vendor drift check fires on mutation :: test/vendor-drift-test.sh
@@ -57,9 +57,17 @@ Mechanism: `## Acceptance` items are `- [ ] claim :: verify-command`. A checked 
 - [x] init installs skills into consumer repos :: S=$PWD/bin/substrate; T=$(mktemp -d) && (cd "$T" && git init -q . && "$S" init --profile shell >/dev/null 2>&1; test -f .claude/skills/context-pack/SKILL.md); rc=$?; rm -rf "$T"; exit $rc
 - [x] guides ported kit-generic :: test -f guides/README.md && test -f guides/daily-workflow.md
 
+### Offline-first enforcement (bash hole, user tier, cadence, VCS layer)
+- [x] tool-agnostic changed-files scan catches bash writes in git and jj :: test/changed-scan-test.sh
+- [x] user-level harness installs, dispatches cross-repo, never touches profiles :: test/user-harness-test.sh
+- [x] git pre-commit/pre-push and gated jj push enforce offline :: test/vcs-hooks-test.sh
+- [x] maintenance cadence recurs locally and opts out cleanly :: test/report-freshness-test.sh
+- [x] LSP config seeded absent-only with informational doctor hints :: test/lsp-config-test.sh
+- [x] audit reports unverifiable instead of silently green offline :: test/audit-test.sh
+
 ### Proof on remote
 - [x] kit repo has a remote :: git remote get-url origin >/dev/null 2>&1
-- [x] Actions CI has a green run :: if [ -z "${GH_TOKEN:-}" ] && ! gh auth token >/dev/null 2>&1; then [ -z "${CI:-}" ] || exit 1; exit 0; fi; gh run list --status success --limit 1 --json conclusion --jq '.[0].conclusion' | grep -qx success
+- [x] Actions CI has a green run :: if [ -z "${GH_TOKEN:-}" ] && ! gh auth token >/dev/null 2>&1; then [ -z "${CI:-}" ] || exit 1; exit 3; fi; out=$(gh run list --status success --limit 1 --json conclusion --jq '.[0].conclusion' 2>/dev/null) || exit 3; printf '%s' "$out" | grep -qx success
 
 ## Deferred (each with a reason — a state, not silence)
 

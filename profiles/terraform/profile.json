@@ -21,5 +21,8 @@
     { "file": "fixtures/bad-fmt.tf", "fails": "68-terraform-fmt.sh" },
     { "file": "fixtures/bad-tflint.tf", "fails": "69-tflint.sh" },
     { "file": "fixtures/bad-validate.tf", "fails": "70-terraform-validate.sh" }
-  ]
+  ],
+  "lsp": {
+    "terraformls": { "bin": "terraform-ls", "hint": "install terraform-ls via your package manager" }
+  }
 }

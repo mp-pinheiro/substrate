@@ -24,5 +24,8 @@
   "check_fixtures": [
     { "file": "fixtures/bad-luacheck.lua", "fails": "78-luacheck.sh" },
     { "file": "fixtures/bad-stylua.lua", "fails": "77-stylua.sh" }
-  ]
+  ],
+  "lsp": {
+    "lua-language-server": { "bin": "lua-language-server", "hint": "install lua-language-server via your package manager" }
+  }
 }

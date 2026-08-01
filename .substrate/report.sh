@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Maintenance queue (advisory — never fails): duplication clusters, dead-code
-# candidates, ratchet-tightening targets. Scheduled in CI (issue upsert) so the
-# cadence recurs instead of depending on someone remembering to run it.
+# candidates, ratchet-tightening targets. --write drops substrate-report.md
+# (55-report-freshness keeps it fresh offline); CI upserts the issue extra.
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -9,13 +9,18 @@ cd "$REPO_ROOT" || exit 0
 
 report_duplication() {
     printf '\n-- duplication clusters (jscpd --min-tokens 35, worst 10 by lines)\n'
-    if ! command -v bunx >/dev/null 2>&1; then
-        printf 'skipped: bunx not found (install bun: https://bun.sh)\n'
+    local JSCPD=()
+    if command -v jscpd >/dev/null 2>&1; then
+        JSCPD=(jscpd)
+    elif command -v bunx >/dev/null 2>&1; then
+        JSCPD=(bunx --yes jscpd)
+    else
+        printf 'skipped: neither jscpd nor bunx found (bun install -g jscpd)\n'
         return 0
     fi
     local dir
     dir=$(mktemp -d)
-    bunx --yes jscpd --min-tokens 35 --reporters json --output "$dir" --silent \
+    "${JSCPD[@]}" --min-tokens 35 --reporters json --output "$dir" --silent \
         --ignore "**/.git/**,**/.jj/**,**/.substrate/**,**/node_modules/**" . >/dev/null 2>&1
     if ! jq -e . "$dir/jscpd-report.json" >/dev/null 2>&1; then
         printf 'skipped: jscpd produced no report\n'
@@ -57,8 +62,19 @@ report_ratchet() {
     printf 'run the gate: improved metrics print a lock-in hint; tighten with --update-baseline\n'
 }
 
-printf '== substrate report: maintenance queue (advisory — never fails)\n'
-report_duplication
-report_dead_code
-report_ratchet
+run_report() {
+    printf '== substrate report: maintenance queue (advisory — never fails)\n'
+    report_duplication
+    report_dead_code
+    report_ratchet
+}
+
+case "${1:-}" in
+    --write)
+        { printf 'generated: %s\n\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"; run_report; } > "$REPO_ROOT/substrate-report.md"
+        printf 'report written: %s\n' "$REPO_ROOT/substrate-report.md"
+        ;;
+    '') run_report ;;
+    *) printf 'usage: report.sh [--write]\n' >&2; exit 2 ;;
+esac
 exit 0

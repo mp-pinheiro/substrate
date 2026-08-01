@@ -36,7 +36,7 @@ for plan in "${plans[@]}"; do
     esac
 
     printf '=== %s (%s)\n' "$plan" "$state"
-    pass=0 pending=0 regressed=0 in_acceptance=0
+    pass=0 pending=0 regressed=0 unverifiable=0 in_acceptance=0
     while IFS= read -r line; do
         case "$line" in
             '## Acceptance'*) in_acceptance=1; continue ;;
@@ -52,10 +52,16 @@ for plan in "${plans[@]}"; do
         claim="${rest%% :: *}"
         cmd="${rest#* :: }"
         out=$(cd "$REPO_ROOT" && bash -c "$cmd" 2>&1)
-        if [ $? -eq 0 ]; then
+        cmd_rc=$?
+        if [ "$cmd_rc" -eq 0 ]; then
             printf '  [ok] %s\n' "$claim"
             pass=$((pass + 1))
             [ "$box" = " " ] && printf '       ^ passing but unchecked — check the box\n'
+        elif [ "$cmd_rc" -eq 3 ]; then
+            # exit 3 is the oracle contract for "cannot verify here" — offline
+            # must stay visible, never silently green
+            printf '  [--] %s — UNVERIFIABLE (no credentials/offline)\n' "$claim"
+            unverifiable=$((unverifiable + 1))
         else
             if [ "$box" = "x" ] || [ "$state" = "committed" ]; then
                 printf '  [XX] %s — REGRESSION (checked claim no longer holds)\n' "$claim"
@@ -68,7 +74,7 @@ for plan in "${plans[@]}"; do
             fi
         fi
     done < "$plan"
-    printf '  audit: %d passing, %d pending, %d regressed\n' "$pass" "$pending" "$regressed"
+    printf '  audit: %d passing, %d pending, %d regressed, %d unverifiable\n' "$pass" "$pending" "$regressed" "$unverifiable"
     [ "$regressed" -eq 0 ] || overall_rc=1
 done
 exit "$overall_rc"

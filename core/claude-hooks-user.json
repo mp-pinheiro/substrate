@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/.substrate/hooks/protect-paths.sh\""
+            "command": "bash \"$HOME/.claude/hooks/substrate-launch.sh\" protect-paths.sh"
           }
         ]
       },
@@ -15,15 +15,15 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/.substrate/hooks/enforce-jj.sh\""
+            "command": "bash \"$HOME/.claude/hooks/substrate-launch.sh\" enforce-jj.sh"
           },
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/.substrate/hooks/enforce-conventional-commits.sh\""
+            "command": "bash \"$HOME/.claude/hooks/substrate-launch.sh\" enforce-conventional-commits.sh"
           },
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/.substrate/hooks/gate-before-push.sh\""
+            "command": "bash \"$HOME/.claude/hooks/substrate-launch.sh\" gate-before-push.sh"
           }
         ]
       }
@@ -34,7 +34,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/.substrate/hooks/changed-files-scan.sh\""
+            "command": "bash \"$HOME/.claude/hooks/substrate-launch.sh\" changed-files-scan.sh"
           }
         ]
       }

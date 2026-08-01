@@ -1,0 +1,17 @@
+{
+  "servers": {
+    "bashls": {
+      "disabled": false
+    },
+    "ruff": {
+      "disabled": false
+    },
+    "vscode-json-language-server": {
+      "disabled": false
+    },
+    "yamlls": {
+      "disabled": false
+    }
+  },
+  "idleTimeoutMs": 300000
+}

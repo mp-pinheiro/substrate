@@ -12,5 +12,8 @@
   "slop_fixtures": [],
   "check_fixtures": [
     { "file": "fixtures/bad-svelte", "fails": "73-svelte-check.sh" }
-  ]
+  ],
+  "lsp": {
+    "svelte": { "bin": "svelteserver", "hint": "bun install -g svelte-language-server" }
+  }
 }

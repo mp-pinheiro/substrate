@@ -23,5 +23,8 @@
   "check_fixtures": [
     { "file": "fixtures/bad-format.cpp", "fails": "79-clang-format.sh" },
     { "file": "fixtures/bad-tidy", "dest": ".", "fails": "72-clang-tidy.sh" }
-  ]
+  ],
+  "lsp": {
+    "clangd": { "bin": "clangd", "hint": "install clangd via your package manager" }
+  }
 }

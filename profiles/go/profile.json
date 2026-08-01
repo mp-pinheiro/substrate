@@ -21,5 +21,8 @@
     { "file": "fixtures/bad-vet.go", "fails": "75-go-build.sh" },
     { "file": "fixtures/bad-lint.go", "fails": "76-golangci.sh" },
     { "file": "fixtures/bad-forbidigo.go", "fails": "76-golangci.sh", "dest": "internal/lib/bad-forbidigo.go" }
-  ]
+  ],
+  "lsp": {
+    "gopls": { "bin": "gopls", "hint": "go install golang.org/x/tools/gopls@latest" }
+  }
 }

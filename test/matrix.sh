@@ -7,6 +7,8 @@
 set -uo pipefail
 
 KIT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# scratch inits must never touch the live user harness (~/.claude, ~/.omp)
+export SUBSTRATE_NO_USER_HARNESS=1
 
 PASS=0
 FAIL=0
@@ -47,6 +49,7 @@ for name in "${profiles[@]}"; do
         git commit -qm seed
 
         "$KIT_ROOT/bin/substrate" init --profile "$name" >/dev/null 2>&1 || { echo "init failed"; exit 9; }
+        jq '.report.max_age_days = 0' substrate.json > s.tmp && mv s.tmp substrate.json
         git add -A && git commit -qm init
 
         out=$(.substrate/gate.sh --update-baseline 2>&1)
