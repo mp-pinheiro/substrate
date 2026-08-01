@@ -34,8 +34,6 @@ jobs:
         run: bun install -g @ast-grep/cli jscpd
       - name: Install every profile toolchain
         run: test/ci-toolchain.sh
-      - name: Run profile matrix
-        run: test/matrix.sh
       - name: Hostile-HOME determinism oracle
         run: test/hostile-home.sh
       - name: Audit plan oracles

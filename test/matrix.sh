@@ -20,15 +20,22 @@ if [ ${#profiles[@]} -eq 0 ]; then
     mapfile -t profiles < <(basename -a "$KIT_ROOT"/profiles/*/)
 fi
 
+# Profiles are fully isolated (own scratch repo + subshell, no shared state),
+# so run them concurrently: wall time tracks the slowest profile, not the sum.
+ORDER=()
+declare -A PIDS LOGS TMPS
 for name in "${profiles[@]}"; do
     pdir="$KIT_ROOT/profiles/$name"
     [ -d "$pdir" ] || { bad "$name: no such kit profile"; continue; }
-
     tmp=$(mktemp -d)
+    log=$(mktemp)
+    ORDER+=("$name")
+    TMPS[$name]=$tmp
+    LOGS[$name]=$log
     (
         set -uo pipefail
         cd "$tmp" || exit 9
-        git init -q
+        git init -q -b main
         git config user.email substrate@localhost
         git config user.name substrate
 
@@ -116,12 +123,18 @@ for name in "${profiles[@]}"; do
             echo "profile ships checks but no check_fixtures — its checks have no oracle"
             exit 9
         fi
-    )
-    case $? in
+    ) >"$log" 2>&1 &
+    PIDS[$name]=$!
+done
+
+for name in "${ORDER[@]}"; do
+    wait "${PIDS[$name]}"; rc=$?
+    cat "${LOGS[$name]}"
+    case $rc in
         0) ok "$name: init + baseline + selftest green" ;;
         *) bad "$name: see output above" ;;
     esac
-    rm -rf "$tmp"
+    rm -rf "${LOGS[$name]}" "${TMPS[$name]}"
 done
 
 printf '\nmatrix: %d passed, %d failed\n' "$PASS" "$FAIL"

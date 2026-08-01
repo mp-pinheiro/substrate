@@ -17,7 +17,7 @@ git init -q --bare "$T/git-origin.git"
 mkdir -p "$T/git-repo"
 (
     cd "$T/git-repo" || exit 9
-    git init -q .
+    git init -q -b main .
     git config user.email substrate@localhost
     git config user.name substrate
     git remote add origin "$T/git-origin.git"

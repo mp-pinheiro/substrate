@@ -27,11 +27,16 @@ printf '[sqlfluff]\nexclude_rules = CP01\n' > "$EVIL/tmp/.sqlfluff"
 printf 'BasedOnStyle: WebKit\nIndentWidth: 3\n' > "$EVIL/tmp/.clang-format"
 printf 'std = "max"\nignore = {".*"}\n' > "$EVIL/tmp/.luacheckrc"
 
+# Git-config: CI runners have no ~/.gitconfig (defaultBranch=master); dev
+# machines do. Poison GIT_CONFIG_GLOBAL so the matrix exercises the CI path.
+printf '[init]\n\tdefaultBranch = master\n' > "$EVIL/gitconfig"
+
 profiles=("$@")
-[ ${#profiles[@]} -gt 0 ] || profiles=(shell python sql cpp terraform go)
+[ ${#profiles[@]} -gt 0 ] || mapfile -t profiles < <(basename -a "$KIT_ROOT"/profiles/*/)
 
 printf '[hostile-home] poisoned XDG + scratch parent at %s — strict matrix must stay green\n' "$EVIL"
 export XDG_CONFIG_HOME="$EVIL/.config"
 export TMPDIR="$EVIL/tmp"
+export GIT_CONFIG_GLOBAL="$EVIL/gitconfig"
 export CI=1
 "$KIT_ROOT/test/matrix.sh" "${profiles[@]}"
