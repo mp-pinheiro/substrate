@@ -22,6 +22,17 @@ function findGateRoot(cwd: string): string | null {
 	}
 }
 
+// jj hooks are runtime-gated: active only when the repo root carries .jj
+function findJjRoot(cwd: string): string | null {
+	let dir = resolve(cwd);
+	for (;;) {
+		if (existsSync(join(dir, ".jj"))) return dir;
+		const parent = dirname(dir);
+		if (parent === dir) return null;
+		dir = parent;
+	}
+}
+
 function globToRegExp(glob: string): RegExp {
 	let out = "";
 	for (let i = 0; i < glob.length; i++) {
@@ -153,6 +164,41 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 					reason: `blocked: ${rel} is generated from a contract — edit the contract source; the gate regenerates (substrate.json contracts)`,
 				};
 			}
+		}
+	});
+
+	// mirrors: enforce-jj.sh
+	pi.on("tool_call", async (event, ctx) => {
+		if (event.toolName !== "bash") return;
+		if (!findJjRoot(ctx.cwd)) return;
+		const cmd = String(event.input.command ?? "").replaceAll(/jj\s+git/g, "JJ_GIT");
+		if (/git\s+(commit|add|rebase|merge|reset|restore|switch|checkout|cherry-pick|revert|stash|clean|am|apply)([\s"\\]|$)/.test(cmd)) {
+			return {
+				block: true,
+				reason: "BLOCKED: this repo is jj-managed — use jj, not git, for VCS changes: 'jj commit -m', 'jj tug', 'jj git push' (see docs/jj-workflow.md). Read-only git (log/status/diff/show) and release 'git tag' are fine.",
+			};
+		}
+		if (/git\s+push/.test(cmd) && !/(--tags|\sv\d)/.test(cmd)) {
+			return {
+				block: true,
+				reason: "BLOCKED: use 'jj git push', not 'git push', in this jj-managed repo (release tags are the exception: 'git push origin vX.Y.Z'). See docs/jj-workflow.md.",
+			};
+		}
+	});
+
+	// mirrors: enforce-conventional-commits.sh
+	pi.on("tool_call", async (event, ctx) => {
+		if (event.toolName !== "bash") return;
+		if (!findJjRoot(ctx.cwd)) return;
+		const cmd = String(event.input.command ?? "");
+		if (!/jj\s+(commit|describe|squash)(\s|$)/.test(cmd)) return;
+		if (!/(-m|--message)[\s=]/.test(cmd)) return;
+		const conv = /(-m|--message)[\s=]+["']?(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([^)]+\))?!?:\s/;
+		if (!conv.test(cmd)) {
+			return {
+				block: true,
+				reason: "BLOCKED: commit message must follow Conventional Commits — 'type(scope): subject'. Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert (append ! for breaking). Example: jj commit -m 'feat(auth): add login'.",
+			};
 		}
 	});
 

@@ -21,6 +21,7 @@
     ".gitattributes",
     ".gitignore",
     ".gitmodules",
+    ".importlinter",
     ".omp/**",
     ".substrate/**",
     "Dockerfile*",

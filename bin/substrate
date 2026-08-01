@@ -269,6 +269,7 @@ cmd_init() {
     install_hooks_config || init_rc=1
     install_skills || init_rc=1
     install_recipe || init_rc=1
+    wire_jj || init_rc=1
 
     cat <<'EOF'
 
@@ -283,6 +284,31 @@ EOF
         warn "init INCOMPLETE — fix the warnings above and rerun init (a repo without write-time hooks drifts silently)"
         exit 1
     fi
+}
+
+wire_jj() {
+    [ -d .jj ] || return 0
+    command -v jj >/dev/null 2>&1 || { warn ".jj present but jj not installed — jj wiring skipped"; return 1; }
+    if [ ! -f docs/jj-workflow.md ]; then
+        mkdir -p docs
+        cp "$KIT_ROOT/core/jj-workflow.md" docs/jj-workflow.md && success "jj workflow doc installed: docs/jj-workflow.md"
+    fi
+    local trunk=main
+    if jj bookmark list 2>/dev/null | grep -q '^master:' && ! jj bookmark list 2>/dev/null | grep -q '^main:'; then
+        trunk=master
+    fi
+    jj config get aliases.tug >/dev/null 2>&1 \
+        || jj config set --user aliases.tug '["bookmark", "advance", "--to", "@-"]'
+    jj config set --repo experimental-advance-branches.enabled-branches "[\"$trunk\"]"
+    if ! jj bookmark list 2>/dev/null | grep -q "^$trunk:"; then
+        jj bookmark create "$trunk" -r @- 2>/dev/null \
+            && success "trunk bookmark $trunk created at @-" \
+            || warn "no $trunk bookmark yet — create it after the first commit: jj bookmark create $trunk -r @-"
+    fi
+    if jj bookmark list --all-remotes 2>/dev/null | grep -q "^$trunk@origin:"; then
+        jj bookmark track "$trunk" --remote=origin 2>/dev/null || true
+    fi
+    success "jj tug wired ($trunk auto-advance; --repo config is machine-local, rerun init per clone)"
 }
 
 cmd_update() {
@@ -378,6 +404,20 @@ cmd_doctor() {
             success "repo check $cb vendored and current"
         fi
     done
+
+    if [ -d .jj ]; then
+        if jj config get experimental-advance-branches.enabled-branches >/dev/null 2>&1; then
+            success "jj trunk auto-advance configured"
+        else
+            warn "jj repo without auto-advance — machine-local config; run: substrate init (wire_jj) per clone"
+        fi
+        if grep -q 'enforce-jj.sh' .claude/settings.json 2>/dev/null; then
+            success "jj workflow hooks wired"
+        else
+            warn "jj repo but enforce-jj not in .claude/settings.json — rerun init"
+        fi
+        [ -f docs/jj-workflow.md ] || warn "docs/jj-workflow.md missing — rerun init"
+    fi
 
     local p d bin hint
     for p in "${profiles[@]}"; do

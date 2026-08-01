@@ -15,6 +15,14 @@
         "hooks": [
           {
             "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/.substrate/hooks/enforce-jj.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/.substrate/hooks/enforce-conventional-commits.sh\""
+          },
+          {
+            "type": "command",
             "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/.substrate/hooks/gate-before-push.sh\""
           }
         ]

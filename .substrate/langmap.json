@@ -20,20 +20,6 @@
   "__shebang__": [
     {
       "match": [
-        "python",
-        "python3"
-      ],
-      "entry": {
-        "mode": "ast",
-        "ast_lang": "python",
-        "markers": [
-          "#"
-        ],
-        "profile": "python"
-      }
-    },
-    {
-      "match": [
         "bash",
         "sh",
         "dash"
@@ -59,24 +45,22 @@
         "heredoc": true,
         "profile": "shell"
       }
+    },
+    {
+      "match": [
+        "python",
+        "python3"
+      ],
+      "entry": {
+        "mode": "ast",
+        "ast_lang": "python",
+        "markers": [
+          "#"
+        ],
+        "profile": "python"
+      }
     }
   ],
-  ".ts": {
-    "mode": "ast",
-    "ast_lang": "typescript",
-    "markers": [
-      "//"
-    ],
-    "profile": "kit-ts"
-  },
-  ".py": {
-    "mode": "ast",
-    "ast_lang": "python",
-    "markers": [
-      "#"
-    ],
-    "profile": "python"
-  },
   ".sh": {
     "mode": "ast",
     "ast_lang": "bash",
@@ -116,5 +100,21 @@
     ],
     "heredoc": true,
     "profile": "shell"
+  },
+  ".py": {
+    "mode": "ast",
+    "ast_lang": "python",
+    "markers": [
+      "#"
+    ],
+    "profile": "python"
+  },
+  ".ts": {
+    "mode": "ast",
+    "ast_lang": "typescript",
+    "markers": [
+      "//"
+    ],
+    "profile": "kit-ts"
   }
 }

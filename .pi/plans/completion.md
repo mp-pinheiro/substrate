@@ -18,6 +18,8 @@ Mechanism: `## Acceptance` items are `- [ ] claim :: verify-command`. A checked 
 ## Acceptance
 
 ### Tracking machinery
+- [x] jj workflow hooks ship with a firing battery :: test/jj-hooks-test.sh
+- [x] init wires jj tug and ships the workflow doc :: grep -q 'wire_jj' bin/substrate && grep -q 'enforce-jj' core/claude-hooks.json && test -f core/jj-workflow.md
 - [x] maintenance report vendored, scheduled, queue live :: test -x core/report.sh || exit 1; grep -q 'schedule:' core/ci/github-report.yml || exit 1; if [ -z "${GH_TOKEN:-}" ] && ! gh auth token >/dev/null 2>&1; then [ -z "${CI:-}" ] || exit 1; exit 0; fi; [ "$(gh api "repos/{owner}/{repo}/issues?labels=substrate-report&state=open" --jq length)" -ge 1 ]
 - [x] init hooks merge is idempotent :: test/init-idempotent-test.sh
 - [x] harness parity check fires on a stripped mirror :: test/parity-test.sh
