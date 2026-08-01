@@ -27,6 +27,9 @@ done
 if [ -f ".omp/extensions/substrate-quality.ts" ]; then
     pair "core/omp/substrate-quality.ts" ".omp/extensions/substrate-quality.ts"
 fi
+if [ -f "docs/jj-workflow.md" ]; then
+    pair "core/jj-workflow.md" "docs/jj-workflow.md"
+fi
 if [ -f "profiles/airflow/checks.d/62-import-linter.sh" ]; then
     pair "profiles/python/checks.d/62-import-linter.sh" "profiles/airflow/checks.d/62-import-linter.sh"
 fi
