@@ -1,0 +1,63 @@
+name: Bug report
+description: Report a reproducible problem with Substrate
+title: "[Bug]: "
+body:
+  - type: checkboxes
+    id: existing
+    attributes:
+      label: Existing issue
+      options:
+        - label: I searched the open and closed issues for this problem.
+          required: true
+  - type: input
+    id: version
+    attributes:
+      label: Substrate version
+      description: Run `cat .substrate/VERSION` in the affected repository.
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Include the operating system, shell, VCS, and harness.
+      placeholder: Ubuntu 24.04, Bash 5.2, jj 0.43.0, omp
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Provide the smallest repository setup and command sequence that reproduces the problem.
+      placeholder: |
+        1. Run substrate bootstrap --profile ...
+        2. Run ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Relevant output
+      description: Remove tokens, credentials, private paths, and other sensitive data before pasting output.
+      render: shell
+  - type: checkboxes
+    id: conduct
+    attributes:
+      label: Code of Conduct
+      options:
+        - label: I agree to follow this project's [Code of Conduct](https://github.com/mp-pinheiro/substrate/blob/main/CODE_OF_CONDUCT.md).
+          required: true

@@ -1,6 +1,7 @@
 # Contributing
 
 Contributions are welcome through GitHub issues and pull requests. Report vulnerabilities through the private process in [`SECURITY.md`](SECURITY.md), not a public issue.
+Participation in project spaces is governed by the [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md).
 
 ## Set up the kit
 
