@@ -21,9 +21,12 @@ if [ ${#profiles[@]} -eq 0 ]; then
 fi
 
 # Profiles are fully isolated (own scratch repo + subshell, no shared state),
-# so run them concurrently: wall time tracks the slowest profile, not the sum.
+# so run them concurrently. On CI (2 cores) 12 at once thrashes; cap to nproc.
+max_jobs=${SUBSTRATE_MATRIX_JOBS:-$(nproc 2>/dev/null || echo 4)}
+[ "$max_jobs" -lt 1 ] && max_jobs=1
 ORDER=()
 declare -A PIDS LOGS TMPS
+running=0
 for name in "${profiles[@]}"; do
     pdir="$KIT_ROOT/profiles/$name"
     [ -d "$pdir" ] || { bad "$name: no such kit profile"; continue; }
@@ -125,6 +128,11 @@ for name in "${profiles[@]}"; do
         fi
     ) >"$log" 2>&1 &
     PIDS[$name]=$!
+    running=$((running + 1))
+    if [ "$running" -ge "$max_jobs" ]; then
+        wait -n 2>/dev/null || true
+        running=$((running - 1))
+    fi
 done
 
 for name in "${ORDER[@]}"; do

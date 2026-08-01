@@ -27,15 +27,29 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   profile-matrix:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [airflow, base, cpp, dbt, go, lua, python, shell, sql, svelte, terraform, typescript]
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
       - name: Install core toolchain
         run: bun install -g @ast-grep/cli jscpd
-      - name: Install every profile toolchain
-        run: test/ci-toolchain.sh
-      - name: Hostile-HOME determinism oracle
-        run: test/hostile-home.sh
+      - name: Install profile toolchain
+        run: test/ci-toolchain.sh ${{ matrix.profile }}
+      - name: Hostile-HOME oracle
+        run: test/hostile-home.sh ${{ matrix.profile }}
+  audit:
+    runs-on: ubuntu-latest
+    needs: [gate]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+      - name: Install core toolchain
+        run: bun install -g @ast-grep/cli jscpd
+      - name: Install active profile toolchains
+        run: test/ci-toolchain.sh --active
       - name: Audit plan oracles
         env:
           GH_TOKEN: ${{ github.token }}

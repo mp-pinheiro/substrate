@@ -7,21 +7,22 @@ set -uo pipefail
 
 KIT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-pjsons=()
-if [ "${1:-}" = "--active" ]; then
-    while IFS= read -r name; do
-        for dir in "$KIT_ROOT/profiles/$name" "$KIT_ROOT/substrate-profiles/$name"; do
-            if [ -f "$dir/profile.json" ]; then
-                pjsons+=("$dir/profile.json")
-                break
-            fi
-        done
-    done < <(jq -r '.profiles[]' "$KIT_ROOT/substrate.json")
-else
-    for pjson in "$KIT_ROOT"/profiles/*/profile.json; do
-        pjsons+=("$pjson")
+add_profile() {
+    for dir in "$KIT_ROOT/profiles/$1" "$KIT_ROOT/substrate-profiles/$1"; do
+        [ -f "$dir/profile.json" ] && { pjsons+=("$dir/profile.json"); return; }
     done
-fi
+}
+
+pjsons=()
+case "${1:-}" in
+    --active)
+        while IFS= read -r name; do add_profile "$name"; done \
+            < <(jq -r '.profiles[]' "$KIT_ROOT/substrate.json") ;;
+    "")
+        for pjson in "$KIT_ROOT"/profiles/*/profile.json; do pjsons+=("$pjson"); done ;;
+    *)
+        for name in "$@"; do add_profile "$name"; done ;;
+esac
 
 for pjson in "${pjsons[@]}"; do
     name=$(jq -r '.name' "$pjson")
