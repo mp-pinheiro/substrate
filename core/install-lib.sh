@@ -3,12 +3,18 @@
 # repo (templates, CI, hooks, harnesses, VCS gates, skills, recipes, jj).
 
 # Requires: KIT_ROOT, info/success/warn/die, profile_dir from the caller.
+
+
 file_mode() {
     stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1" 2>/dev/null
 }
 
 replace_preserving_mode() {
     local path="$1" content="$2" template="$3" mode="" tmp
+    if [ -L "$path" ]; then
+        warn "$path is a symlink — left untouched; merge manually from $template"
+        return 1
+    fi
     mode=$(file_mode "$path") || mode=""
     if ! tmp=$(mktemp "$path.XXXXXX" 2>/dev/null); then
         warn "cannot stage next to $path — merge the hooks manually from $template"
@@ -30,10 +36,31 @@ replace_preserving_mode() {
 
 # shellcheck source=./install-assets.sh
 source "$KIT_ROOT/core/install-assets.sh"
+merge_hook_groups() {
+    local settings="$1" template="$2"
+    jq --argjson extra "$(cat "$template")" '
+        def managed_command:
+            (.command // "") as $command
+            | ($command | test("^bash \"\\$\\{CLAUDE_PROJECT_DIR:-\\.\\}/\\.substrate/hooks/[A-Za-z0-9._-]+\\.sh\"$"))
+                or ($command | test("^bash \"\\$HOME/\\.claude/hooks/substrate-launch\\.sh\" [A-Za-z0-9._-]+$"));
+        def strip_managed($groups):
+            [$groups[]?
+                | .hooks = [(.hooks // [])[] | select(managed_command | not)]
+                | select((.hooks | length) > 0)];
+        .hooks.PreToolUse = (strip_managed((.hooks.PreToolUse // [])) + ($extra.hooks.PreToolUse // []))
+        | .hooks.PostToolUse = (strip_managed((.hooks.PostToolUse // [])) + ($extra.hooks.PostToolUse // []))
+    ' "$settings"
+}
+
 
 sync_managed_workflow() {
     local source="$1" dest="$2" force="$3" label="$4" staged
-    staged=$(mktemp) || { warn "$label staging failed"; return 1; }
+    repo_path_safe "$dest" "$label" || return 1
+    if [ -e "$dest" ] && [ ! -f "$dest" ]; then
+        warn "$dest is not a regular workflow file — left untouched"
+        return 1
+    fi
+    staged=$(mktemp "$dest.substrate.XXXXXX") || { warn "$label staging failed"; return 1; }
     if ! { printf '# substrate-managed\n'; cat "$source"; } > "$staged"; then
         rm -f "$staged"
         warn "$label staging failed"
@@ -41,11 +68,6 @@ sync_managed_workflow() {
     fi
     chmod 644 "$staged"
 
-    if [ -L "$dest" ]; then
-        rm -f "$staged"
-        warn "$dest is a symlink — left untouched"
-        return 1
-    fi
     if [ -f "$dest" ] && grep -qx '# substrate-repo-owned' "$dest"; then
         rm -f "$staged"
         info "$label repo-owned: $dest"
@@ -85,6 +107,7 @@ install_ci() {
             [ -n "$l" ] && lines+=("$l")
         done < <(jq -r '(.ci // [])[]' "$d/profile.json")
     done
+    repo_path_safe .github/workflows "GitHub workflow directory" || return 1
     mkdir -p .github/workflows
     local out=.github/workflows/substrate-gate.yml line trimmed rendered rc=0
     rendered=$(mktemp) || { warn "gate workflow staging failed"; return 1; }
@@ -111,15 +134,15 @@ install_ci() {
 
 install_hooks_config() {
     local template="$KIT_ROOT/core/claude-hooks.json" settings=.claude/settings.json merged
+    repo_path_safe .claude "Claude configuration directory" || return 1
+    repo_path_safe "$settings" "Claude settings" || return 1
     mkdir -p .claude
+    if [ -e "$settings" ] && [ ! -f "$settings" ]; then
+        warn "$settings is not a regular file — left untouched"
+        return 1
+    fi
     if [ -f "$settings" ] && jq -e . "$settings" >/dev/null 2>&1; then
-        # hook arrays concatenate (deep merge would drop repo-owned hooks) yet
-        # stay idempotent: .substrate/ groups are dropped before re-appending
-        if ! merged=$(jq --argjson extra "$(cat "$template")" '
-            def keep: map(select([.hooks[]?.command // ""] | any(test("\\.substrate/hooks/")) | not));
-            .hooks.PreToolUse = (((.hooks.PreToolUse // []) | keep) + ($extra.hooks.PreToolUse // []))
-            | .hooks.PostToolUse = (((.hooks.PostToolUse // []) | keep) + ($extra.hooks.PostToolUse // []))
-        ' "$settings"); then
+        if ! merged=$(merge_hook_groups "$settings" "$template"); then
             warn "Claude settings merge failed — $settings left untouched"
             return 1
         fi
@@ -131,6 +154,12 @@ install_hooks_config() {
         cp "$template" "$settings" || { warn "failed to write $settings"; return 1; }
     fi
     success "Claude hooks wired in $settings"
+    repo_path_safe .omp/extensions "omp extension directory" || return 1
+    repo_path_safe .omp/extensions/substrate-quality.ts "omp extension" || return 1
+    if [ -e .omp/extensions/substrate-quality.ts ] && [ ! -f .omp/extensions/substrate-quality.ts ]; then
+        warn ".omp/extensions/substrate-quality.ts is not a regular file — left untouched"
+        return 1
+    fi
     mkdir -p .omp/extensions
     cp "$KIT_ROOT/core/omp/substrate-quality.ts" .omp/extensions/ || { warn "omp extension install failed"; return 1; }
     success "omp extension installed: .omp/extensions/substrate-quality.ts"
@@ -141,19 +170,38 @@ install_user_harness() {
         info "user harness skipped (SUBSTRATE_NO_USER_HARNESS=1)"
         return 0
     fi
-    local rc=0
+    local rc=0 path
+    local omp_root="$HOME/.omp/agent/extensions" omp_dest="$HOME/.omp/agent/extensions/substrate-quality.ts"
+    local claude_root="$HOME/.claude/hooks" claude_dest="$HOME/.claude/hooks/substrate-launch.sh"
+    local template="$KIT_ROOT/core/claude-hooks-user.json" settings="$HOME/.claude/settings.json" merged
+    for path in \
+        "$omp_root" "$omp_dest" \
+        "$claude_root" "$claude_dest" "$settings" \
+        "$HOME/.claude/skills" "$HOME/.claude/agents" \
+        "$HOME/.omp/agent/skills" "$HOME/.omp/agent/agents"; do
+        user_path_safe "$path" "user harness path" || return 1
+    done
     # agent-level only — ~/.omp/profiles/* must never be touched by this installer
-    if mkdir -p "$HOME/.omp/agent/extensions" 2>/dev/null \
-        && cp "$KIT_ROOT/core/omp/substrate-quality.ts" "$HOME/.omp/agent/extensions/substrate-quality.ts" 2>/dev/null; then
+    if [ -L "$omp_root" ] || [ -L "$omp_dest" ] \
+        || { [ -e "$omp_dest" ] && [ ! -f "$omp_dest" ]; }; then
+        warn "user-level omp extension path is a symlink — left untouched"
+        rc=1
+    elif mkdir -p "$omp_root" 2>/dev/null \
+        && cp "$KIT_ROOT/core/omp/substrate-quality.ts" "$omp_dest" 2>/dev/null; then
         success "user-level omp extension: ~/.omp/agent/extensions/substrate-quality.ts"
     else
         warn "user-level omp extension install failed — sessions rooted outside substrate repos run unguarded"
         rc=1
     fi
 
-    if mkdir -p "$HOME/.claude/hooks" 2>/dev/null \
-        && cp "$KIT_ROOT/core/substrate-launch.sh" "$HOME/.claude/hooks/substrate-launch.sh" 2>/dev/null \
-        && chmod +x "$HOME/.claude/hooks/substrate-launch.sh" 2>/dev/null; then
+    if [ -L "$claude_root" ] || [ -L "$claude_dest" ] \
+        || { [ -e "$claude_dest" ] && [ ! -f "$claude_dest" ]; }; then
+        warn "user-level Claude launcher path is a symlink — left untouched"
+        return 1
+    fi
+    if mkdir -p "$claude_root" 2>/dev/null \
+        && cp "$KIT_ROOT/core/substrate-launch.sh" "$claude_dest" 2>/dev/null \
+        && chmod +x "$claude_dest" 2>/dev/null; then
         success "user-level Claude launcher: ~/.claude/hooks/substrate-launch.sh"
     else
         warn "user-level Claude launcher install failed"
@@ -161,14 +209,17 @@ install_user_harness() {
     fi
     install_user_harness_assets || rc=1
 
-    local template="$KIT_ROOT/core/claude-hooks-user.json" settings="$HOME/.claude/settings.json" merged
+
+    if [ -L "$settings" ]; then
+        warn "$settings is a symlink — left untouched; merge manually from $template"
+        return 1
+    fi
+    if [ -e "$settings" ] && [ ! -f "$settings" ]; then
+        warn "$settings is not a regular file — left untouched"
+        return 1
+    fi
     if [ -f "$settings" ] && jq -e . "$settings" >/dev/null 2>&1; then
-        # drop substrate-launch groups, re-append (idempotent, same shape as install_hooks_config)
-        if ! merged=$(jq --argjson extra "$(cat "$template")" '
-            def keep: map(select([.hooks[]?.command // ""] | any(test("substrate-launch")) | not));
-            .hooks.PreToolUse = (((.hooks.PreToolUse // []) | keep) + ($extra.hooks.PreToolUse // []))
-            | .hooks.PostToolUse = (((.hooks.PostToolUse // []) | keep) + ($extra.hooks.PostToolUse // []))
-        ' "$settings"); then
+        if ! merged=$(merge_hook_groups "$settings" "$template"); then
             warn "user Claude settings merge failed — $settings left untouched"
             return 1
         fi
@@ -184,30 +235,38 @@ install_user_harness() {
 }
 
 install_git_hook() {
-    local path="$1" body="$2" name
+    local path="$1" body="$2" name staged
     name=$(basename "$path")
-    if [ -f "$path" ] && ! grep -q '^# substrate-managed$' "$path"; then
-        warn "$name exists and is not substrate-managed — left untouched"
-        return 0
-    fi
-    if printf '#!/usr/bin/env bash\n# substrate-managed\n%s\n' "$body" > "$path" && chmod +x "$path"; then
-        success "git $name hook installed"
-    else
-        warn "git $name hook install failed"
+    if [ -L "$path" ]; then
+        warn "$name is a symlink — Substrate hook not installed"
         return 1
     fi
+    if [ -e "$path" ] && { [ ! -f "$path" ] || ! grep -q '^# substrate-managed$' "$path"; }; then
+        warn "$name exists and is not substrate-managed — left untouched; chain it to the Substrate hook"
+        return 1
+    fi
+    staged=$(mktemp "$path.XXXXXX") || { warn "git $name hook staging failed"; return 1; }
+    if printf '#!/usr/bin/env bash\n# substrate-managed\n%s\n' "$body" > "$staged" \
+        && chmod +x "$staged" \
+        && mv -f "$staged" "$path"; then
+        success "git $name hook installed"
+        return 0
+    fi
+    rm -f "$staged"
+    warn "git $name hook install failed"
+    return 1
 }
 
 install_vcs_hooks() {
     local rc=0 hooks_dir
-    if [ -d .git ]; then
-        if [ -n "$(git config --get core.hooksPath 2>/dev/null)" ]; then
-            warn "core.hooksPath is set — install substrate hooks there yourself"
-        else
-            hooks_dir=$(git rev-parse --git-path hooks 2>/dev/null) || hooks_dir=.git/hooks
-            mkdir -p "$hooks_dir"
+    if git rev-parse --git-dir >/dev/null 2>&1; then
+        if hooks_dir=$(git rev-parse --git-path hooks 2>/dev/null) \
+            && mkdir -p "$hooks_dir"; then
             install_git_hook "$hooks_dir/pre-commit" 'exec bash "$(git rev-parse --show-toplevel)/.substrate/hooks/changed-files-scan.sh"' || rc=1
             install_git_hook "$hooks_dir/pre-push" 'exec bash "$(git rev-parse --show-toplevel)/.substrate/gate.sh"' || rc=1
+        else
+            warn "effective Git hooks directory is unavailable"
+            rc=1
         fi
     fi
     if [ -d .jj ]; then
@@ -235,18 +294,24 @@ install_templates() {
         d=$(profile_dir "$p") || continue
         while IFS=$'\t' read -r src dest; do
             [ -n "$src" ] || continue
+            repo_path_safe "$dest" "template $dest" || return 1
             if [ -e "$dest" ]; then
                 info "template $dest exists — left untouched"
             else
-                mkdir -p "$(dirname "$dest")"
-                cp "$d/templates/$src" "$dest"
-                success "template installed: $dest"
+                if mkdir -p "$(dirname "$dest")" && cp "$d/templates/$src" "$dest"; then
+                    success "template installed: $dest"
+                else
+                    warn "template installation failed: $dest"
+                    return 1
+                fi
             fi
         done < <(jq -r '(.templates // [])[] | "\(.src)\t\(.dest)"' "$d/profile.json")
     done
 }
 
 install_recipe() {
+    repo_path_safe justfile "gate recipe" || return 1
+    repo_path_safe Makefile "gate target" || return 1
     if [ -f justfile ]; then
         if grep -q '.substrate/gate.sh' justfile; then
             success "gate recipe wired (just gate)"
@@ -254,7 +319,8 @@ install_recipe() {
             warn "justfile already owns a 'gate' recipe — point it at .substrate/gate.sh yourself (appending would redefine the recipe and break just entirely)"
             return 1
         else
-            printf '\ngate *ARGS:\n    .substrate/gate.sh {{ARGS}}\n' >> justfile
+            printf '\ngate *ARGS:\n    .substrate/gate.sh {{ARGS}}\n' >> justfile \
+                || { warn "gate recipe write failed"; return 1; }
             success "gate recipe wired (just gate)"
         fi
     elif [ -f Makefile ]; then
@@ -264,21 +330,28 @@ install_recipe() {
             warn "Makefile already owns a 'gate' target — point it at .substrate/gate.sh yourself"
             return 1
         else
-            printf '\ngate:\n\t.substrate/gate.sh\n' >> Makefile
+            printf '\ngate:\n\t.substrate/gate.sh\n' >> Makefile \
+                || { warn "gate target write failed"; return 1; }
             success "gate target wired (make gate)"
         fi
     else
-        printf 'gate *ARGS:\n    .substrate/gate.sh {{ARGS}}\n' > justfile
+        printf 'gate *ARGS:\n    .substrate/gate.sh {{ARGS}}\n' > justfile \
+            || { warn "gate recipe write failed"; return 1; }
         success "gate recipe wired (just gate)"
     fi
 }
 
 wire_jj() {
     [ -d .jj ] || return 0
+    repo_path_safe docs/jj-workflow.md "jj workflow documentation" || return 1
     command -v jj >/dev/null 2>&1 || { warn ".jj present but jj not installed — jj wiring skipped"; return 1; }
     if [ ! -f docs/jj-workflow.md ]; then
-        mkdir -p docs
-        cp "$KIT_ROOT/core/jj-workflow.md" docs/jj-workflow.md && success "jj workflow doc installed: docs/jj-workflow.md"
+        if mkdir -p docs && cp "$KIT_ROOT/core/jj-workflow.md" docs/jj-workflow.md; then
+            success "jj workflow doc installed: docs/jj-workflow.md"
+        else
+            warn "jj workflow documentation install failed"
+            return 1
+        fi
     fi
     local trunk=main
     if jj bookmark list 2>/dev/null | grep -q '^master:' && ! jj bookmark list 2>/dev/null | grep -q '^main:'; then
@@ -300,6 +373,7 @@ wire_jj() {
 
 install_lsp_config() {
     local profiles=("$@") p d k keys=()
+    repo_path_safe .omp/lsp.json "omp LSP configuration" || return 1
     if [ -f .omp/lsp.json ]; then
         info ".omp/lsp.json exists — left untouched (repo edits win)"
         return 0

@@ -23,9 +23,9 @@ substrate baseline                     # grandfather current debt (green infra o
 substrate selftest                     # full negative battery
 ```
 
-Run `substrate bootstrap` again whenever the kit changes. Existing repositories read their profiles from `substrate.json`; the command refreshes only Substrate-owned files.
+Run `substrate bootstrap` again whenever the kit changes. Existing repositories read their profiles from `substrate.json`; the command refreshes only explicitly Substrate-owned files and fails incomplete when required hooks or destinations cannot be installed safely.
 
-What lands in the repo: `.substrate/` (vendored, pinned core), `substrate.json` (profiles, reviewed exclusions, budgets, protected paths), `substrate-baseline.json` (grandfathered debt; only the gate writes it), Claude and omp hooks, managed agents and skills for both harnesses, managed CI workflows, and a `just gate` recipe.
+What lands in the repo: `.substrate/` (vendored, pinned core), `substrate.json` (profiles, reviewed exclusions, budgets, protected paths), `substrate-baseline.json` (grandfathered debt; only the gate writes it), Claude and omp hooks, managed agents and skills for both harnesses, managed CI workflows, and a `just gate` recipe. Agent and skill roots carrying `.substrate-managed.json` are fully kit-owned and converge exactly; unmarked same-name assets remain repo-owned.
 
 ## What the gate enforces
 

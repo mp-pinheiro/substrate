@@ -32,7 +32,7 @@ A change is done when `substrate gate` is green — not before. Green is trustwo
 | `substrate-baseline.json` | grandfathered debt snapshot; only the gate runner may write it |
 | `.substrate/` | vendored engine (gate, checks, hooks); `substrate bootstrap` synchronizes it with the kit |
 | `.substrate/checks.d/` | active checks: core 05–59, profile 60–79, repo-local 80–99 |
-| `.claude/{agents,skills}/`, `.omp/{agents,skills}/` | kit-owned working agents and skills; same-name repo-owned assets are preserved |
+| `.claude/{agents,skills}/`, `.omp/{agents,skills}/` | working agents and skills; unmarked same-name assets are repo-owned, while a `.substrate-managed.json` marker grants full kit ownership and stale marked assets are removed |
 | `profiles/<name>/` | kit profiles: `profile.json` (claims, checks, fixtures), `checks.d/`, `templates/` |
 | `substrate-profiles/<name>/` | repo-local profiles, same schema |
 | `checks.d/` (repo root) | repo-local checks, vendored in at 80–99 |

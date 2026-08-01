@@ -38,7 +38,7 @@ git init -q .
 git config user.email substrate@localhost
 git config user.name substrate
 mkdir -p .claude
-printf '{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"bash repo-hook.sh"}]}]}}\n' > .claude/settings.json
+printf '{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"bash repo-hook.sh"},{"type":"command","command":"bash \\\"${CLAUDE_PROJECT_DIR:-.}/.substrate/hooks/retired-hook.sh\\\""}]}]}}\n' > .claude/settings.json
 chmod 444 .claude/settings.json
 mkdir -p .claude/skills/context-pack .omp/agents
 : > .claude/agents
@@ -49,6 +49,8 @@ printf 'repo-owned agent\n' > .omp/agents/enemy.md
     || fail "fresh bootstrap failed"
 [ -x .substrate/gate.sh ] || fail "gate was not vendored"
 grep -q 'repo-hook.sh' .claude/settings.json || fail "repo hook was dropped"
+grep -q 'retired-hook.sh' .claude/settings.json \
+    && fail "retired managed hook survived mixed-group synchronization"
 grep -qx '# substrate-managed' .github/workflows/substrate-gate.yml \
     || fail "gate workflow is not marked as managed"
 managed_matches .github/workflows/substrate-report.yml "$KIT_ROOT/core/ci/github-report.yml" \
@@ -69,6 +71,18 @@ grep -q '^repo-owned agent$' .omp/agents/enemy.md \
     || fail "repo-owned agent was overwritten"
 [ "$(stat -c '%a' .claude/settings.json)" = "444" ] \
     || fail "Claude settings mode changed during atomic synchronization"
+cp .claude/settings.json "$T/settings.saved"
+jq '.note = "protect-paths.sh"
+    | .hooks.PreToolUse |= map(
+        if any(.hooks[]?; (.command // "") | contains("/protect-paths.sh"))
+        then .matcher = "Read" else . end
+    )' .claude/settings.json > "$T/settings.malformed"
+mv "$T/settings.malformed" .claude/settings.json
+out=$("$KIT_ROOT/bin/substrate" doctor 2>&1)
+grep -q 'hook registration missing or malformed' <<< "$out" \
+    || fail "doctor accepted a filename mention under the wrong matcher"
+mv "$T/settings.saved" .claude/settings.json
+chmod 444 .claude/settings.json
 
 config_before=$(sha256sum substrate.json)
 printf '{"metrics":{"sentinel":1}}\n' > substrate-baseline.json
@@ -84,6 +98,12 @@ printf 'stale skill\n' > .omp/skills/review/SKILL.md
 printf 'stale agent\n' > .claude/agents/explorer.md
 mv .omp/skills/review/.substrate-managed.json .omp/skills/review/.substrate-managed
 mv .claude/agents/explorer.md.substrate-managed.json .claude/agents/explorer.md.substrate-managed
+printf 'user addition inside managed root\n' > .omp/skills/review/local.txt
+mkdir -p .omp/skills/retired
+printf 'retired skill\n' > .omp/skills/retired/SKILL.md
+printf '{"managed_by":"substrate"}\n' > .omp/skills/retired/.substrate-managed.json
+printf 'retired agent\n' > .claude/agents/retired.md
+printf '{"managed_by":"substrate"}\n' > .claude/agents/retired.md.substrate-managed.json
 
 "$KIT_ROOT/bin/substrate" bootstrap >/dev/null 2>&1 \
     || fail "existing-repo synchronization failed"
@@ -111,6 +131,12 @@ jq -e '.managed_by == "substrate"' .omp/skills/review/.substrate-managed.json >/
     || fail "managed skill marker did not migrate to JSON"
 jq -e '.managed_by == "substrate"' .claude/agents/explorer.md.substrate-managed.json >/dev/null \
     || fail "managed agent marker did not migrate to JSON"
+[ ! -e .omp/skills/review/local.txt ] \
+    || fail "managed skill root retained a user-added file despite full ownership"
+[ ! -e .omp/skills/retired ] || fail "retired managed skill survived synchronization"
+[ ! -e .claude/agents/retired.md ] || fail "retired managed agent survived synchronization"
+[ ! -e .claude/agents/retired.md.substrate-managed.json ] \
+    || fail "retired managed agent marker survived synchronization"
 [ ! -e .omp/skills/review/.substrate-managed ] \
     || fail "legacy skill marker survived migration"
 [ ! -e .claude/agents/explorer.md.substrate-managed ] \
@@ -143,5 +169,124 @@ if "$KIT_ROOT/bin/substrate" bootstrap --profile lua > bootstrap.out 2>&1; then
 fi
 grep -q 'requested profiles differ' bootstrap.out \
     || fail "profile mismatch refusal was not actionable"
+
+# A non-regular managed file must fail closed and remain untouched.
+rm -f .omp/agents/explorer.md
+mkdir .omp/agents/explorer.md
+if "$KIT_ROOT/bin/substrate" bootstrap > bootstrap.out 2>&1; then
+    fail "bootstrap accepted a directory at a managed file path"
+fi
+[ -d .omp/agents/explorer.md ] || fail "non-regular managed path was destructively replaced"
+rm -rf .omp/agents/explorer.md
+rm -f .omp/agents/explorer.md.substrate-managed.json
+"$KIT_ROOT/bin/substrate" bootstrap >/dev/null 2>&1 || fail "managed agent recovery failed"
+
+# A symlinked ownership marker cannot authorize deletion.
+mkdir -p .omp/skills/retired-link
+printf 'do not delete\n' > .omp/skills/retired-link/SKILL.md
+printf '{"managed_by":"substrate"}\n' > "$T/external-marker.json"
+ln -s "$T/external-marker.json" .omp/skills/retired-link/.substrate-managed.json
+if "$KIT_ROOT/bin/substrate" bootstrap > bootstrap.out 2>&1; then
+    fail "bootstrap trusted a symlinked ownership marker"
+fi
+[ -f .omp/skills/retired-link/SKILL.md ] || fail "symlink-marked skill was deleted"
+grep -q 'managed_by' "$T/external-marker.json" || fail "external marker target changed"
+rm -rf .omp/skills/retired-link
+
+# A second-leg install failure restores the previous managed file and marker.
+(
+    info() { :; }
+    success() { :; }
+    warn() { :; }
+    die() { return 1; }
+    profile_dir() { return 1; }
+    # shellcheck source=../core/install-lib.sh
+    source "$KIT_ROOT/core/install-lib.sh"
+    TX="$T/asset-transaction"
+    mkdir -p "$TX"
+    printf 'new agent\n' > "$TX/source.md"
+    printf 'old agent\n' > "$TX/agent.md"
+    printf '{"managed_by":"substrate","sentinel":"old"}\n' > "$TX/agent.md.substrate-managed.json"
+    old_file=$(sha256sum "$TX/agent.md")
+    old_marker=$(sha256sum "$TX/agent.md.substrate-managed.json")
+    mv() {
+        local destination=""
+        for destination in "$@"; do :; done
+        if [ "$destination" = "$TX/agent.md.substrate-managed.json" ] \
+            && [ "$(basename "$1")" = "marker" ]; then
+            return 1
+        fi
+        command mv "$@"
+    }
+    if sync_managed_asset_file "$TX/source.md" "$TX/agent.md" "transaction probe"; then
+        fail "managed file transaction ignored marker-install failure"
+    fi
+    [ "$old_file" = "$(sha256sum "$TX/agent.md")" ] \
+        || fail "managed file transaction did not restore prior content"
+    [ "$old_marker" = "$(sha256sum "$TX/agent.md.substrate-managed.json")" ] \
+        || fail "managed file transaction did not preserve prior marker"
+)
+
+# An internal symlinked asset root resolves to its canonical repo path.
+mkdir -p "$T/internal-link-repo/.claude" "$T/internal-link-repo/shared/skills/context-pack"
+cd "$T/internal-link-repo" || exit 9
+git init -q .
+git config user.email substrate@localhost
+git config user.name substrate
+printf 'repo-owned skill\n' > shared/skills/context-pack/SKILL.md
+ln -s ../shared/skills .claude/skills
+"$KIT_ROOT/bin/substrate" bootstrap --profile shell >/dev/null 2>&1 \
+    || fail "bootstrap rejected an internal symlinked asset root"
+[ -L .claude/skills ] || fail "bootstrap replaced an internal asset-root symlink"
+grep -q '^repo-owned skill$' shared/skills/context-pack/SKILL.md \
+    || fail "bootstrap changed a repo-owned skill behind an internal symlink"
+cmp -s shared/skills/review/SKILL.md "$KIT_ROOT/skills/review/SKILL.md" \
+    || fail "bootstrap did not synchronize through the canonical internal asset path"
+
+# An asset-root symlink outside the repository remains fail-closed.
+mkdir -p "$T/asset-escape/.claude" "$T/outside-skills"
+printf 'sentinel\n' > "$T/outside-skills/sentinel"
+cd "$T/asset-escape" || exit 9
+git init -q .
+git config user.email substrate@localhost
+git config user.name substrate
+ln -s "$T/outside-skills" .claude/skills
+if "$KIT_ROOT/bin/substrate" bootstrap --profile shell > bootstrap.out 2>&1; then
+    fail "bootstrap followed an escaping asset-root symlink"
+fi
+[ ! -e "$T/outside-skills/review" ] || fail "bootstrap wrote assets outside the repository"
+grep -q '^sentinel$' "$T/outside-skills/sentinel" || fail "outside asset sentinel changed"
+
+# Repository writes cannot traverse a symlinked destination root.
+mkdir -p "$T/outside" "$T/symlink-repo"
+printf 'sentinel\n' > "$T/outside/sentinel"
+cd "$T/symlink-repo" || exit 9
+git init -q .
+git config user.email substrate@localhost
+git config user.name substrate
+ln -s "$T/outside" .github
+if "$KIT_ROOT/bin/substrate" bootstrap --profile shell > bootstrap.out 2>&1; then
+    fail "bootstrap followed a symlinked .github destination"
+fi
+[ ! -e "$T/outside/workflows" ] || fail "bootstrap wrote workflows outside the repository"
+grep -q '^sentinel$' "$T/outside/sentinel" || fail "outside sentinel changed"
+
+# Bootstrap and init share update's downgrade guard.
+mkdir -p "$T/newer-repo"
+cd "$T/newer-repo" || exit 9
+git init -q .
+git config user.email substrate@localhost
+git config user.name substrate
+"$KIT_ROOT/bin/substrate" bootstrap --profile shell >/dev/null 2>&1 \
+    || fail "newer-version fixture bootstrap failed"
+printf '9.9.9\n' > .substrate/VERSION
+if "$KIT_ROOT/bin/substrate" bootstrap > bootstrap.out 2>&1; then
+    fail "bootstrap silently downgraded a newer vendored core"
+fi
+grep -q 'newer than kit' bootstrap.out || fail "downgrade refusal was not actionable"
+grep -q '^9.9.9$' .substrate/VERSION || fail "downgrade refusal still changed the core"
+"$KIT_ROOT/bin/substrate" bootstrap --force >/dev/null 2>&1 \
+    || fail "explicit forced downgrade failed"
+cmp -s .substrate/VERSION "$KIT_ROOT/VERSION" || fail "forced downgrade did not install the kit version"
 
 printf 'bootstrap-test: fresh, sync, ownership, force-adopt, preservation green\n'

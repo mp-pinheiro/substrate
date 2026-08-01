@@ -57,6 +57,44 @@ mkdir -p "$T/git-repo"
     git ls-remote --heads "$T/git-origin.git" | grep -q main || fail "git: green push produced no remote ref"
 ) || exit 1
 
+# Existing hooks must make bootstrap incomplete rather than silently shipping without enforcement.
+mkdir -p "$T/custom-hook-repo"
+(
+    cd "$T/custom-hook-repo" || exit 9
+    git init -q .
+    git config user.email substrate@localhost
+    git config user.name substrate
+    printf '#!/usr/bin/env bash\necho custom\n' > .git/hooks/pre-commit
+    chmod +x .git/hooks/pre-commit
+    before=$(sha256sum .git/hooks/pre-commit)
+    if env -u CI "$KIT_ROOT/bin/substrate" init --profile shell > bootstrap.out 2>&1; then
+        fail "git: init reported success with an unchained custom pre-commit hook"
+    fi
+    [ "$before" = "$(sha256sum .git/hooks/pre-commit)" ] \
+        || fail "git: custom pre-commit hook was modified"
+    grep -q 'left untouched; chain it' bootstrap.out \
+        || fail "git: custom hook refusal was not actionable"
+) || exit 1
+
+mkdir -p "$T/hooks-path-repo"
+(
+    cd "$T/hooks-path-repo" || exit 9
+    git init -q .
+    git config user.email substrate@localhost
+    git config user.name substrate
+    git config core.hooksPath .githooks
+    mkdir .githooks
+    printf '#!/usr/bin/env bash\necho custom\n' > .githooks/pre-push
+    chmod +x .githooks/pre-push
+    before=$(sha256sum .githooks/pre-push)
+    if env -u CI "$KIT_ROOT/bin/substrate" init --profile shell > bootstrap.out 2>&1; then
+        fail "git: init reported success with a custom hooksPath collision"
+    fi
+    [ "$before" = "$(sha256sum .githooks/pre-push)" ] \
+        || fail "git: hooksPath pre-push hook was modified"
+    [ -x .githooks/pre-commit ] || fail "git: effective hooksPath did not receive pre-commit"
+) || exit 1
+
 git init -q --bare "$T/jj-origin.git"
 mkdir -p "$T/jj-repo"
 (

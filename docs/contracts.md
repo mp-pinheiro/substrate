@@ -84,22 +84,23 @@ Ordering: core checks 05–59, profile checks 60–79, repo-local checks 80–99
 - `hooks/protect-paths.sh` — PreToolUse(Write|Edit) stdin JSON; blocks: any symlink write (message names the target), baseline, `.substrate/`, `CLAUDE.md`/governance, `protected_paths` globs. Exit 2 = blocked.
 - `hooks/changed-files-scan.sh` — PostToolUse(Bash|Write|Edit|MultiEdit|NotebookEdit|Task); scans every changed path in the working tree (jj diff or git status), not the tool's declared target, so bash/eval writes are covered; runs the comment ratchet per changed scannable file (pass-only memo in `$TMPDIR`) and flags `protected_paths` writes the write-time hook could not intercept. Report on stderr, exit 2 = blocking feedback.
 - `hooks/gate-before-push.sh` — PreToolUse(Bash) matching the repo's push command; runs the gate; exit 2 with report on red.
-- `omp/quality.ts` — same three behaviors via ExtensionAPI `tool_call`/`tool_result`, reading `substrate.json` + `langmap.json` directly (Bun `JSON.parse`); subprocesses via `Bun.spawnSync`.
-- `install_user_harness` — installs the user-scoped omp extension, Claude launcher, and kit-owned agents/skills into `~/.omp/agent` and `~/.claude`; it never creates or changes `~/.omp/profiles/*`.
+- `core/omp/substrate-quality.ts` — mirrors the hook layer via ExtensionAPI `tool_call`/`tool_result`. Every write resolves its own target repo, including cross-repo and not-yet-created parent paths; symlink ancestors cannot escape that repo. Config is read from the resolved repo with Bun `JSON.parse`; subprocesses use `Bun.spawnSync`.
+- `install_user_harness` — installs the user-scoped omp extension, Claude launcher, and kit-owned agents/skills into `~/.omp/agent` and `~/.claude`; it never creates or changes `~/.omp/profiles/*` and refuses any destination that crosses a symlink.
+- Agent/skill ownership is explicit. A same-name destination without `.substrate-managed.json` is repo/user-owned and remains untouched. A valid `{"managed_by":"substrate"}` marker grants full ownership of that asset root: synchronization replaces its complete contents, and a marked asset removed from the kit is removed from consumers. Invalid or symlinked markers fail closed. A repo-local asset-root symlink is accepted only when its canonical target remains inside the repository; writes use that canonical path. User-level roots never traverse symlinks.
 
 ## CLI surface (`bin/substrate`)
 
-- `bootstrap [--profile a,b] [--force]` — the canonical installer and synchronizer. A new repo requires profiles; later runs read them from `substrate.json`. It re-vendors `.substrate/`, re-renders workflows marked `# substrate-managed`, merges hook groups, refreshes harness and VCS wiring, and synchronizes kit-owned agents and skills into both Claude and omp. It preserves the baseline, config, templates, repo-owned LSP settings, same-name repo-owned assets, and local checks. An unmarked workflow is adopted only when it exactly matches generated output or `--force` is explicit; `# substrate-repo-owned` opts a custom workflow into preservation without making bootstrap incomplete.
+- `bootstrap [--profile a,b] [--force]` — the canonical installer and synchronizer. A new repo requires profiles; later runs read them from `substrate.json`. It re-vendors `.substrate/`, re-renders workflows marked `# substrate-managed`, merges individual hook commands without dropping foreign commands from mixed groups, refreshes harness and VCS wiring, and synchronizes kit-owned agents and skills into both Claude and omp. It preserves the baseline, config, templates, repo-owned LSP settings, unmarked same-name assets, and local checks. An unmarked workflow is adopted only when it exactly matches generated output or `--force` is explicit; `# substrate-repo-owned` preserves a custom workflow. Symlink escapes, non-regular managed destinations, and unchained Git hook collisions make bootstrap incomplete rather than reporting false success.
 - `init [--profile a,b] [--vcs auto|git|jj] [--force]` — first-run-compatible entry point for the same installer.
 - `gate [...]` — run `.substrate/gate.sh` (flags pass through: `--update-baseline`, `--accept-regression`).
-- `doctor` — config validity, langmap freshness (regenerate + compare), toolchain presence per active profile with hints.
-- `update [--apply]` — inspect vendored engine drift; `--apply` re-vendors the engine and omp extension only. Use `bootstrap` for full scaffold synchronization.
+- `doctor` — config validity, langmap freshness (regenerate + compare), exact Claude event/matcher/command registrations, and toolchain presence per active profile with hints.
+- `update [--apply] [--force]` — inspect vendored engine drift; `--apply` re-vendors the engine, refreshes the installed omp extension, and refreshes the user harness. Use `bootstrap` for full repository scaffold synchronization.
 - `selftest` — sandbox copy of the repo (inventory files only), then: steady must be green (or baseline-pending warns only); per-profile slop fixture injected must go red AND be named in the report; detector tool shimmed to fail must go red with "cannot pass blind"; corrupt baseline must hard-exit. Any deviation = selftest fails.
 - `audit [plan.md ...]` — executes plan acceptance oracles (see Plan tracking). Checked `[x]` items must pass (regression = exit 1); `committed` plans must pass everything; pending `[ ]` items on active plans report without failing.
 
 ## Versioning
 
-`.substrate/VERSION` is stamped by bootstrap/init/update. `substrate update` refuses when the vendored version is newer than the kit (downgrade needs `--force`).
+`.substrate/VERSION` is stamped by bootstrap/init/update. All three mutation paths refuse when the vendored version is newer than the kit; an explicit `--force` is required to downgrade.
 
 ## Plan tracking (`.pi/plans/*.md`)
 

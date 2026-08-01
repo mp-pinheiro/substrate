@@ -67,6 +67,13 @@ Mechanism: `## Acceptance` items are `- [ ] claim :: verify-command`. A checked 
 - [x] LSP config seeded absent-only with informational doctor hints :: test/lsp-config-test.sh
 - [x] audit reports unverifiable instead of silently green offline :: test/audit-test.sh
 
+### Bootstrap safety and convergence
+- [x] bootstrap contains writes, canonicalizes internal asset roots, rejects escapes, and guards downgrades :: test/bootstrap-test.sh
+- [x] managed assets converge and retired marked assets are removed with rollback coverage :: test/bootstrap-test.sh
+- [x] Claude and omp user harnesses resolve cross-repo targets and reject settings symlinks :: test/user-harness-test.sh
+- [x] mixed hook groups preserve foreign commands and doctor validates registrations structurally :: test/bootstrap-test.sh && test/user-harness-test.sh
+- [x] custom Git hook collisions make bootstrap incomplete :: test/vcs-hooks-test.sh
+
 ### Proof on remote
 - [x] kit repo has a remote :: git remote get-url origin >/dev/null 2>&1
 - [x] Actions CI has a green run :: if [ -z "${GH_TOKEN:-}" ] && ! gh auth token >/dev/null 2>&1; then [ -z "${CI:-}" ] || exit 1; exit 3; fi; out=$(gh run list --status success --limit 1 --json conclusion --jq '.[0].conclusion' 2>/dev/null) || exit 3; printf '%s' "$out" | grep -qx success

@@ -96,6 +96,22 @@ function loadConfig(cwd: string): Config {
 function toolPath(input: Record<string, unknown>): string {
 	return String(input.path ?? input.file_path ?? "");
 }
+function resolveThroughExistingParent(path: string): string {
+	let current = path;
+	const missing: string[] = [];
+	while (!existsSync(current)) {
+		const parent = dirname(current);
+		if (parent === current) return path;
+		missing.unshift(basename(current));
+		current = parent;
+	}
+	try {
+		return join(realpathSync(current), ...missing);
+	} catch {
+		return path;
+	}
+}
+
 
 export default function substrateQuality(pi: ExtensionAPI): void {
 	// both copies (project + user) load in one process; vendor-drift keeps them byte-identical, so first registration wins
@@ -110,7 +126,10 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 		const path = toolPath(event.input);
 		if (!path) return;
 
-		const cfg = loadConfig(ctx.cwd);
+		const abs = resolve(ctx.cwd, path);
+		const root = findGateRoot(dirname(abs));
+		if (!root) return;
+		const cfg = loadConfig(root);
 		if (!cfg.ok) {
 			return { block: true, reason: "blocked: substrate.json is corrupt — fix it before writing anything else" };
 		}
@@ -120,8 +139,6 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 				reason: "blocked: substrate.json contracts entries need name/regen/paths — fix the config",
 			};
 		}
-
-		const abs = resolve(ctx.cwd, path);
 		try {
 			if (lstatSync(abs).isSymbolicLink()) {
 				let target = "unknown";
@@ -135,15 +152,8 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 			}
 		} catch {}
 
-		const rel = relative(ctx.cwd, abs);
-		let real = rel;
-		try {
-			real = relative(ctx.cwd, realpathSync(abs));
-		} catch {
-			try {
-				real = relative(ctx.cwd, join(realpathSync(dirname(abs)), basename(abs)));
-			} catch {}
-		}
+		const rel = relative(root, abs);
+		const real = relative(root, resolveThroughExistingParent(abs));
 		if (real.startsWith("..") || isAbsolute(real)) {
 			return {
 				block: true,

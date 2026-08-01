@@ -41,6 +41,7 @@ profile_dir() {
 # shellcheck source=../core/install-lib.sh
 source "$KIT_ROOT/core/install-lib.sh"
 
+
 build_langmap() {
     local out="$1"; shift
     local pjsons=() p d
@@ -60,8 +61,10 @@ build_langmap() {
 }
 
 vendor_core() {
-    local profiles=("$@") p d c staging=.substrate.new
-    rm -rf "$staging"
+    local profiles=("$@") p d c staging backup=""
+    repo_path_safe .substrate ".substrate vendor directory" || die "unsafe .substrate destination"
+    [ ! -e .substrate ] || [ -d .substrate ] || die ".substrate exists but is not a directory"
+    staging=$(mktemp -d .substrate.new.XXXXXX) || die "vendor staging failed"
     mkdir -p "$staging/checks.d" "$staging/hooks" "$staging/profiles"
     cp "$KIT_ROOT"/core/gate.sh "$KIT_ROOT"/core/gate-lib.sh \
        "$KIT_ROOT"/core/check-comments.sh "$KIT_ROOT"/core/comment-ratchet.sh \
@@ -86,36 +89,20 @@ vendor_core() {
     fi
     build_langmap "$staging/langmap.json" "${profiles[@]}"
     chmod +x "$staging"/*.sh "$staging"/hooks/*.sh "$staging"/checks.d/*.sh
-    rm -rf .substrate.old
     if [ -d .substrate ]; then
-        mv .substrate .substrate.old || die "vendor swap failed: could not set aside old copy"
+        backup=$(mktemp -d .substrate.backup.XXXXXX) || die "vendor backup failed"
+        rm -rf "$backup"
+        mv .substrate "$backup" || die "vendor swap failed: could not set aside old copy"
     fi
-    mv "$staging" .substrate || die "vendor swap failed — previous copy preserved at .substrate.old"
-    rm -rf .substrate.old
+    if ! mv "$staging" .substrate; then
+        if [ -n "$backup" ] && ! mv "$backup" .substrate 2>/dev/null; then
+            die "vendor swap and restore failed — recover the previous copy from $backup"
+        fi
+        die "vendor swap failed — previous copy restored"
+    fi
+    [ -z "$backup" ] || rm -rf "$backup"
 }
 
-seed_config() {
-    local profiles_json="$1"
-    jq -n --argjson profiles "$profiles_json" '{
-        version: 1,
-        profiles: $profiles,
-        inventory: "auto",
-        unscanned: [
-            "*.md", "**/*.md", "*.txt", "*.lock", "*.toml",
-            "LICENSE*", "VERSION", ".gitignore", ".gitattributes", ".gitmodules",
-            "*.png", "*.svg", "*.jpg", "*.csv", "Dockerfile*", "Makefile", "justfile",
-            ".substrate/**", ".omp/**", ".importlinter",
-            "substrate-report.md"
-        ],
-        protected_paths: [],
-        comment: { allow_tags: ["SAFETY:", "WHY:", "PERF:", "HACK:"] },
-        budgets: { max_file_lines: 500 },
-        duplication: { min_tokens: 35 },
-        report: { max_age_days: 14 },
-        checks: { disabled: [] },
-        push_gate: true
-    }' > substrate.json
-}
 
 
 cmd_init() {
@@ -140,6 +127,9 @@ cmd_init() {
     done
     [ -n "$profiles_csv" ] || die "init requires --profile a,b — kit profiles: $(basename -a "$KIT_ROOT"/profiles/* | tr '\n' ' ')"
     [ -d .git ] || [ -d .jj ] || die "not a repo root (no .git or .jj here)"
+    repo_path_safe .substrate ".substrate vendor directory" || die "unsafe .substrate destination"
+    repo_path_safe substrate.json "substrate configuration" || die "unsafe substrate.json destination"
+    guard_vendor_downgrade "$force"
 
     local profiles=(base)
     local requested=() p
@@ -197,6 +187,7 @@ EOF
 
 cmd_bootstrap() {
     local arg has_profile=0 profiles_csv
+    repo_path_safe substrate.json "substrate configuration" || die "unsafe substrate.json destination"
     for arg in "$@"; do
         [ "$arg" = "--profile" ] && has_profile=1
     done
@@ -221,16 +212,14 @@ cmd_update() {
             *) die "unknown update flag: $arg" ;;
         esac
     done
+    repo_path_safe .substrate ".substrate vendor directory" || die "unsafe .substrate destination"
+    repo_path_safe substrate.json "substrate configuration" || die "unsafe substrate.json destination"
     [ -d .substrate ] || die "no .substrate here — run: substrate init"
     jq -e . substrate.json >/dev/null 2>&1 || die "substrate.json missing or corrupt"
 
-    local kit_v vendored_v newest
+    local kit_v
     kit_v=$(cat "$KIT_ROOT/VERSION")
-    vendored_v=$(cat .substrate/VERSION 2>/dev/null || echo "0.0.0")
-    newest=$(printf '%s\n%s\n' "$kit_v" "$vendored_v" | sort -V | tail -1)
-    if [ "$newest" != "$kit_v" ] && [ "$force" -ne 1 ]; then
-        die "vendored $vendored_v is newer than kit $kit_v — pass --force to downgrade"
-    fi
+    guard_vendor_downgrade "$force"
 
     local profiles=()
     mapfile -t profiles < <(jq -r '.profiles[]' substrate.json)
@@ -249,12 +238,14 @@ cmd_update() {
 
     vendor_core "${profiles[@]}"
     if [ -f .omp/extensions/substrate-quality.ts ]; then
+        repo_path_safe .omp/extensions/substrate-quality.ts "omp extension" \
+            || die "unsafe omp extension destination"
         cp "$KIT_ROOT/core/omp/substrate-quality.ts" .omp/extensions/substrate-quality.ts \
             || die "failed to refresh installed omp extension"
         info "refreshed .omp/extensions/substrate-quality.ts"
     fi
     install_user_harness \
-        || warn "user-level harness refresh failed — a stale user copy may win the load race; run: substrate init"
+        || die "user-level harness refresh failed — rerun after fixing the warning"
     success "re-vendored .substrate at kit $kit_v (config, baseline, templates untouched)"
 }
 
@@ -275,16 +266,25 @@ cmd_doctor() {
     fi
     rm -f "$fresh"
 
-    local h hb hooks_missing=0
+    local event matcher command hooks_missing=0
     if [ -f .claude/settings.json ] && jq -e . .claude/settings.json >/dev/null 2>&1; then
-        for h in .substrate/hooks/*.sh; do
-            [ -f "$h" ] || continue
-            hb=$(basename "$h")
-            if ! grep -q "$hb" .claude/settings.json; then
-                warn "hook $hb not wired in .claude/settings.json — rerun init or merge manually"
+        while IFS=$'\t' read -r event matcher command; do
+            [ -n "$command" ] || continue
+            if ! jq -e --arg event "$event" --arg matcher "$matcher" --arg command "$command" '
+                [.hooks[$event][]?
+                    | select(.matcher == $matcher)
+                    | .hooks[]?
+                    | select((.type == "command") and (.command == $command))]
+                | length > 0
+            ' .claude/settings.json >/dev/null 2>&1; then
+                warn "$event hook registration missing or malformed: $command"
                 hooks_missing=1
             fi
-        done
+        done < <(jq -r '
+            .hooks | to_entries[] | .key as $event | .value[]
+            | .matcher as $matcher | .hooks[]
+            | [$event, $matcher, .command] | @tsv
+        ' "$KIT_ROOT/core/claude-hooks.json")
         [ "$hooks_missing" -eq 0 ] && success "claude hooks wired"
     else
         warn ".claude/settings.json absent or invalid — write-time hooks unarmed (run init)"

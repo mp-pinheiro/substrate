@@ -16,7 +16,7 @@ trap 'rm -rf "$T"' EXIT
 export HOME="$T/home"
 mkdir -p "$HOME/.claude" "$T/repo"
 
-printf '{"hooks": {"PostToolUse": [{"matcher": "Write", "hooks": [{"type": "command", "command": "bash my-user-hook.sh"}]}]}}\n' \
+printf '{"hooks": {"PostToolUse": [{"matcher": "Write", "hooks": [{"type": "command", "command": "bash my-user-hook.sh"}, {"type": "command", "command": "bash \\\"$HOME/.claude/hooks/substrate-launch.sh\\\" retired-hook.sh"}]}]}}\n' \
     > "$HOME/.claude/settings.json"
 
 cd "$T/repo" || exit 9
@@ -39,9 +39,40 @@ cmp -s "$HOME/.claude/skills/review/SKILL.md" "$KIT_ROOT/skills/review/SKILL.md"
     || fail "user-level Claude skill differs from kit copy"
 [ -e "$HOME/.omp/profiles" ] && fail "HOME/.omp/profiles was created — installer crossed into profile stacks"
 
+# The user-level omp extension resolves each write target, not the session cwd.
+mkdir -p "$T/nowhere"
+cat > "$T/omp-probe.ts" <<'TS'
+const handlers: Record<string, Array<(event: any, context: any) => Promise<any>>> = {};
+const pi = {
+	setLabel() {},
+	on(name: string, handler: (event: any, context: any) => Promise<any>) {
+		(handlers[name] ??= []).push(handler);
+	},
+};
+const extension = await import(process.argv[2]);
+extension.default(pi);
+const protect = handlers.tool_call[0];
+const cwd = process.argv[3];
+const results = [];
+for (const path of process.argv.slice(4)) {
+	results.push(await protect({ toolName: "write", input: { path } }, { cwd }));
+}
+console.log(JSON.stringify(results));
+TS
+ln -s "$T/nowhere" "$T/repo/escaped-parent"
+omp_results=$(bun "$T/omp-probe.ts" "$KIT_ROOT/core/omp/substrate-quality.ts" "$T/nowhere" \
+    "$T/repo/missing/deep/substrate-baseline.json" \
+    "$T/repo/escaped-parent/missing/file.sh")
+jq -e '.[0].block == true and (.[0].reason | contains("baseline"))' <<< "$omp_results" >/dev/null \
+    || fail "user-level omp extension missed a cross-repo protected write: $omp_results"
+jq -e '.[1].block == true and (.[1].reason | contains("outside the repo"))' <<< "$omp_results" >/dev/null \
+    || fail "user-level omp extension missed a missing-parent symlink escape: $omp_results"
+
 count1=$(jq '[(.hooks.PreToolUse // [])[].hooks[].command, (.hooks.PostToolUse // [])[].hooks[].command] | map(select(test("substrate-launch"))) | length' "$HOME/.claude/settings.json")
 [ "$count1" -ge 1 ] || fail "no substrate-launch registrations in user settings"
 grep -q 'my-user-hook.sh' "$HOME/.claude/settings.json" || fail "pre-existing user hook group dropped"
+grep -q 'retired-hook.sh' "$HOME/.claude/settings.json" \
+    && fail "retired managed hook survived mixed user-hook group synchronization"
 
 env -u CI -u SUBSTRATE_NO_USER_HARNESS "$KIT_ROOT/bin/substrate" init --profile shell >/dev/null 2>&1
 count2=$(jq '[(.hooks.PreToolUse // [])[].hooks[].command, (.hooks.PostToolUse // [])[].hooks[].command] | map(select(test("substrate-launch"))) | length' "$HOME/.claude/settings.json")
@@ -65,6 +96,14 @@ rc=$?
 [ "$rc" -eq 2 ] || fail "cross-repo dispatch failed despite inert project wiring (rc=$rc: $out)"
 printf '%s' "$out" | grep -q 'baseline' || fail "cross-repo verdict lost: $out"
 
+# Target routing starts at lexical parents, even before they exist.
+probe_missing=$(printf '{"tool_input": {"file_path": "%s"}}' "$T/repo/missing/deep/substrate-baseline.json")
+out=$(cd "$T/nowhere" && printf '%s' "$probe_missing" \
+    | CLAUDE_PROJECT_DIR="$T/nowhere" bash "$LAUNCH" protect-paths.sh 2>&1)
+rc=$?
+[ "$rc" -eq 2 ] || fail "missing-parent target bypassed launcher routing (rc=$rc: $out)"
+printf '%s' "$out" | grep -q 'baseline' || fail "missing-parent target verdict lost: $out"
+
 # subdirectory + relative payload path: upward walk from the target
 mkdir -p "$T/repo/components"
 out=$(cd "$T/repo/components" && printf '{"tool_input": {"file_path": "substrate-baseline.json"}}' \
@@ -79,14 +118,36 @@ rc=$?
 
 # per-hook scope: wiring for OTHER hooks must not suppress one the project does not register
 tmp=$(mktemp)
-jq '.hooks.PostToolUse = [{"matcher": "Write|Edit", "hooks": [{"type": "command", "command": "bash something-else.sh"}]}]' \
+jq '.note = ".substrate/hooks/changed-files-scan.sh"
+    | .hooks.PostToolUse = [{"matcher": "Write|Edit", "hooks": [{"type": "command", "command": "bash something-else.sh"}]}]' \
     "$T/repo/.claude/settings.json" > "$tmp" && mv "$tmp" "$T/repo/.claude/settings.json"
 printf '#!/usr/bin/env bash\nls\n# now we check the thing\nls\n' > "$T/repo/components/gapfill.sh"
 out=$(cd "$T/repo" && printf '{"tool_input": {"command": "true"}}' | CLAUDE_PROJECT_DIR="$T/repo" bash "$LAUNCH" changed-files-scan.sh 2>&1)
 rc=$?
 [ "$rc" -eq 2 ] || fail "gap-fill dispatch not observable (rc=$rc: $out)"
 printf '%s' "$out" | grep -q 'components/gapfill.sh' || fail "gap-fill scan verdict lost: $out"
-grep -qF '.substrate/hooks/changed-files-scan.sh' "$T/repo/.claude/settings.json" \
+jq -e --arg command 'bash "${CLAUDE_PROJECT_DIR:-.}/.substrate/hooks/changed-files-scan.sh"' '
+    [(.hooks.PreToolUse // [])[], (.hooks.PostToolUse // [])[]]
+    | any(.[] | .hooks[]?; .command == $command)
+' "$T/repo/.claude/settings.json" >/dev/null \
     && fail "fixture drift: scan hook unexpectedly project-wired"
 
+
+# User settings symlinks and symlinked ancestors are never replaced or traversed.
+HOME2="$T/home-symlink"
+mkdir -p "$HOME2/.claude" "$T/symlink-user-repo"
+printf '{"hooks":{"PreToolUse":[]}}\n' > "$T/external-settings.json"
+settings_before=$(sha256sum "$T/external-settings.json")
+ln -s "$T/external-settings.json" "$HOME2/.claude/settings.json"
+cd "$T/symlink-user-repo" || exit 9
+git init -q .
+git config user.email substrate@localhost
+git config user.name substrate
+if HOME="$HOME2" env -u CI -u SUBSTRATE_NO_USER_HARNESS \
+    "$KIT_ROOT/bin/substrate" init --profile shell > bootstrap.out 2>&1; then
+    fail "init replaced a symlinked user settings file"
+fi
+[ -L "$HOME2/.claude/settings.json" ] || fail "user settings symlink was replaced"
+[ "$settings_before" = "$(sha256sum "$T/external-settings.json")" ] \
+    || fail "user settings symlink target changed"
 printf 'user-harness-test: install, idempotency, no-op, cross-repo, walk, stand-down, gap-fill green\n'
