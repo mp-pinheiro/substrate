@@ -14,7 +14,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - name: Run maintenance report
         run: |
-          { echo '```'; .substrate/report.sh; echo '```'; } > report.md
+          .substrate/report.sh > report.md
       - name: Upsert maintenance queue issue
         env:
           GH_TOKEN: ${{ github.token }}

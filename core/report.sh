@@ -63,7 +63,11 @@ report_dead_code() {
             done <<< "$output"
         fi
     else
-        printf "Status: not scanned. \`vulture\` is missing, so %s Python files were skipped.\n" "${#pyfiles[@]}"
+        if [ ${#pyfiles[@]} -eq 1 ]; then
+            printf "Status: not scanned. \`vulture\` is missing, so 1 Python file was skipped.\n"
+        else
+            printf "Status: not scanned. \`vulture\` is missing, so %s Python files were skipped.\n" "${#pyfiles[@]}"
+        fi
     fi
     if [ -f package.json ]; then
         printf '\nJavaScript and TypeScript dead exports were not scanned. Knip needs repository-specific configuration.\n'

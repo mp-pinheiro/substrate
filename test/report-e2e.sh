@@ -39,6 +39,9 @@ issue=$(gh issue list --label substrate-report --state open --limit 1 --json num
 if [ -n "${CI:-}" ]; then
     title=$(jq -r '.title' <<< "$issue")
     body=$(jq -r '.body' <<< "$issue")
+    first_line=${body%%$'\n'*}
+    [ "$first_line" = "# Substrate maintenance report" ] \
+        || { printf 'report-e2e: issue body is not rendered Markdown\n' >&2; exit 1; }
     [ "$title" = "Substrate maintenance report: cleanup candidates" ] \
         || { printf 'report-e2e: issue title stale (%s)\n' "$title" >&2; exit 1; }
     grep -q '^# Substrate maintenance report$' <<< "$body" \
