@@ -32,7 +32,13 @@ substrate selftest                     # full negative battery
 
 Run `substrate bootstrap` again whenever the kit changes. Existing repositories read their profiles from `substrate.json`; the command refreshes only explicitly Substrate-owned files and fails incomplete when required hooks or destinations cannot be installed safely.
 
-What lands in the repo: `.substrate/` (vendored, pinned core), `substrate.json` (profiles, reviewed exclusions, budgets, protected paths), `substrate-baseline.json` (grandfathered debt; only the gate writes it), Claude and omp hooks, managed agents and skills for both harnesses, managed CI workflows, and a `just gate` recipe. Agent and skill roots carrying `.substrate-managed.json` are fully kit-owned and converge exactly; unmarked same-name assets remain repo-owned.
+What lands in the repo: `.substrate/` (vendored, pinned core), `substrate.json` (profiles, reviewed exclusions, budgets, protected paths), `substrate-baseline.json` (grandfathered debt; only the gate writes it), Claude and omp hooks, `.omp/lsp.json` (seeded once from active profile declarations), managed agents and skills for both harnesses, managed CI workflows, and a `just gate` recipe. Agent and skill roots carrying `.substrate-managed.json` are fully kit-owned and converge exactly; unmarked same-name assets remain repo-owned.
+
+## Editor feedback
+
+Profiles may declare optional language servers for omp. `substrate bootstrap` seeds `.omp/lsp.json` from the active profiles only when the file does not exist; later runs preserve repository edits. `substrate doctor` reports whether each server binary is available and prints an installation hint when it is missing. Substrate does not install LSP binaries, and a missing server disables inline diagnostics without failing the gate.
+
+Profile mappings currently cover YAML/JSON, C++, Go, Lua, Python, shell, Svelte, Terraform, and TypeScript. Each mapping names the server binary and gives an installation hint.
 
 ## What the gate enforces
 
@@ -51,7 +57,7 @@ Everything fails closed: a broken or missing detector is a red gate ("cannot pas
 
 ## Profiles
 
-`base` (always on: YAML/JSON claims) plus per-language profiles under [`profiles/`](profiles/). Each declares its claims (extension → comment-gate mode), toolchain, CI install lines, config templates, checks, and fixtures. Every profile is proven by [`test/matrix.sh`](test/matrix.sh): scratch repo → init → baseline → selftest (slop fixtures must go red) → own-check oracles (bad fixtures must be rejected *by the profile's own checks*). A profile without oracles does not ship.
+`base` (always on: YAML/JSON claims) plus per-language profiles under [`profiles/`](profiles/). Each declares its claims (extension → comment-gate mode), toolchain, CI install lines, optional LSP mappings, config templates, checks, and fixtures. Every profile is proven by [`test/matrix.sh`](test/matrix.sh): scratch repo → init → baseline → selftest (slop fixtures must go red) → own-check oracles (bad fixtures must be rejected *by the profile's own checks*). A profile without oracles does not ship.
 
 ## Developing the kit
 
