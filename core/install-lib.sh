@@ -1,11 +1,84 @@
 #!/usr/bin/env bash
 # Installer library sourced by bin/substrate: everything cmd_init arms in a
 # repo (templates, CI, hooks, harnesses, VCS gates, skills, recipes, jj).
+
 # Requires: KIT_ROOT, info/success/warn/die, profile_dir from the caller.
+file_mode() {
+    stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1" 2>/dev/null
+}
+
+replace_preserving_mode() {
+    local path="$1" content="$2" template="$3" mode="" tmp
+    mode=$(file_mode "$path") || mode=""
+    if ! tmp=$(mktemp "$path.XXXXXX" 2>/dev/null); then
+        warn "cannot stage next to $path — merge the hooks manually from $template"
+        return 1
+    fi
+    if ! printf '%s\n' "$content" > "$tmp"; then
+        rm -f "$tmp"
+        warn "staging write failed for $path"
+        return 1
+    fi
+    [ -n "$mode" ] && chmod "$mode" "$tmp" 2>/dev/null
+    if mv -f "$tmp" "$path" 2>/dev/null; then
+        return 0
+    fi
+    rm -f "$tmp"
+    warn "$path is not replaceable — merge the hooks manually from $template"
+    return 1
+}
+
+# shellcheck source=./install-assets.sh
+source "$KIT_ROOT/core/install-assets.sh"
+
+sync_managed_workflow() {
+    local source="$1" dest="$2" force="$3" label="$4" staged
+    staged=$(mktemp) || { warn "$label staging failed"; return 1; }
+    if ! { printf '# substrate-managed\n'; cat "$source"; } > "$staged"; then
+        rm -f "$staged"
+        warn "$label staging failed"
+        return 1
+    fi
+    chmod 644 "$staged"
+
+    if [ -L "$dest" ]; then
+        rm -f "$staged"
+        warn "$dest is a symlink — left untouched"
+        return 1
+    fi
+    if [ -f "$dest" ] && grep -qx '# substrate-repo-owned' "$dest"; then
+        rm -f "$staged"
+        info "$label repo-owned: $dest"
+        return 0
+    fi
+    if [ -f "$dest" ] && ! grep -qx '# substrate-managed' "$dest"; then
+        if cmp -s "$dest" "$source"; then
+            info "adopting legacy substrate workflow: $dest"
+        elif [ "$force" -ne 1 ]; then
+            rm -f "$staged"
+            warn "$dest is not substrate-managed — left untouched (rerun bootstrap --force to adopt it)"
+            return 1
+        else
+            info "adopting workflow with --force: $dest"
+        fi
+    fi
+    if [ -f "$dest" ] && cmp -s "$staged" "$dest"; then
+        rm -f "$staged"
+        info "$label current: $dest"
+        return 0
+    fi
+    if mv -f "$staged" "$dest"; then
+        success "$label synchronized: $dest"
+        return 0
+    fi
+    rm -f "$staged"
+    warn "$label synchronization failed: $dest"
+    return 1
+}
 
 install_ci() {
+    local force="$1"; shift
     local profiles=("$@") p d lines=() l
-    [ -f .github/workflows/substrate-gate.yml ] && { info "CI workflow exists — left untouched"; return 0; }
     for p in "${profiles[@]}"; do
         d=$(profile_dir "$p") || continue
         while IFS= read -r l; do
@@ -13,24 +86,27 @@ install_ci() {
         done < <(jq -r '(.ci // [])[]' "$d/profile.json")
     done
     mkdir -p .github/workflows
-    local out=.github/workflows/substrate-gate.yml line trimmed
-    : > "$out"
-    while IFS= read -r line; do
+    local out=.github/workflows/substrate-gate.yml line trimmed rendered rc=0
+    rendered=$(mktemp) || { warn "gate workflow staging failed"; return 1; }
+    if ! while IFS= read -r line; do
         trimmed="${line#"${line%%[![:space:]]*}"}"
         if [ "$trimmed" = "# substrate:profile-toolchain" ]; then
             for l in ${lines[@]+"${lines[@]}"}; do
-                printf '          %s\n' "$l" >> "$out"
+                printf '          %s\n' "$l"
             done
         else
-            printf '%s\n' "$line" >> "$out"
+            printf '%s\n' "$line"
         fi
-    done < "$KIT_ROOT/core/ci/github-gate.yml"
-    success "CI workflow installed: $out"
-    if [ ! -f .github/workflows/substrate-report.yml ]; then
-        cp "$KIT_ROOT/core/ci/github-report.yml" .github/workflows/substrate-report.yml \
-            && success "report schedule installed: .github/workflows/substrate-report.yml" \
-            || warn "report schedule install failed"
+    done < "$KIT_ROOT/core/ci/github-gate.yml" > "$rendered"; then
+        rm -f "$rendered"
+        warn "gate workflow rendering failed"
+        return 1
     fi
+    sync_managed_workflow "$rendered" "$out" "$force" "CI workflow" || rc=1
+    rm -f "$rendered"
+    sync_managed_workflow "$KIT_ROOT/core/ci/github-report.yml" \
+        .github/workflows/substrate-report.yml "$force" "report schedule" || rc=1
+    return "$rc"
 }
 
 install_hooks_config() {
@@ -47,10 +123,7 @@ install_hooks_config() {
             warn "Claude settings merge failed — $settings left untouched"
             return 1
         fi
-        if ! printf '%s\n' "$merged" > "$settings" 2>/dev/null; then
-            warn "$settings is not writable (locked?) — chmod u+w it, rerun init, or merge manually from $template"
-            return 1
-        fi
+        replace_preserving_mode "$settings" "$merged" "$template" || return 1
     elif [ -f "$settings" ]; then
         warn "$settings exists but is not valid JSON — left untouched; merge the hooks manually from $template"
         return 1
@@ -86,8 +159,9 @@ install_user_harness() {
         warn "user-level Claude launcher install failed"
         return 1
     fi
+    install_user_harness_assets || rc=1
 
-    local template="$KIT_ROOT/core/claude-hooks-user.json" settings="$HOME/.claude/settings.json" merged mode=""
+    local template="$KIT_ROOT/core/claude-hooks-user.json" settings="$HOME/.claude/settings.json" merged
     if [ -f "$settings" ] && jq -e . "$settings" >/dev/null 2>&1; then
         # drop substrate-launch groups, re-append (idempotent, same shape as install_hooks_config)
         if ! merged=$(jq --argjson extra "$(cat "$template")" '
@@ -98,20 +172,7 @@ install_user_harness() {
             warn "user Claude settings merge failed — $settings left untouched"
             return 1
         fi
-        mode=$(stat -c '%a' "$settings" 2>/dev/null) || mode=""
-        # stage-and-rename: never truncate the user's live Claude config in place
-        local tmp
-        if ! tmp=$(mktemp "$settings.XXXXXX" 2>/dev/null); then
-            warn "cannot stage next to $settings — merge the hooks manually from $template"
-            return 1
-        fi
-        printf '%s\n' "$merged" > "$tmp" || { rm -f "$tmp"; warn "staging write failed for $settings"; return 1; }
-        [ -n "$mode" ] && chmod "$mode" "$tmp" 2>/dev/null
-        if ! mv -f "$tmp" "$settings" 2>/dev/null; then
-            rm -f "$tmp"
-            warn "$settings is not replaceable — merge the hooks manually from $template"
-            return 1
-        fi
+        replace_preserving_mode "$settings" "$merged" "$template" || return 1
     elif [ -f "$settings" ]; then
         warn "$settings exists but is not valid JSON — left untouched; merge manually from $template"
         return 1
@@ -167,27 +228,6 @@ install_vcs_hooks() {
     return "$rc"
 }
 
-install_skills() {
-    local s name dest
-    [ -d "$KIT_ROOT/skills" ] || return 0
-    if ! mkdir -p .claude/skills 2>/dev/null; then
-        warn ".claude/skills is not a directory — skills not installed; fix the path and rerun init"
-        return 1
-    fi
-    for s in "$KIT_ROOT"/skills/*/; do
-        [ -d "$s" ] || continue
-        name=$(basename "$s")
-        dest=".claude/skills/$name"
-        if [ -e "$dest" ]; then
-            info "skill $name exists — left untouched"
-        elif cp -R "$s" "$dest" 2>/dev/null; then
-            success "skill installed: $dest"
-        else
-            warn "skill $name install failed — is .claude/skills writable?"
-            return 1
-        fi
-    done
-}
 
 install_templates() {
     local profiles=("$@") p d src dest

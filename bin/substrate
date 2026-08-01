@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # substrate — deterministic gates for agentic development, installable in any repo.
-# Commands: init, gate, baseline, doctor, update, selftest. See docs/contracts.md.
+# Commands: bootstrap, init, gate, baseline, doctor, update, selftest. See docs/contracts.md.
 set -uo pipefail
 
 KIT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -14,11 +14,12 @@ usage() {
     cat <<'EOF'
 usage: substrate <command> [args]
 
-  init --profile a,b [--vcs auto|git|jj]   install the gate into the current repo
+  bootstrap [--profile a,b] [--force]       kickstart or synchronize the current repo
+  init --profile a,b [--vcs auto|git|jj]   install the gate into a new repo
   gate [--update-baseline|--accept-regression]
   baseline [--update|--accept-regression]
   doctor                                    config, langmap freshness, toolchain
-  update [--apply] [--force]                re-vendor .substrate/ from the kit
+  update [--apply] [--force]                inspect or re-vendor the engine only
   selftest                                  sandboxed negative-test battery
   audit [plan.md ...]                       execute plan acceptance oracles
   report                                    advisory maintenance queue (always exits 0)
@@ -118,12 +119,23 @@ seed_config() {
 
 
 cmd_init() {
-    local profiles_csv=""
+    local profiles_csv="" force=0
     while [ $# -gt 0 ]; do
         case "$1" in
-            --profile) profiles_csv="${2:-}"; shift 2 ;;
-            --vcs) shift 2 ;;
-            *) die "unknown init flag: $1" ;;
+            --profile)
+                [ $# -ge 2 ] || die "--profile needs a comma-separated value"
+                profiles_csv="$2"
+                shift 2
+                ;;
+            --vcs)
+                [ $# -ge 2 ] || die "--vcs needs auto, git, or jj"
+                shift 2
+                ;;
+            --force)
+                force=1
+                shift
+                ;;
+            *) die "unknown init/bootstrap flag: $1" ;;
         esac
     done
     [ -n "$profiles_csv" ] || die "init requires --profile a,b — kit profiles: $(basename -a "$KIT_ROOT"/profiles/* | tr '\n' ' ')"
@@ -136,24 +148,42 @@ cmd_init() {
         [ "$p" = "base" ] || profiles+=("$p")
     done
 
-    vendor_core "${profiles[@]}"
+    local profiles_json configured_json fresh=0
+    profiles_json=$(printf '%s\n' "${profiles[@]}" | jq -Rn '[inputs]')
+    [ -d .substrate ] || fresh=1
     if [ -f substrate.json ]; then
-        info "substrate.json exists — left untouched (its profiles list drives update/doctor)"
+        jq -e '(.profiles | type == "array") and (.profiles | length > 0)' substrate.json >/dev/null 2>&1 \
+            || die "substrate.json is corrupt or has no profiles"
+        configured_json=$(jq -c '.profiles' substrate.json)
+        [ "$configured_json" = "$(jq -c . <<< "$profiles_json")" ] \
+            || die "requested profiles differ from substrate.json — edit its profiles list, then run: substrate bootstrap"
+        info "substrate.json exists — left untouched"
     else
-        seed_config "$(printf '%s\n' "${profiles[@]}" | jq -Rn '[inputs]')"
+        seed_config "$profiles_json"
+        fresh=1
         success "substrate.json seeded — review the unscanned ledger"
     fi
+
+    vendor_core "${profiles[@]}"
     local init_rc=0
     install_templates "${profiles[@]}" || init_rc=1
-    install_ci "${profiles[@]}" || init_rc=1
+    install_ci "$force" "${profiles[@]}" || init_rc=1
     install_hooks_config || init_rc=1
     install_user_harness || init_rc=1
     install_vcs_hooks || init_rc=1
     install_lsp_config "${profiles[@]}" || init_rc=1
-    install_skills || init_rc=1
+    install_harness_assets || init_rc=1
     install_recipe || init_rc=1
     wire_jj || init_rc=1
 
+    if [ "$init_rc" -ne 0 ]; then
+        warn "bootstrap INCOMPLETE — fix the warnings above and rerun substrate bootstrap"
+        exit 1
+    fi
+    if [ "$fresh" -eq 0 ]; then
+        success "substrate repository scaffold synchronized"
+        return 0
+    fi
     cat <<'EOF'
 
 next steps (in order):
@@ -163,10 +193,23 @@ next steps (in order):
   4. positive control: add a slop comment to a source file, rerun, MUST go red; revert
   5. substrate selftest                    # full negative battery (includes slop injection)
 EOF
-    if [ "$init_rc" -ne 0 ]; then
-        warn "init INCOMPLETE — fix the warnings above and rerun init (a repo without write-time hooks drifts silently)"
-        exit 1
+}
+
+cmd_bootstrap() {
+    local arg has_profile=0 profiles_csv
+    for arg in "$@"; do
+        [ "$arg" = "--profile" ] && has_profile=1
+    done
+    if [ "$has_profile" -eq 1 ]; then
+        cmd_init "$@"
+        return
     fi
+    [ -f substrate.json ] \
+        || die "bootstrap requires --profile a,b the first time; later runs read substrate.json"
+    jq -e '(.profiles | type == "array") and (.profiles | length > 0)' substrate.json >/dev/null 2>&1 \
+        || die "substrate.json is corrupt or has no profiles"
+    profiles_csv=$(jq -r '.profiles | join(",")' substrate.json)
+    cmd_init --profile "$profiles_csv" "$@"
 }
 
 cmd_update() {
@@ -336,6 +379,7 @@ cmd_doctor() {
     info "kit $(cat "$KIT_ROOT/VERSION"), vendored $(cat .substrate/VERSION 2>/dev/null || echo none)"
 }
 case "${1:-}" in
+    bootstrap) shift; cmd_bootstrap "$@" ;;
     init)     shift; cmd_init "$@" ;;
     gate)     shift; [ -x .substrate/gate.sh ] || die "no .substrate here — run: substrate init"; exec .substrate/gate.sh "$@" ;;
     baseline)

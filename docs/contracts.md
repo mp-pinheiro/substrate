@@ -13,7 +13,7 @@ The interfaces every component implements. Change these deliberately — everyth
 7. Never write through symlinks; protect governance docs, baselines, and `.substrate/` at the hook layer.
 8. No `sed`/`awk`; bash + jq + coreutils. Config is JSON, parsed only with jq (bash) or JSON.parse (Bun) — trivial parsers, no YAML.
 
-## substrate.json (repo root, tracked; created by `substrate init`)
+## substrate.json (repo root, tracked; created by `substrate bootstrap`)
 
 ```json
 {
@@ -85,20 +85,21 @@ Ordering: core checks 05–59, profile checks 60–79, repo-local checks 80–99
 - `hooks/changed-files-scan.sh` — PostToolUse(Bash|Write|Edit|MultiEdit|NotebookEdit|Task); scans every changed path in the working tree (jj diff or git status), not the tool's declared target, so bash/eval writes are covered; runs the comment ratchet per changed scannable file (pass-only memo in `$TMPDIR`) and flags `protected_paths` writes the write-time hook could not intercept. Report on stderr, exit 2 = blocking feedback.
 - `hooks/gate-before-push.sh` — PreToolUse(Bash) matching the repo's push command; runs the gate; exit 2 with report on red.
 - `omp/quality.ts` — same three behaviors via ExtensionAPI `tool_call`/`tool_result`, reading `substrate.json` + `langmap.json` directly (Bun `JSON.parse`); subprocesses via `Bun.spawnSync`.
+- `install_user_harness` — installs the user-scoped omp extension, Claude launcher, and kit-owned agents/skills into `~/.omp/agent` and `~/.claude`; it never creates or changes `~/.omp/profiles/*`.
 
 ## CLI surface (`bin/substrate`)
 
-- `init [--profile a,b] [--vcs auto|git|jj] [--force]` — vendor core into `.substrate/`, write `substrate.json` (seeded `unscanned`), generate langmap, copy profile templates (absent-only), install checks, wire gate recipe (justfile/Makefile append-or-create), CI workflow, Claude settings merge (single-input `--argjson`, jaq-safe, guarded — a failed merge writes nothing), omp extension copy. Never creates a baseline.
+- `bootstrap [--profile a,b] [--force]` — the canonical installer and synchronizer. A new repo requires profiles; later runs read them from `substrate.json`. It re-vendors `.substrate/`, re-renders workflows marked `# substrate-managed`, merges hook groups, refreshes harness and VCS wiring, and synchronizes kit-owned agents and skills into both Claude and omp. It preserves the baseline, config, templates, repo-owned LSP settings, same-name repo-owned assets, and local checks. An unmarked workflow is adopted only when it exactly matches generated output or `--force` is explicit; `# substrate-repo-owned` opts a custom workflow into preservation without making bootstrap incomplete.
+- `init [--profile a,b] [--vcs auto|git|jj] [--force]` — first-run-compatible entry point for the same installer.
 - `gate [...]` — run `.substrate/gate.sh` (flags pass through: `--update-baseline`, `--accept-regression`).
 - `doctor` — config validity, langmap freshness (regenerate + compare), toolchain presence per active profile with hints.
-- `update [--apply]` — diff vendored `.substrate/` against the kit version; `--apply` re-vendors. Local `substrate.json`, baseline, templates, repo checks are never touched.
-- `update --apply` also refreshes the installed omp extension copy (`.omp/extensions/substrate-quality.ts`) — `80-vendor-drift` pairs it in the kit repo.
+- `update [--apply]` — inspect vendored engine drift; `--apply` re-vendors the engine and omp extension only. Use `bootstrap` for full scaffold synchronization.
 - `selftest` — sandbox copy of the repo (inventory files only), then: steady must be green (or baseline-pending warns only); per-profile slop fixture injected must go red AND be named in the report; detector tool shimmed to fail must go red with "cannot pass blind"; corrupt baseline must hard-exit. Any deviation = selftest fails.
 - `audit [plan.md ...]` — executes plan acceptance oracles (see Plan tracking). Checked `[x]` items must pass (regression = exit 1); `committed` plans must pass everything; pending `[ ]` items on active plans report without failing.
 
 ## Versioning
 
-`.substrate/VERSION` is stamped at init/update. `substrate update` refuses when the vendored version is newer than the kit (downgrade needs `--force`).
+`.substrate/VERSION` is stamped by bootstrap/init/update. `substrate update` refuses when the vendored version is newer than the kit (downgrade needs `--force`).
 
 ## Plan tracking (`.pi/plans/*.md`)
 

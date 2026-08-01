@@ -1,3 +1,4 @@
+# substrate-managed
 name: substrate-report
 on:
   schedule:

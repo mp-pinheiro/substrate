@@ -29,6 +29,14 @@ env -u CI -u SUBSTRATE_NO_USER_HARNESS "$KIT_ROOT/bin/substrate" init --profile 
 [ -f "$HOME/.omp/agent/extensions/substrate-quality.ts" ] || fail "user-level omp extension not installed"
 cmp -s "$HOME/.omp/agent/extensions/substrate-quality.ts" "$KIT_ROOT/core/omp/substrate-quality.ts" \
     || fail "user-level omp extension differs from kit copy"
+[ -f "$HOME/.omp/agent/agents/explorer.md" ] || fail "user-level omp agent not installed"
+[ -f "$HOME/.omp/agent/skills/review/SKILL.md" ] || fail "user-level omp skill not installed"
+[ -f "$HOME/.claude/agents/explorer.md" ] || fail "user-level Claude agent not installed"
+[ -f "$HOME/.claude/skills/review/SKILL.md" ] || fail "user-level Claude skill not installed"
+cmp -s "$HOME/.omp/agent/agents/explorer.md" "$KIT_ROOT/agents/omp/explorer.md" \
+    || fail "user-level omp agent differs from kit copy"
+cmp -s "$HOME/.claude/skills/review/SKILL.md" "$KIT_ROOT/skills/review/SKILL.md" \
+    || fail "user-level Claude skill differs from kit copy"
 [ -e "$HOME/.omp/profiles" ] && fail "HOME/.omp/profiles was created — installer crossed into profile stacks"
 
 count1=$(jq '[(.hooks.PreToolUse // [])[].hooks[].command, (.hooks.PostToolUse // [])[].hooks[].command] | map(select(test("substrate-launch"))) | length' "$HOME/.claude/settings.json")

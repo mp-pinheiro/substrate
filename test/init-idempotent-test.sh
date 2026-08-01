@@ -12,10 +12,10 @@ fail() { printf 'init-idempotent-test FAIL: %s\n' "$1" >&2; exit 1; }
 
 T=$(mktemp -d)
 trap 'rm -rf "$T"' EXIT
+git -C "$T" init -q .
+git -C "$T" config user.email substrate@localhost
+git -C "$T" config user.name substrate
 cd "$T" || exit 9
-git init -q .
-git config user.email substrate@localhost
-git config user.name substrate
 
 mkdir -p .claude
 printf '{"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "bash my-own-hook.sh"}]}]}}\n' > .claude/settings.json
@@ -55,9 +55,12 @@ esac
 rm -rf "$T2"
 
 chmod 444 .claude/settings.json
-if env -u CI "$KIT_ROOT/bin/substrate" init --profile shell >/dev/null 2>&1; then
-    fail "init exited 0 with an unwritable settings file (partial install must not read as success)"
-fi
+env -u CI "$KIT_ROOT/bin/substrate" init --profile shell >/dev/null 2>&1 \
+    || fail "init could not atomically synchronize locked settings"
+[ "$(stat -c '%a' .claude/settings.json)" = "444" ] \
+    || fail "init changed locked settings mode"
+grep -q 'my-own-hook.sh' .claude/settings.json \
+    || fail "atomic settings synchronization dropped repo-owned hooks"
 chmod 644 .claude/settings.json
 
-printf 'init-idempotent-test: hooks stable at %s groups, locked-settings init fails loudly\n' "$count1"
+printf 'init-idempotent-test: hooks stable at %s groups, locked-settings sync is atomic\n' "$count1"

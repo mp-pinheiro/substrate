@@ -30,8 +30,9 @@ A change is done when `substrate gate` is green — not before. Green is trustwo
 | --- | --- |
 | `substrate.json` | repo config: active profiles, unscanned ledger, budgets, disabled checks |
 | `substrate-baseline.json` | grandfathered debt snapshot; only the gate runner may write it |
-| `.substrate/` | vendored engine (gate, checks, hooks) — never hand-edit; `substrate update --apply` re-vendors |
+| `.substrate/` | vendored engine (gate, checks, hooks); `substrate bootstrap` synchronizes it with the kit |
 | `.substrate/checks.d/` | active checks: core 05–59, profile 60–79, repo-local 80–99 |
+| `.claude/{agents,skills}/`, `.omp/{agents,skills}/` | kit-owned working agents and skills; same-name repo-owned assets are preserved |
 | `profiles/<name>/` | kit profiles: `profile.json` (claims, checks, fixtures), `checks.d/`, `templates/` |
 | `substrate-profiles/<name>/` | repo-local profiles, same schema |
 | `checks.d/` (repo root) | repo-local checks, vendored in at 80–99 |
@@ -48,7 +49,7 @@ A change is done when `substrate gate` is green — not before. Green is trustwo
 ## Fast start
 
 ```sh
-substrate init --profile go,python   # install the gate into this repo
+substrate bootstrap --profile go,python   # first run; later runs need no profile flag
 substrate doctor                     # toolchain + config sanity
 substrate gate                       # run everything; green = safe to push
 substrate selftest                   # negative battery: prove the gate can go red

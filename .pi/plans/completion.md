@@ -22,6 +22,8 @@ Mechanism: `## Acceptance` items are `- [ ] claim :: verify-command`. A checked 
 - [x] init wires jj tug and ships the workflow doc :: grep -q 'wire_jj' bin/substrate && grep -q 'enforce-jj' core/claude-hooks.json && test -f core/jj-workflow.md
 - [x] maintenance report vendored, scheduled, queue live :: test -x core/report.sh || exit 1; grep -q 'schedule:' core/ci/github-report.yml || exit 1; if [ -z "${GH_TOKEN:-}" ] && ! gh auth token >/dev/null 2>&1; then [ -z "${CI:-}" ] || exit 1; exit 3; fi; n=$(gh api "repos/{owner}/{repo}/issues?labels=substrate-report&state=open" --jq length 2>/dev/null) || exit 3; [ "${n:-0}" -ge 1 ]
 - [x] init hooks merge is idempotent :: test/init-idempotent-test.sh
+- [x] bootstrap kickstarts and synchronizes managed scaffolds :: test/bootstrap-test.sh
+- [x] agents and skills synchronize without replacing repo-owned assets :: test/bootstrap-test.sh
 - [x] harness parity check fires on a stripped mirror :: test/parity-test.sh
 - [x] vendor drift check fires on mutation :: test/vendor-drift-test.sh
 - [x] tracking check rejects committed-with-open-work plans :: CI=1 test/matrix.sh base 2>&1 | grep -q '15-tracking.sh rejected bad-plan.md'
@@ -59,7 +61,7 @@ Mechanism: `## Acceptance` items are `- [ ] claim :: verify-command`. A checked 
 
 ### Offline-first enforcement (bash hole, user tier, cadence, VCS layer)
 - [x] tool-agnostic changed-files scan catches bash writes in git and jj :: test/changed-scan-test.sh
-- [x] user-level harness installs, dispatches cross-repo, never touches profiles :: test/user-harness-test.sh
+- [x] user-level harness installs agents and skills, dispatches cross-repo, never touches profiles :: test/user-harness-test.sh
 - [x] git pre-commit/pre-push and gated jj push enforce offline :: test/vcs-hooks-test.sh
 - [x] maintenance cadence recurs locally and opts out cleanly :: test/report-freshness-test.sh
 - [x] LSP config seeded absent-only with informational doctor hints :: test/lsp-config-test.sh

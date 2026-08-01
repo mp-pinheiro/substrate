@@ -18,7 +18,7 @@ Where it lives decides who gets it:
 
 - `core/checks.d/NN-name.sh` (05–59) — every repo.
 - `profiles/<name>/checks.d/NN-name.sh` (60–79) — repos with the profile ([adding-a-profile.md](adding-a-profile.md)).
-- `<repo>/checks.d/NN-name.sh` (80–99) — one repo; vendored in by `substrate update --apply`.
+- `<repo>/checks.d/NN-name.sh` (80–99) — one repo; vendored by `substrate bootstrap`.
 
 Skeleton — copy an existing check's shape:
 
@@ -47,15 +47,15 @@ Path protection: a `case` arm in `core/hooks/protect-paths.sh` and its mirror en
 echo '{"tool_input":{"file_path":"substrate-baseline.json"}}' | .substrate/hooks/protect-paths.sh; echo $?
 ```
 
-Kit changes reach consumer repos via `substrate update --apply` — never edit `.substrate/` directly; `80-vendor-drift.sh` catches drift.
+Kit changes reach consumer repos via `substrate bootstrap`. Never edit `.substrate/` directly; `80-vendor-drift.sh` catches drift.
 
-## Installing into a new repo
+## Bootstrapping a repo
 
 ```sh
-substrate init --profile a,b
+substrate bootstrap --profile a,b
 ```
 
-vendors the engine, seeds `substrate.json`, copies templates (absent-only), installs CI, wires both harnesses, installs skills into `.claude/skills/` (absent-only). Then:
+The first run vendors the engine, seeds `substrate.json`, copies absent templates, installs managed CI workflows, wires both harnesses, synchronizes kit-owned agents and skills, and installs the gate recipes. Later runs read the profile list from `substrate.json` and synchronize Substrate-owned files with `substrate bootstrap`; same-name repo-owned agents and skills remain untouched.
 
 1. `substrate doctor` — toolchain.
 2. `.substrate/gate.sh` — first run: findings + pending baseline.

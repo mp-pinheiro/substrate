@@ -15,7 +15,7 @@ export PATH="$HOME/git/substrate/bin:$PATH"
 
 ```sh
 cd ~/your/repo
-substrate init --profile go            # or: python,airflow  ts: typescript,svelte  etc.
+substrate bootstrap --profile go       # or: python,airflow  ts: typescript,svelte  etc.
 substrate doctor                       # toolchain + config sanity
 substrate gate                         # first run: findings + pending baseline
 substrate baseline                     # grandfather current debt (green infra only)
@@ -23,7 +23,9 @@ substrate baseline                     # grandfather current debt (green infra o
 substrate selftest                     # full negative battery
 ```
 
-What lands in the repo: `.substrate/` (vendored, pinned core — tracked), `substrate.json` (config: profiles, the reviewed `unscanned` ledger, budgets, protected paths), `substrate-baseline.json` (grandfathered debt; only the gate writes it), hooks wired for Claude Code (`.claude/settings.json`) and omp (`.omp/extensions/`), a CI workflow, and a `just gate` recipe.
+Run `substrate bootstrap` again whenever the kit changes. Existing repositories read their profiles from `substrate.json`; the command refreshes only Substrate-owned files.
+
+What lands in the repo: `.substrate/` (vendored, pinned core), `substrate.json` (profiles, reviewed exclusions, budgets, protected paths), `substrate-baseline.json` (grandfathered debt; only the gate writes it), Claude and omp hooks, managed agents and skills for both harnesses, managed CI workflows, and a `just gate` recipe.
 
 ## What the gate enforces
 
