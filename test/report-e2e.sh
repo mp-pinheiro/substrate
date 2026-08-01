@@ -52,5 +52,9 @@ if [ -n "${CI:-}" ]; then
         printf 'report-e2e: issue contains an unscanned section\n' >&2
         exit 1
     fi
+    if grep -Eq 'creating virtual environment|installing vulture' <<< "$body"; then
+        printf 'report-e2e: issue contains pipx setup noise\n' >&2
+        exit 1
+    fi
 fi
 printf 'report-e2e: queue issue present after successful dispatch\n'

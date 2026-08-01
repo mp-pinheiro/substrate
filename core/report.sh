@@ -54,7 +54,7 @@ report_dead_code() {
     if command -v vulture >/dev/null 2>&1; then
         vulture_cmd=(vulture)
     elif [ -n "${CI:-}" ] && command -v pipx >/dev/null 2>&1; then
-        vulture_cmd=(pipx run vulture)
+        vulture_cmd=(pipx run --quiet vulture)
     fi
     if [ ${#pyfiles[@]} -eq 0 ]; then
         printf 'No tracked Python files.\n'
