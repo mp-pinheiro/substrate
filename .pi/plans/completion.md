@@ -72,6 +72,7 @@ Mechanism: `## Acceptance` items are `- [ ] claim :: verify-command`. A checked 
 - [x] managed assets converge and retired marked assets are removed with rollback coverage :: test/bootstrap-test.sh
 - [x] Claude and omp user harnesses resolve cross-repo targets and reject settings symlinks :: test/user-harness-test.sh
 - [x] mixed hook groups preserve foreign commands and doctor validates registrations structurally :: test/bootstrap-test.sh && test/user-harness-test.sh
+- [x] consumer CI provisions jj for Jj-backed acceptance oracles :: test/bootstrap-test.sh
 - [x] custom Git hook collisions make bootstrap incomplete :: test/vcs-hooks-test.sh
 
 ### Proof on remote

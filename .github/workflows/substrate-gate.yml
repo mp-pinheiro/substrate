@@ -47,6 +47,9 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: jj-cli
       - name: Install core + all profile toolchains
         run: |
           bun install -g @ast-grep/cli jscpd

@@ -57,6 +57,8 @@ managed_matches .github/workflows/substrate-report.yml "$KIT_ROOT/core/ci/github
     || fail "report workflow does not match its source"
 grep -q 'shellcheck zsh' .github/workflows/substrate-gate.yml \
     || fail "shell profile toolchain missing from gate workflow"
+grep -q 'tool: jj-cli' .github/workflows/substrate-gate.yml \
+    || fail "core jj toolchain missing from gate workflow"
 cmp -s .claude/skills/review/SKILL.md "$KIT_ROOT/skills/review/SKILL.md" \
     || fail "Claude skill was not installed"
 cmp -s .omp/skills/review/SKILL.md "$KIT_ROOT/skills/review/SKILL.md" \

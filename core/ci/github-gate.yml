@@ -15,6 +15,9 @@ jobs:
         with:
           fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: jj-cli
       - name: Install substrate toolchain
         run: |
           bun install -g @ast-grep/cli jscpd
