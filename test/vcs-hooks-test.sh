@@ -100,6 +100,8 @@ mkdir -p "$T/jj-repo"
 (
     cd "$T/jj-repo" || exit 9
     jj git init --colocate >/dev/null 2>&1 || { printf 'vcs-hooks-test: jj unavailable — jj case skipped\n'; exit 0; }
+    jj config set --repo user.name substrate >/dev/null 2>&1
+    jj config set --repo user.email substrate@localhost >/dev/null 2>&1
     git remote add origin "$T/jj-origin.git"
     mkdir -p components
     printf '#!/usr/bin/env bash\nset -euo pipefail\nls "$@"\n' > components/x.sh
