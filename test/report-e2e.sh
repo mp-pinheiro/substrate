@@ -48,5 +48,9 @@ if [ -n "${CI:-}" ]; then
         || { printf 'report-e2e: issue body heading missing\n' >&2; exit 1; }
     grep -q '^## Duplicate code$' <<< "$body" \
         || { printf 'report-e2e: issue body sections missing\n' >&2; exit 1; }
+    if grep -q 'Status: not scanned' <<< "$body"; then
+        printf 'report-e2e: issue contains an unscanned section\n' >&2
+        exit 1
+    fi
 fi
 printf 'report-e2e: queue issue present after successful dispatch\n'

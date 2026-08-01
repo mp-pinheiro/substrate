@@ -47,14 +47,19 @@ report_duplication() {
 report_dead_code() {
     printf '\n## Possible dead code\n\n'
     printf 'Static analysis can misidentify dynamic or indirectly used code. Confirm each result before deleting anything.\n\n'
-    local pyfiles=() f output finding
+    local pyfiles=() vulture_cmd=() f output finding
     while IFS= read -r f; do
         [ -n "$f" ] && pyfiles+=("$f")
     done < <(git ls-files '*.py' ':!**/fixtures/**' ':!.substrate/**' 2>/dev/null)
+    if command -v vulture >/dev/null 2>&1; then
+        vulture_cmd=(vulture)
+    elif [ -n "${CI:-}" ] && command -v pipx >/dev/null 2>&1; then
+        vulture_cmd=(pipx run vulture)
+    fi
     if [ ${#pyfiles[@]} -eq 0 ]; then
         printf 'No tracked Python files.\n'
-    elif command -v vulture >/dev/null 2>&1; then
-        output=$(vulture ${pyfiles[@]+"${pyfiles[@]}"} 2>&1 || true)
+    elif [ ${#vulture_cmd[@]} -gt 0 ]; then
+        output=$("${vulture_cmd[@]}" ${pyfiles[@]+"${pyfiles[@]}"} 2>&1 || true)
         if [ -z "$output" ]; then
             printf 'No Python candidates found.\n'
         else
