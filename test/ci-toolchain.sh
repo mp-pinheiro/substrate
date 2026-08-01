@@ -21,7 +21,7 @@ case "${1:-}" in
     "")
         for pjson in "$KIT_ROOT"/profiles/*/profile.json; do pjsons+=("$pjson"); done ;;
     *)
-        for name in "$@"; do add_profile "$name"; done ;;
+        for name in base "$@"; do add_profile "$name"; done ;;
 esac
 
 for pjson in "${pjsons[@]}"; do
