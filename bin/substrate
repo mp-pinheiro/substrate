@@ -69,7 +69,8 @@ vendor_core() {
     cp "$KIT_ROOT"/core/gate.sh "$KIT_ROOT"/core/gate-lib.sh \
        "$KIT_ROOT"/core/check-comments.sh "$KIT_ROOT"/core/comment-ratchet.sh \
        "$KIT_ROOT"/core/selftest.sh "$KIT_ROOT"/core/audit.sh \
-       "$KIT_ROOT"/core/report.sh "$KIT_ROOT"/core/gated-push.sh "$staging/" || die "vendor copy failed: core scripts"
+       "$KIT_ROOT"/core/report.sh "$KIT_ROOT"/core/gated-push.sh \
+       "$KIT_ROOT"/core/install-jj.sh "$staging/" || die "vendor copy failed: core scripts"
     cp "$KIT_ROOT"/core/hooks/*.sh "$staging/hooks/" || die "vendor copy failed: hooks"
     cp "$KIT_ROOT"/core/checks.d/*.sh "$staging/checks.d/" || die "vendor copy failed: core checks"
     cp "$KIT_ROOT"/VERSION "$staging/VERSION" || die "vendor copy failed: VERSION"

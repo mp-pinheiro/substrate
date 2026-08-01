@@ -48,6 +48,7 @@ printf 'repo-owned agent\n' > .omp/agents/enemy.md
 "$KIT_ROOT/bin/substrate" bootstrap --profile shell >/dev/null 2>&1 \
     || fail "fresh bootstrap failed"
 [ -x .substrate/gate.sh ] || fail "gate was not vendored"
+[ -x .substrate/install-jj.sh ] || fail "Jujutsu installer was not vendored"
 grep -q 'repo-hook.sh' .claude/settings.json || fail "repo hook was dropped"
 grep -q 'retired-hook.sh' .claude/settings.json \
     && fail "retired managed hook survived mixed-group synchronization"
@@ -57,8 +58,8 @@ managed_matches .github/workflows/substrate-report.yml "$KIT_ROOT/core/ci/github
     || fail "report workflow does not match its source"
 grep -q 'shellcheck zsh' .github/workflows/substrate-gate.yml \
     || fail "shell profile toolchain missing from gate workflow"
-grep -q 'tool: jj-cli' .github/workflows/substrate-gate.yml \
-    || fail "core jj toolchain missing from gate workflow"
+grep -q '\.substrate/install-jj\.sh' .github/workflows/substrate-gate.yml \
+    || fail "core Jujutsu installer missing from gate workflow"
 cmp -s .claude/skills/review/SKILL.md "$KIT_ROOT/skills/review/SKILL.md" \
     || fail "Claude skill was not installed"
 cmp -s .omp/skills/review/SKILL.md "$KIT_ROOT/skills/review/SKILL.md" \
