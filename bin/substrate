@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # substrate — deterministic gates for agentic development, installable in any repo.
-# Commands: bootstrap, init, gate, checkpoint, baseline, doctor, update, selftest, audit, report.
+# Commands: bootstrap, init, gate, checkpoint, baseline, doctor, verify, update, selftest, audit, report.
 set -uo pipefail
 
 SCRIPT=$(readlink -f "${BASH_SOURCE[0]}") || { printf 'substrate: cannot resolve executable path\n' >&2; exit 2; }
@@ -21,6 +21,7 @@ usage: substrate <command> [args]
   baseline [--update|--accept-regression]
   checkpoint --message <message> --path <path>...  gate, tighten, commit locally
   doctor                                    config, langmap freshness, toolchain
+  verify                                    active OMP runtime + bounded local gate
   update [--apply] [--force]                inspect or re-vendor the engine only
   maintenance flags: --checkpoint [--message <message>] [--accept-baseline] [--repo-only] [--json]
   selftest                                  sandboxed negative-test battery
@@ -45,6 +46,8 @@ profile_dir() {
 source "$KIT_ROOT/core/install-lib.sh"
 # shellcheck source=../core/doctor.sh
 source "$KIT_ROOT/core/doctor.sh"
+# shellcheck source=../core/verify.sh
+source "$KIT_ROOT/core/verify.sh"
 # shellcheck source=../core/maintenance.sh
 source "$KIT_ROOT/core/maintenance.sh"
 
@@ -351,6 +354,7 @@ case "${1:-}" in
             *) usage ;;
         esac ;;
     doctor)   shift; cmd_doctor "$@" ;;
+    verify)   shift; cmd_verify "$@" ;;
     update)   shift; cmd_update "$@" ;;
     selftest) shift; [ -x .substrate/selftest.sh ] || die "no .substrate here — run: substrate init"; exec .substrate/selftest.sh "$@" ;;
     audit)    shift; [ -x .substrate/audit.sh ] || die "no .substrate here — run: substrate init"; exec .substrate/audit.sh "$@" ;;
