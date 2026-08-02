@@ -372,7 +372,7 @@ wire_jj() {
 }
 
 install_lsp_config() {
-    local profiles=("$@") p d k keys=()
+    local profiles=("$@") p d dirs=()
     repo_path_safe .omp/lsp.json "omp LSP configuration" || return 1
     if [ -f .omp/lsp.json ]; then
         info ".omp/lsp.json exists — left untouched (repo edits win)"
@@ -380,16 +380,25 @@ install_lsp_config() {
     fi
     for p in "${profiles[@]}"; do
         d=$(profile_dir "$p") || continue
-        while IFS= read -r k; do
-            [ -n "$k" ] && keys+=("$k")
-        done < <(jq -r '(.lsp // {}) | keys[]' "$d/profile.json")
+        dirs+=("$d/profile.json")
     done
-    [ ${#keys[@]} -eq 0 ] && return 0
+    [ ${#dirs[@]} -gt 0 ] || return 0
+    # Propagate optional fileTypes overrides (e.g. shell dotfiles omp's extension
+    # matcher misses); bin/hint stay substrate-doctor metadata, never omp config.
+    local merged
+    merged=$(cat "${dirs[@]}" | jq -rs '
+        [ .[] | (.lsp // {})
+            | with_entries(.value |= ({fileTypes}
+                | with_entries(select(.value != null and ((.value | length) > 0))))) ]
+        | add // {}
+        | to_entries | sort_by(.key) | from_entries') \
+        || { warn ".omp/lsp.json build failed"; return 1; }
+    [ "$(jq 'length' <<< "$merged")" -gt 0 ] || return 0
     mkdir -p .omp
-    if printf '%s\n' "${keys[@]}" | jq -Rn \
-        '{servers: ([inputs] | unique | map({(.): {disabled: false}}) | add), idleTimeoutMs: 300000}' \
+    if jq -n --argjson s "$merged" \
+        '{servers: ($s | map_values(. + {disabled: false})), idleTimeoutMs: 300000}' \
         > .omp/lsp.json; then
-        success "omp LSP config seeded: .omp/lsp.json (${keys[*]})"
+        success "omp LSP config seeded: .omp/lsp.json ($(jq -r 'keys | join(", ")' <<< "$merged"))"
     else
         warn ".omp/lsp.json write failed"
         return 1

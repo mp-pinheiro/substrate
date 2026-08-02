@@ -20,6 +20,8 @@ env -u CI "$KIT_ROOT/bin/substrate" init --profile shell,lua >/dev/null 2>&1 || 
 
 [ -f .omp/lsp.json ] || fail ".omp/lsp.json not seeded"
 jq -e '.servers.bashls.disabled == false' .omp/lsp.json >/dev/null || fail "bashls missing: $(cat .omp/lsp.json)"
+jq -e '[.servers.bashls.fileTypes[]] | (any(. == ".zshenv") and any(. == ".sh"))' .omp/lsp.json >/dev/null \
+    || fail "bashls fileTypes must route .zshenv (basename route) and keep .sh: $(jq -c '.servers.bashls.fileTypes' .omp/lsp.json)"
 jq -e '.servers."lua-language-server".disabled == false' .omp/lsp.json >/dev/null || fail "lua-language-server missing"
 jq -e '.idleTimeoutMs == 300000' .omp/lsp.json >/dev/null || fail "idleTimeoutMs missing"
 jq -e '.servers | keys | length >= 4' .omp/lsp.json >/dev/null || fail "base profile lsp keys missing"
