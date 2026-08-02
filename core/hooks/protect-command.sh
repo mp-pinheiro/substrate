@@ -15,6 +15,11 @@ input=$(cat)
 cmd=$(jq -r '.tool_input.command // .command // empty' <<< "$input") \
     || { printf 'blocked: malformed Bash tool payload\n' >&2; exit 2; }
 [ -n "$cmd" ] || exit 0
+if printf '%s' "$cmd" | grep -Eq '(^|[[:space:]/])substrate[[:space:]]+verify([[:space:];&|>]|$)' \
+    && ! printf '%s' "$cmd" | grep -Eq '^[[:space:]]*([^[:space:]]*/)?substrate[[:space:]]+verify[[:space:]]*$'; then
+    printf 'BLOCKED: run substrate verify directly and unmodified; pipes, redirects, and chained commands can hide a failing verdict\n' >&2
+    exit 2
+fi
 
 if printf '%s' "$cmd" | grep -Eq '(^|[;&|][[:space:]]*|[[:space:]])(jj[[:space:]]+(commit|describe|squash)|git[[:space:]]+commit)([[:space:]"\\]|$)'; then
     printf 'BLOCKED: commits must use the Substrate checkpoint transaction after direct verification; do not run jj commit, jj describe, jj squash, or git commit directly\n' >&2

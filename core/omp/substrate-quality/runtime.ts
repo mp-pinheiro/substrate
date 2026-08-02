@@ -11,7 +11,7 @@ const HARD: Array<[RegExp, string]> = [
 const SUBSTRATE_POLICY = [
 	"This repository is governed by Substrate's deterministic quality gate.",
 	"Treat every `[substrate — fix before proceeding]` report as blocking: resolve it before unrelated work.",
-	"For workflow-health requests, run `substrate verify` once; do not assemble ad hoc test batteries or run `substrate audit` unless the user explicitly requests committed-plan regression.",
+	"For workflow-health requests, run `substrate verify` directly and unmodified; do not assemble ad hoc test batteries or run `substrate audit` unless the user explicitly requests committed-plan regression.",
 	"Run only direct verification relevant to the requested change.",
 	"After direct verification, call `substrate_checkpoint`; it gates, tightens improved metrics, and commits only agent-owned paths.",
 	"Never run `jj commit` or `git commit` directly. Never push automatically; publication remains user-owned.",
