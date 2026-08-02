@@ -44,8 +44,10 @@ mkdir -p .claude/skills/context-pack .omp/agents
 : > .claude/agents
 printf 'repo-owned skill\n' > .claude/skills/context-pack/SKILL.md
 printf 'repo-owned agent\n' > .omp/agents/enemy.md
+git add -A
+git commit -qm 'chore: seed repository-owned files'
 
-"$KIT_ROOT/bin/substrate" bootstrap --profile shell >/dev/null 2>&1 \
+"$KIT_ROOT/bin/substrate" bootstrap --profile shell --checkpoint --accept-baseline --repo-only >/dev/null 2>&1 \
     || fail "fresh bootstrap failed"
 [ -x .substrate/gate.sh ] || fail "gate was not vendored"
 [ -x .substrate/install-jj.sh ] || fail "Jujutsu installer was not vendored"
@@ -86,9 +88,20 @@ grep -q 'hook registration missing or malformed' <<< "$out" \
     || fail "doctor accepted a filename mention under the wrong matcher"
 mv "$T/settings.saved" .claude/settings.json
 chmod 444 .claude/settings.json
+printf '{"metrics":{"sentinel":1}}\n' > substrate-baseline.json
+dirty_baseline_before=$(sha256sum substrate-baseline.json)
+if "$KIT_ROOT/bin/substrate" bootstrap --checkpoint --repo-only > bootstrap.out 2>&1; then
+    fail "bootstrap absorbed an uncommitted baseline"
+fi
+grep -q 'overlaps dirty managed paths: substrate-baseline.json' bootstrap.out \
+    || fail "dirty baseline refusal was not actionable"
+[ "$dirty_baseline_before" = "$(sha256sum substrate-baseline.json)" ] \
+    || fail "dirty baseline refusal changed the file"
+git restore substrate-baseline.json
+
 
 config_before=$(sha256sum substrate.json)
-printf '{"metrics":{"sentinel":1}}\n' > substrate-baseline.json
+cp substrate-baseline.json "$T/baseline.before"
 printf '{"servers":{},"idleTimeoutMs":1}\n' > .omp/lsp.json
 lsp_before=$(sha256sum .omp/lsp.json)
 mkdir -p checks.d
@@ -107,9 +120,12 @@ printf 'retired skill\n' > .omp/skills/retired/SKILL.md
 printf '{"managed_by":"substrate"}\n' > .omp/skills/retired/.substrate-managed.json
 printf 'retired agent\n' > .claude/agents/retired.md
 printf '{"managed_by":"substrate"}\n' > .claude/agents/retired.md.substrate-managed.json
+rm -f bootstrap.out
+git add -A
+git commit -q --no-verify -m 'chore: seed legacy managed state'
 
-"$KIT_ROOT/bin/substrate" bootstrap >/dev/null 2>&1 \
-    || fail "existing-repo synchronization failed"
+"$KIT_ROOT/bin/substrate" bootstrap --checkpoint --repo-only > bootstrap.out 2>&1 \
+    || { cat bootstrap.out >&2; fail "existing-repo synchronization failed"; }
 cmp -s .substrate/report.sh "$KIT_ROOT/core/report.sh" \
     || fail "vendored report did not synchronize"
 managed_matches .github/workflows/substrate-report.yml "$KIT_ROOT/core/ci/github-report.yml" \
@@ -120,8 +136,11 @@ cmp -s checks.d/85-local.sh .substrate/checks.d/85-local.sh \
     || fail "repo-local check did not synchronize"
 [ "$config_before" = "$(sha256sum substrate.json)" ] \
     || fail "bootstrap changed substrate.json"
-grep -q '"sentinel":1' substrate-baseline.json \
-    || fail "bootstrap changed the baseline"
+jq -e -s '.[0].metrics as $old
+    | .[1].metrics
+    | all(to_entries[]; .value <= ($old[.key] // .value))' \
+    "$T/baseline.before" substrate-baseline.json >/dev/null \
+    || fail "bootstrap checkpoint loosened the baseline"
 [ "$lsp_before" = "$(sha256sum .omp/lsp.json)" ] \
     || fail "bootstrap changed repo-owned LSP config"
 grep -q 'repo-hook.sh' .claude/settings.json \
@@ -150,6 +169,8 @@ grep -q '^repo-owned agent$' .omp/agents/enemy.md \
     || fail "repo-owned agent changed during synchronization"
 
 printf 'repo-owned workflow\n' > .github/workflows/substrate-report.yml
+git add .github/workflows/substrate-report.yml
+git commit -q --no-verify -m 'chore: seed repo-owned workflow'
 if "$KIT_ROOT/bin/substrate" bootstrap > bootstrap.out 2>&1; then
     fail "bootstrap adopted an unmarked workflow without --force"
 fi
@@ -157,12 +178,23 @@ grep -q 'not substrate-managed' bootstrap.out \
     || fail "unmanaged workflow refusal was not actionable"
 grep -q '^repo-owned workflow$' .github/workflows/substrate-report.yml \
     || fail "unmanaged workflow was modified"
-"$KIT_ROOT/bin/substrate" bootstrap --force >/dev/null 2>&1 \
+"$KIT_ROOT/bin/substrate" bootstrap --force --checkpoint --repo-only >/dev/null 2>&1 \
     || fail "forced workflow adoption failed"
 managed_matches .github/workflows/substrate-report.yml "$KIT_ROOT/core/ci/github-report.yml" \
     || fail "forced workflow adoption did not synchronize"
-printf '# substrate-repo-owned\nname: custom-workflow\n' > .github/workflows/substrate-report.yml
-"$KIT_ROOT/bin/substrate" bootstrap >/dev/null 2>&1 \
+cat > .github/workflows/substrate-report.yml <<'EOF'
+# substrate-repo-owned
+name: custom-workflow
+on: [push]
+jobs:
+  noop:
+    runs-on: ubuntu-latest
+    steps:
+      - run: "true"
+EOF
+git add .github/workflows/substrate-report.yml
+git commit -q --no-verify -m 'chore: mark repo-owned workflow'
+"$KIT_ROOT/bin/substrate" bootstrap --checkpoint --repo-only >/dev/null 2>&1 \
     || fail "explicitly repo-owned workflow made bootstrap incomplete"
 grep -q '^name: custom-workflow$' .github/workflows/substrate-report.yml \
     || fail "explicitly repo-owned workflow was modified"
@@ -182,7 +214,8 @@ fi
 [ -d .omp/agents/explorer.md ] || fail "non-regular managed path was destructively replaced"
 rm -rf .omp/agents/explorer.md
 rm -f .omp/agents/explorer.md.substrate-managed.json
-"$KIT_ROOT/bin/substrate" bootstrap >/dev/null 2>&1 || fail "managed agent recovery failed"
+"$KIT_ROOT/bin/substrate" bootstrap --checkpoint --repo-only >/dev/null 2>&1 \
+    || fail "managed agent recovery failed"
 
 # A symlinked ownership marker cannot authorize deletion.
 mkdir -p .omp/skills/retired-link
@@ -238,7 +271,9 @@ git config user.email substrate@localhost
 git config user.name substrate
 printf 'repo-owned skill\n' > shared/skills/context-pack/SKILL.md
 ln -s ../shared/skills .claude/skills
-"$KIT_ROOT/bin/substrate" bootstrap --profile shell >/dev/null 2>&1 \
+git add -A
+git commit -qm 'chore: seed internal asset symlink'
+"$KIT_ROOT/bin/substrate" bootstrap --profile shell --checkpoint --accept-baseline --repo-only >/dev/null 2>&1 \
     || fail "bootstrap rejected an internal symlinked asset root"
 [ -L .claude/skills ] || fail "bootstrap replaced an internal asset-root symlink"
 grep -q '^repo-owned skill$' shared/skills/context-pack/SKILL.md \
@@ -254,7 +289,9 @@ git init -q .
 git config user.email substrate@localhost
 git config user.name substrate
 ln -s "$T/outside-skills" .claude/skills
-if "$KIT_ROOT/bin/substrate" bootstrap --profile shell > bootstrap.out 2>&1; then
+git add .claude/skills
+git commit -qm 'chore: seed escaping asset symlink'
+if "$KIT_ROOT/bin/substrate" bootstrap --profile shell --checkpoint --accept-baseline --repo-only > bootstrap.out 2>&1; then
     fail "bootstrap followed an escaping asset-root symlink"
 fi
 [ ! -e "$T/outside-skills/review" ] || fail "bootstrap wrote assets outside the repository"
@@ -268,7 +305,9 @@ git init -q .
 git config user.email substrate@localhost
 git config user.name substrate
 ln -s "$T/outside" .github
-if "$KIT_ROOT/bin/substrate" bootstrap --profile shell > bootstrap.out 2>&1; then
+git add .github
+git commit -qm 'chore: seed escaping destination symlink'
+if "$KIT_ROOT/bin/substrate" bootstrap --profile shell --checkpoint --accept-baseline --repo-only > bootstrap.out 2>&1; then
     fail "bootstrap followed a symlinked .github destination"
 fi
 [ ! -e "$T/outside/workflows" ] || fail "bootstrap wrote workflows outside the repository"
@@ -280,7 +319,7 @@ cd "$T/newer-repo" || exit 9
 git init -q .
 git config user.email substrate@localhost
 git config user.name substrate
-"$KIT_ROOT/bin/substrate" bootstrap --profile shell >/dev/null 2>&1 \
+"$KIT_ROOT/bin/substrate" bootstrap --profile shell --checkpoint --accept-baseline --repo-only >/dev/null 2>&1 \
     || fail "newer-version fixture bootstrap failed"
 printf '9.9.9\n' > .substrate/VERSION
 if "$KIT_ROOT/bin/substrate" bootstrap > bootstrap.out 2>&1; then
@@ -288,8 +327,20 @@ if "$KIT_ROOT/bin/substrate" bootstrap > bootstrap.out 2>&1; then
 fi
 grep -q 'newer than kit' bootstrap.out || fail "downgrade refusal was not actionable"
 grep -q '^9.9.9$' .substrate/VERSION || fail "downgrade refusal still changed the core"
-"$KIT_ROOT/bin/substrate" bootstrap --force >/dev/null 2>&1 \
+"$KIT_ROOT/bin/substrate" bootstrap --force --checkpoint --repo-only >/dev/null 2>&1 \
     || fail "explicit forced downgrade failed"
 cmp -s .substrate/VERSION "$KIT_ROOT/VERSION" || fail "forced downgrade did not install the kit version"
 
-printf 'bootstrap-test: fresh, sync, ownership, force-adopt, preservation green\n'
+# Invoking the CLI through a user-local symlink must still resolve the source kit.
+mkdir -p "$T/symlink-bin" "$T/symlink-cli-repo"
+ln -s "$KIT_ROOT/bin/substrate" "$T/symlink-bin/substrate"
+cd "$T/symlink-cli-repo" || exit 9
+git init -q .
+git config user.email substrate@localhost
+git config user.name substrate
+"$T/symlink-bin/substrate" bootstrap --profile base >/dev/null 2>&1 \
+    || fail "symlinked CLI did not resolve the source kit"
+cmp -s .substrate/VERSION "$KIT_ROOT/VERSION" \
+    || fail "symlinked CLI installed a runtime from the wrong kit"
+
+printf 'bootstrap-test: fresh, sync, ownership, force-adopt, symlink-cli, preservation green\n'

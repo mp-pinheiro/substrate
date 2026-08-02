@@ -22,19 +22,21 @@ Substrate currently supports Linux. It expects Bash, Git, `jq`, `yq`, Bun, and g
 
 ```sh
 cd ~/your/repo
-substrate bootstrap --profile go       # or: python,airflow  ts: typescript,svelte  etc.
+substrate bootstrap --profile go --checkpoint --accept-baseline
 substrate doctor                       # toolchain + config sanity
-substrate gate                         # first run: findings + pending baseline
-substrate baseline                     # grandfather current debt (green infra only)
 # positive control: add "# now we check the thing" to a source file — gate MUST go red; revert
 substrate selftest                     # full negative battery
 ```
 
-Run `substrate bootstrap` again whenever the kit changes. Existing repositories read their profiles from `substrate.json`; the command refreshes only explicitly Substrate-owned files and fails incomplete when required hooks or destinations cannot be installed safely.
+Run `substrate bootstrap --checkpoint` again whenever the kit or repository scaffold changes. Use `substrate update --apply --checkpoint` when only the vendored engine should change.
+
+Repository maintenance is transactional. `bootstrap`, `init`, and `update --apply` capture the current revision and dirty paths, render the requested state in a scratch clone, gate that candidate, and then replace only the declared managed units. Dirty Substrate-owned paths stop the transaction unless a prior receipt or ownership marker authorizes repair. Without `--checkpoint`, repo-owned inputs that the installer merges or preserves are copied into the candidate and left uncommitted; checkpoint mode refuses to absorb them. Concurrent drift stops the transaction, and unrelated dirty work stays untouched.
+
+`--checkpoint` tightens an existing baseline after the candidate passes and creates one local Conventional Commit through the active Git or jj repository. Initial debt still requires the explicit `--accept-baseline` flag. An interrupted apply or exact-path commit records resumable state under the repository's VCS metadata; rerun the same command to finish it. Repository runtime wiring and user-harness synchronization run after the repository commit and report their own status. `--repo-only` skips the user phase, `--json` prints the receipt, and no maintenance command pushes.
 
 What lands in the repo: `.substrate/` (vendored, pinned core), `substrate.json` (profiles, reviewed exclusions, budgets, protected paths), `substrate-baseline.json` (grandfathered debt; only the gate writes it), Claude and omp hooks, `.omp/lsp.json` (seeded once from active profile declarations), managed agents and skills for both harnesses, managed CI workflows, and a `just gate` recipe. Agent and skill roots carrying `.substrate-managed.json` are fully kit-owned and converge exactly; unmarked same-name assets remain repo-owned.
 
-Agents and skills are optional helpers, not the enforcement layer. Omp enforcement comes from the automatically loaded `substrate-quality.ts` extension: it injects the gate policy into the main agent, blocks protected operations, scans mutating tool results (including LSP refactors), and runs the full gate before a push.
+Agents and skills are optional helpers, not the enforcement layer. Omp enforcement comes from the automatically loaded user-scoped `substrate-quality.ts` extension and its private modules: it injects gate policy, tracks agent-owned paths, blocks protected operations and direct commits, scans every mutating tool result (including LSP refactors), and refuses task completion until the agent runs a green local `substrate_checkpoint`. The checkpoint tightens improved ceilings, commits only owned paths, and records an exact-state receipt; it never pushes. `substrate doctor` and `/substrate` expose the installed and loaded path, aggregate source hash, engine version, and latest lifecycle state.
 
 ## Editor feedback
 
@@ -51,7 +53,7 @@ Profile mappings currently cover YAML/JSON, C++, Go, Lua, Python, shell, Svelte,
 | duplication | copy/paste growth (jscpd) vs baseline |
 | budgets | file-size growth vs baseline; hard cap configurable |
 | data-validity | JSON/YAML that does not parse |
-| gitleaks | secrets in git history |
+| gitleaks | secrets in pending Git/jj work; full reachable history is explicit (`gate --deep`) and CI-owned |
 | profile checks | language toolchain findings (shellcheck, ruff, golangci-lint, sqlfluff, tflint, tsc, ...) |
 | vendor-drift (kit repo) | `.substrate/` diverging from `core/` |
 
@@ -64,9 +66,10 @@ Everything fails closed: a broken or missing detector is a red gate ("cannot pas
 ## Developing the kit
 
 ```sh
-just gate            # the kit gates itself (including vendor drift)
+just gate                  # the kit gates itself (including vendor drift)
 bin/substrate selftest
-test/matrix.sh       # every profile, scratch-repo oracle
+test/maintenance-test.sh   # isolated Git/jj maintenance transactions
+test/matrix.sh             # every profile, scratch-repo oracle
 ```
 
 ## Contributing and security

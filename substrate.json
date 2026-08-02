@@ -65,6 +65,5 @@
   },
   "checks": {
     "disabled": []
-  },
-  "push_gate": true
+  }
 }

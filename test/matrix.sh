@@ -59,7 +59,6 @@ for name in "${profiles[@]}"; do
         git commit -qm seed
 
         "$KIT_ROOT/bin/substrate" init --profile "$name" >/dev/null 2>&1 || { echo "init failed"; exit 9; }
-        jq '.report.max_age_days = 0' substrate.json > s.tmp && mv s.tmp substrate.json
         git add -A && git commit -qm init
 
         out=$(.substrate/gate.sh --update-baseline 2>&1)

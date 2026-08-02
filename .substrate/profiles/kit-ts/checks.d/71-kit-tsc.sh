@@ -15,10 +15,18 @@ require_bin_ci bunx "bun runtime — https://bun.sh" || exit 0
 
 kit_ts_dir="$REPO_ROOT/substrate-profiles/kit-ts"
 ambient="$kit_ts_dir/types/bun-ambient.d.ts"
+surface="$kit_ts_dir/types/pi-surface.d.ts"
 [ -f "$ambient" ] || die_infra "bun ambient decl missing: $ambient"
+filtered=()
+for file in "${files[@]}"; do
+    case "$REPO_ROOT/$file" in
+        "$ambient"|"$surface") ;;
+        *) filtered+=("$file") ;;
+    esac
+done
+files=("${filtered[@]}")
 
 sdk_types="${BUN_INSTALL:-$HOME/.bun}/install/global/node_modules/@oh-my-pi/pi-coding-agent/dist/types/index.d.ts"
-surface="$kit_ts_dir/types/pi-surface.d.ts"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 

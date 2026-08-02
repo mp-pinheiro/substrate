@@ -29,6 +29,21 @@ env -u CI -u SUBSTRATE_NO_USER_HARNESS "$KIT_ROOT/bin/substrate" init --profile 
 [ -f "$HOME/.omp/agent/extensions/substrate-quality.ts" ] || fail "user-level omp extension not installed"
 cmp -s "$HOME/.omp/agent/extensions/substrate-quality.ts" "$KIT_ROOT/core/omp/substrate-quality.ts" \
     || fail "user-level omp extension differs from kit copy"
+[ -f "$HOME/.omp/agent/extensions/substrate-quality/runtime.ts" ] \
+    || fail "user-level omp runtime module not installed"
+[ -f "$HOME/.omp/agent/extensions/substrate-quality/lifecycle.ts" ] \
+    || fail "user-level omp lifecycle module not installed"
+[ -f "$HOME/.omp/agent/extensions/substrate-quality/identity.ts" ] \
+    || fail "user-level omp identity module not installed"
+cmp -s "$HOME/.omp/agent/extensions/substrate-quality/runtime.ts" \
+    "$KIT_ROOT/core/omp/substrate-quality/runtime.ts" \
+    || fail "user-level omp runtime module differs from kit copy"
+cmp -s "$HOME/.omp/agent/extensions/substrate-quality/lifecycle.ts" \
+    "$KIT_ROOT/core/omp/substrate-quality/lifecycle.ts" \
+    || fail "user-level omp lifecycle module differs from kit copy"
+cmp -s "$HOME/.omp/agent/extensions/substrate-quality/identity.ts" \
+    "$KIT_ROOT/core/omp/substrate-quality/identity.ts" \
+    || fail "user-level omp identity module differs from kit copy"
 [ -f "$HOME/.omp/agent/agents/explorer.md" ] || fail "user-level omp agent not installed"
 [ -f "$HOME/.omp/agent/skills/review/SKILL.md" ] || fail "user-level omp skill not installed"
 [ -f "$HOME/.claude/agents/explorer.md" ] || fail "user-level Claude agent not installed"
@@ -41,41 +56,87 @@ cmp -s "$HOME/.claude/skills/review/SKILL.md" "$KIT_ROOT/skills/review/SKILL.md"
 
 # The user-level omp extension resolves each write target, not the session cwd.
 mkdir -p "$T/nowhere" "$T/repo/components"
-printf '#!/usr/bin/env bash\nls\n# now we check the thing\nls\n' > "$T/repo/components/gapfill.sh"
+printf '#!/usr/bin/env bash\nls\n' > "$T/repo/components/gapfill.sh"
 cat > "$T/omp-probe.ts" <<'TS'
+import { appendFileSync } from "node:fs";
 const handlers: Record<string, Array<(event: any, context: any) => Promise<any>>> = {};
-const pi = {
-	setLabel() {},
+const commands: Record<string, any> = {};
+const notifications: Array<{ message: string; type: string }> = [];
+let label = "";
+const pi: any = {
+	setLabel(value: string) {
+		label = value;
+	},
 	on(name: string, handler: (event: any, context: any) => Promise<any>) {
 		(handlers[name] ??= []).push(handler);
+	},
+	registerCommand(name: string, command: any) {
+		commands[name] = command;
+	},
+	registerTool() {},
+	typebox: {
+		Type: {
+			Object() {
+				return {};
+			},
+			String() {
+				return {};
+			},
+		},
 	},
 };
 const extension = await import(process.argv[2]);
 extension.default(pi);
 const protect = handlers.tool_call[0];
 const policy = handlers.before_agent_start[0];
-const scan = handlers.tool_result[0];
+async function recordToolCall(event: any, context: any) {
+	for (const handler of handlers.tool_call) await handler(event, context);
+}
+async function collectToolResult(event: any, context: any) {
+	let current = event;
+	let result = null;
+	for (const handler of handlers.tool_result) {
+		const next = await handler(current, context);
+		if (next) {
+			result = next;
+			current = { ...current, ...next };
+		}
+	}
+	return result;
+}
 const outsideCwd = process.argv[3];
 const repoCwd = process.argv[4];
 const scanFile = process.argv[5];
+const context = {
+	cwd: repoCwd,
+	ui: {
+		notify(message: string, type: string) {
+			notifications.push({ message, type });
+		},
+	},
+};
+await handlers.session_start[0]({}, context);
+await commands.substrate.handler("", context);
 const writes = [];
 for (const path of process.argv.slice(6)) {
 	writes.push(await protect({ toolName: "write", input: { path } }, { cwd: outsideCwd }));
 }
 const policyRepo = await policy({ systemPrompt: ["base"] }, { cwd: repoCwd });
 const policyOutside = await policy({ systemPrompt: ["base"] }, { cwd: outsideCwd });
-const lsp = await scan(
+const lspCall = {
+	toolName: "lsp",
+	toolCallId: "mutating-lsp",
+	input: { action: "rename", file: scanFile },
+	content: [{ type: "text", text: "rename applied" }],
+	isError: false,
+};
+await recordToolCall(lspCall, { cwd: outsideCwd });
+appendFileSync(scanFile, "# now we check the thing\n");
+const lsp = await collectToolResult(lspCall, { cwd: outsideCwd });
+const lspRead = await collectToolResult(
 	{
 		toolName: "lsp",
-		input: { action: "rename", file: scanFile },
-		content: [{ type: "text", text: "rename applied" }],
-		isError: false,
-	},
-	{ cwd: outsideCwd },
-);
-const lspRead = await scan(
-	{
-		toolName: "lsp",
+		toolCallId: "read-lsp",
 		input: { action: "references", file: scanFile },
 		content: [{ type: "text", text: "references found" }],
 		isError: false,
@@ -88,11 +149,12 @@ console.log(
 		policy: { repo: policyRepo, outside: policyOutside ?? null },
 		lsp,
 		lspRead: lspRead ?? null,
+		identity: { label, notifications },
 	}),
 );
 TS
 ln -s "$T/nowhere" "$T/repo/escaped-parent"
-omp_results=$(bun "$T/omp-probe.ts" "$KIT_ROOT/core/omp/substrate-quality.ts" \
+omp_results=$(bun "$T/omp-probe.ts" "$HOME/.omp/agent/extensions/substrate-quality.ts" \
 	"$T/nowhere" "$T/repo" "$T/repo/components/gapfill.sh" \
 	"$T/repo/missing/deep/substrate-baseline.json" \
 	"$T/repo/escaped-parent/missing/file.sh")
@@ -108,6 +170,23 @@ jq -e '.lsp.content[-1].text | contains("components/gapfill.sh")' <<< "$omp_resu
 	|| fail "user-level omp extension skipped a mutating cross-repo lsp result: $omp_results"
 jq -e '.lspRead == null' <<< "$omp_results" >/dev/null \
 	|| fail "user-level omp extension scanned a read-only lsp result: $omp_results"
+read -r extension_hash _ < <(
+	cat "$HOME/.omp/agent/extensions/substrate-quality.ts" \
+		"$HOME/.omp/agent/extensions/substrate-quality/runtime.ts" \
+		"$HOME/.omp/agent/extensions/substrate-quality/lifecycle.ts" \
+		"$HOME/.omp/agent/extensions/substrate-quality/identity.ts" |
+		sha256sum
+)
+extension_path=$(realpath "$HOME/.omp/agent/extensions/substrate-quality.ts")
+jq -e --arg path "$extension_path" --arg hash "$extension_hash" \
+	'.extensionPath == $path and .extensionHash == $hash' \
+	"$HOME/.omp/run/substrate-quality.json" >/dev/null \
+	|| fail "runtime identity does not name the installed extension"
+jq -e --arg short "${extension_hash:0:8}" --arg path "$extension_path" --arg hash "$extension_hash" \
+	'.identity.label == ("Substrate " + $short)
+	 and any(.identity.notifications[]; (.message | contains($path)) and (.message | contains($hash)))' \
+	<<< "$omp_results" >/dev/null \
+	|| fail "runtime summary did not expose the installed extension identity: $omp_results"
 
 count1=$(jq '[(.hooks.PreToolUse // [])[].hooks[].command, (.hooks.PostToolUse // [])[].hooks[].command] | map(select(test("substrate-launch"))) | length' "$HOME/.claude/settings.json")
 [ "$count1" -ge 1 ] || fail "no substrate-launch registrations in user settings"

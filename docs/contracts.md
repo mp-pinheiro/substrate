@@ -25,8 +25,7 @@ The interfaces every component implements. Change these deliberately — everyth
   "comment": { "allow_tags": ["SAFETY:", "WHY:", "PERF:", "HACK:"] },
   "budgets": { "max_file_lines": 500 },
   "checks": { "disabled": [] },
-  "contracts": [{ "name": "api", "regen": "bun run generate", "paths": ["src/generated"] }],
-  "push_gate": true
+  "contracts": [{ "name": "api", "regen": "bun run generate", "paths": ["src/generated"] }]
 }
 ```
 
@@ -80,26 +79,40 @@ Ordering: core checks 05–59, profile checks 60–79, repo-local checks 80–99
 
 ## Baseline (`substrate-baseline.json`, repo root, tracked)
 
-`{"metrics": {"dup_pct": 0.28, "comments:src/x.go": 2}}`. Written only by the runner: refused while any check fails (first creation is allowed on a run whose only complaints are missing-baseline warnings), `--accept-regression` prints the exact diff being relaxed. When the file exists, an absent metric key means zero tolerance.
+`{"metrics": {"dup_pct": 0.28, "comments:src/x.go": 2}}`. The checkpoint transaction lowers existing ceilings component-wise only after a green run, stages the new JSON beside the original, and atomically replaces it before committing. Initial debt adoption remains explicit; `--accept-regression` is the only loosening path and prints the exact diff. When the file exists, an absent metric key means zero tolerance.
 
 ## Hook contract
 
 - `hooks/protect-paths.sh` — PreToolUse(Write|Edit) stdin JSON; blocks: any symlink write (message names the target), baseline, `.substrate/`, `CLAUDE.md`/governance, `protected_paths` globs. Exit 2 = blocked.
 - `hooks/changed-files-scan.sh` — PostToolUse(Bash|Write|Edit|MultiEdit|NotebookEdit|Task); scans every changed path in the working tree (jj diff or git status), not the tool's declared target, so bash/eval writes are covered; runs the comment ratchet per changed scannable file (pass-only memo in `$TMPDIR`) and flags `protected_paths` writes the write-time hook could not intercept. Report on stderr, exit 2 = blocking feedback.
-- `hooks/gate-before-push.sh` — PreToolUse(Bash) matching the repo's push command; runs the gate; exit 2 with report on red.
-- `core/omp/substrate-quality.ts` — the executable omp enforcement layer. Its `before_agent_start` handler injects concise gate policy into the main agent; `tool_call` blocks protected writes and red pushes; `tool_result` scans mutations, including write-tier LSP actions, while proven read-only actions skip the scan. Every target resolves its own repo, including cross-repo and not-yet-created parent paths; symlink ancestors cannot escape that repo. Config is read from the resolved repo with Bun `JSON.parse`; subprocesses use `Bun.spawnSync`.
-- `install_user_harness` — installs the user-scoped omp extension, Claude launcher, and kit-owned agents/skills into `~/.omp/agent` and `~/.claude`; it never creates or changes `~/.omp/profiles/*` and refuses any destination that crosses a symlink.
+- `hooks/gate-before-push.sh`, the Git pre-push hook, and the `jj push` alias call the shared receipt-aware push guard. It accepts only a green receipt whose revision, tracked tree, refs, config inputs, vendored engine/checks, executable toolchain, bounded environment, and declared external SDK fingerprint still match; otherwise it reruns the gate. Arbitrary contract generators and dirty trees are deliberately non-reusable. Push remains an explicit user action and has no opt-out.
+- `core/omp/substrate-quality.ts` plus `core/omp/substrate-quality/*.ts` — the executable omp enforcement layer and private runtime modules. The entrypoint's `before_agent_start` handler injects concise gate policy; `tool_call` blocks protected writes, direct commits, and red pushes; `tool_result` scans mutations, including write-tier LSP actions, while proven read-only actions skip the scan. Every target resolves its own repo, including cross-repo and not-yet-created parent paths; symlink ancestors cannot escape that repo. Runtime identity hashes the entrypoint and every private module in a fixed order.
+- `install_user_harness` — installs the user-scoped omp entrypoint and private module directory, Claude launcher, and kit-owned agents/skills into `~/.omp/agent` and `~/.claude`; it never creates or changes `~/.omp/profiles/*` and refuses any destination that crosses a symlink.
 - Agents and skills are optional helpers, not enforcement. Their ownership is explicit: a same-name destination without `.substrate-managed.json` is repo/user-owned and remains untouched. A valid `{"managed_by":"substrate"}` marker grants full ownership of that asset root: synchronization replaces its complete contents, and a marked asset removed from the kit is removed from consumers. Invalid or symlinked markers fail closed. A repo-local asset-root symlink is accepted only when its canonical target remains inside the repository; writes use that canonical path. User-level roots never traverse symlinks.
+
+## Repository maintenance transaction
+
+`bootstrap`, `init`, and `update --apply` use the same repository transaction. The transaction takes a revision and dirty-tree snapshot, builds a write manifest from the selected operation and profiles, renders a scratch clone, and runs the candidate's vendored gate before touching the working tree. The renderer must stay inside the declared manifest.
+
+Each changed top-level unit records its preimage and desired hash. Apply uses compare-and-swap checks, refuses dirty managed overlap unless a prior receipt or a checked ownership marker authorizes it, and verifies that the revision and unrelated dirty-work fingerprint did not change during rendering. A run without `--checkpoint` may seed repo-owned merge/preserve inputs into the candidate; they are included in preimage checks and the receipt but remain uncommitted. Checkpoint mode refuses those inputs instead of absorbing them. Unrelated dirty paths are preserved. A repository-local lock rejects concurrent maintenance.
+
+With `--checkpoint`, a green candidate tightens existing baseline ceilings and commits exactly the changed managed units through Git's temporary index or a path-scoped jj commit. Initial debt requires `--accept-baseline`; that flag never accepts regression against an existing baseline. The transaction writes a receipt to the repository's common Git metadata before apply. Prepared, applying, applied, and incomplete checkpoint receipts retain the candidate and can resume after interruption. The final receipt records the source and destination revisions, exact changed paths, commit, gate hash, preserved-dirty fingerprint, and `noPush: true`.
+
+Repository runtime wiring runs after the repository commit. User-scoped harness synchronization runs last under its own lock and receipt; `--repo-only` skips it. A failure in either external phase leaves the repository commit intact and a rerun repairs only the unfinished phase. Maintenance never invokes a push.
 
 ## CLI surface (`bin/substrate`)
 
-- `bootstrap [--profile a,b] [--force]` — the canonical installer and synchronizer. A new repo requires profiles; later runs read them from `substrate.json`. It re-vendors `.substrate/`, re-renders workflows marked `# substrate-managed`, merges individual hook commands without dropping foreign commands from mixed groups, refreshes harness and VCS wiring, and synchronizes kit-owned agents and skills into both Claude and omp. It preserves the baseline, config, templates, repo-owned LSP settings, unmarked same-name assets, and local checks. An unmarked workflow is adopted only when it exactly matches generated output or `--force` is explicit; `# substrate-repo-owned` preserves a custom workflow. Symlink escapes, non-regular managed destinations, and unchained Git hook collisions make bootstrap incomplete rather than reporting false success.
-- `init [--profile a,b] [--vcs auto|git|jj] [--force]` — first-run-compatible entry point for the same installer.
-- `gate [...]` — run `.substrate/gate.sh` (flags pass through: `--update-baseline`, `--accept-regression`).
-- `doctor` — config validity, langmap freshness (regenerate + compare), exact Claude event/matcher/command registrations, and toolchain presence per active profile with hints.
-- `update [--apply] [--force]` — inspect vendored engine drift; `--apply` re-vendors the engine, refreshes the installed omp extension, and refreshes the user harness. Use `bootstrap` for full repository scaffold synchronization.
+- `bootstrap [--profile a,b] [--vcs auto|git|jj] [--force] [maintenance flags]` — the canonical installer and synchronizer. A new repo requires profiles; later runs read them from `substrate.json`. It re-vendors `.substrate/`, re-renders workflows marked `# substrate-managed`, merges individual hook commands without dropping foreign commands from mixed groups, refreshes harness and VCS wiring, and synchronizes kit-owned agents and skills into both Claude and omp. It preserves config templates, repo-owned LSP settings, unmarked same-name assets, and local checks. An unmarked workflow is adopted only when it exactly matches generated output or `--force` is explicit; `# substrate-repo-owned` preserves a custom workflow.
+- `init --profile a,b [--vcs auto|git|jj] [--force] [maintenance flags]` — first-run-compatible entry point for the same transaction.
+- Maintenance flags: `--checkpoint` creates the local commit; `--message <message>` overrides its Conventional Commit message; `--accept-baseline` explicitly adopts initial debt; `--repo-only` skips user-harness synchronization; `--json` prints the receipt. Symlink escapes, non-regular destinations, manifest escapes, ownership conflicts, and unchained Git hooks fail the transaction.
+- `gate [...]` — run `.substrate/gate.sh`; `gate --deep [--no-cache]` additionally runs the cached full-history secret scan.
+- `checkpoint --message <message> [--session <id> | --path <path> ...]` — verify ownership, run the gate, tighten the baseline, commit locally, rerun the gate, and record an exact-state receipt. It never pushes.
+- `baseline [--update|--accept-regression]` — explicitly establish initial debt or accept a reviewed regression.
+- `doctor` — config validity, langmap freshness (regenerate + compare), installed/loaded harness identity, and toolchain presence per active profile with hints.
+- `update [--apply] [--force] [maintenance flags]` — without `--apply`, inspect vendored engine drift. With `--apply`, run the repository transaction for the engine, then refresh repository runtime and the user harness.
 - `selftest` — sandbox copy of the repo (inventory files only), then: steady must be green (or baseline-pending warns only); per-profile slop fixture injected must go red AND be named in the report; detector tool shimmed to fail must go red with "cannot pass blind"; corrupt baseline must hard-exit. Any deviation = selftest fails.
 - `audit [plan.md ...]` — executes plan acceptance oracles (see Plan tracking). Checked `[x]` items must pass (regression = exit 1); `committed` plans must pass everything; pending `[ ]` items on active plans report without failing.
+- `report [--write|--refresh]` — advisory cleanup output. Harness session start refreshes ignored local state when due; scheduled CI owns the durable issue. Report age or generation never changes the code-gate verdict.
 
 ## Versioning
 
