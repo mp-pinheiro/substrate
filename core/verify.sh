@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Bounded, read-only proof that the active OMP runtime matches this kit and the local gate is green.
+
+verify_omp_runtime() {
+    local dest module_root runtime expected_hash runtime_hash runtime_path
+    dest="$HOME/.omp/agent/extensions/substrate-quality.ts"
+    module_root="$HOME/.omp/agent/extensions/substrate-quality"
+    runtime="$HOME/.omp/run/substrate-quality.json"
+
+    if [ ! -f "$dest" ] || [ ! -f "$module_root/runtime.ts" ] \
+        || [ ! -f "$module_root/lifecycle.ts" ] || [ ! -f "$module_root/identity.ts" ]; then
+        warn "OMP runtime is not installed — run: substrate bootstrap"
+        return 1
+    fi
+    if ! cmp -s "$dest" "$KIT_ROOT/core/omp/substrate-quality.ts" \
+        || ! cmp -s "$module_root/runtime.ts" "$KIT_ROOT/core/omp/substrate-quality/runtime.ts" \
+        || ! cmp -s "$module_root/lifecycle.ts" "$KIT_ROOT/core/omp/substrate-quality/lifecycle.ts" \
+        || ! cmp -s "$module_root/identity.ts" "$KIT_ROOT/core/omp/substrate-quality/identity.ts"; then
+        warn "OMP runtime is stale — run: substrate bootstrap"
+        return 1
+    fi
+    read -r expected_hash _ < <(
+        cat "$KIT_ROOT/core/omp/substrate-quality.ts" \
+            "$KIT_ROOT/core/omp/substrate-quality/runtime.ts" \
+            "$KIT_ROOT/core/omp/substrate-quality/lifecycle.ts" \
+            "$KIT_ROOT/core/omp/substrate-quality/identity.ts" |
+            sha256sum
+    )
+    if [ ! -f "$runtime" ] || ! jq -e . "$runtime" >/dev/null 2>&1; then
+        warn "OMP runtime has not been observed — start OMP, then retry"
+        return 1
+    fi
+    runtime_hash=$(jq -r '.extensionHash // empty' "$runtime")
+    runtime_path=$(jq -r '.extensionPath // empty' "$runtime")
+    if [ "$runtime_hash" != "$expected_hash" ] || [ "$runtime_path" != "$(realpath "$dest")" ]; then
+        warn "OMP loaded a different runtime — restart OMP, then retry"
+        return 1
+    fi
+    success "OMP runtime current (sha256 ${expected_hash:0:12})"
+}
+
+cmd_verify() {
+    [ "$#" -eq 0 ] || die "verify takes no arguments"
+    [ -x .substrate/gate.sh ] || die "no .substrate here — run: substrate init"
+    verify_omp_runtime || return 1
+    info "running bounded local gate"
+    .substrate/gate.sh || return 1
+    success "Substrate ready — runtime current, gate green, no push performed"
+}
