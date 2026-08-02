@@ -11,7 +11,10 @@ if [ ! -f "$REPO_ROOT/go.mod" ]; then
 fi
 require_bin_ci go "profile toolchain — see profiles/go/profile.json" || exit 0
 
-if ! out=$(go build ./... 2>&1); then
+build_output=$(mktemp -d) || die_infra "could not create isolated go build output"
+trap 'rm -rf "$build_output"' EXIT
+
+if ! out=$(go build -o "$build_output/" ./... 2>&1); then
     printf '%s\n' "$out"
     exit 1
 fi

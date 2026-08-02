@@ -20,7 +20,6 @@ seed_repo() {
     printf '#!/usr/bin/env bash\nset -euo pipefail\nls "$@"\n' > components/x.sh
     chmod +x components/x.sh
     env -u CI "$KIT_ROOT/bin/substrate" init --profile shell >/dev/null 2>&1 || fail "$1: init failed"
-    jq '.report.max_age_days = 0' substrate.json > s.tmp && mv s.tmp substrate.json
 }
 
 battery() {

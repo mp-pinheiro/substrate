@@ -13,16 +13,16 @@ you / the agent writes
 L1  write-time hooks        ms feedback: protected paths, symlinks, comment ratchet
         │
         ▼
-L2  push-time hook          gate runs before push; red blocks
+L2  direct verification + checkpoint
+        │                 gate, tighten, exact local commit
+        ▼
+L3  push guard + CI gate   stale or red state blocks publication
         │
         ▼
-L3  substrate gate / CI     the authority: claims, comments, duplication, budgets, profile checks
-        │
-        ▼
-L4  review + human merge    tool-grounded review; you own what lands
+L4  review + human merge   tool-grounded review; you own what lands
 ```
 
-A change is done when `substrate gate` is green — not before. Green is trustworthy: every detector fails the gate loudly when its own tooling breaks (`cannot pass blind`), so a passing run means everything actually ran.
+A mutating agent task is done when direct verification has passed and `substrate checkpoint` has recorded a green exact-state receipt. Push remains a separate user action. Green is trustworthy: every detector fails the gate loudly when its own tooling breaks (`cannot pass blind`), so a passing run means everything actually ran.
 
 ## Where everything lives
 
@@ -30,7 +30,7 @@ A change is done when `substrate gate` is green — not before. Green is trustwo
 | --- | --- |
 | `substrate.json` | repo config: active profiles, unscanned ledger, budgets, disabled checks |
 | `substrate-baseline.json` | grandfathered debt snapshot; only the gate runner may write it |
-| `.substrate/` | vendored engine (gate, checks, hooks); `substrate bootstrap` synchronizes it with the kit |
+| `.substrate/` | vendored engine (gate, checks, hooks); transactional `substrate bootstrap --checkpoint` synchronizes it with the kit |
 | `.substrate/checks.d/` | active checks: core 05–59, profile 60–79, repo-local 80–99 |
 | `.claude/{agents,skills}/`, `.omp/{agents,skills}/` | working agents and skills; unmarked same-name assets are repo-owned, while a `.substrate-managed.json` marker grants full kit ownership and stale marked assets are removed |
 | `profiles/<name>/` | kit profiles: `profile.json` (claims, checks, fixtures), `checks.d/`, `templates/` |
@@ -49,9 +49,8 @@ A change is done when `substrate gate` is green — not before. Green is trustwo
 ## Fast start
 
 ```sh
-substrate bootstrap --profile go,python   # first run; later runs need no profile flag
+substrate bootstrap --profile go,python --checkpoint --accept-baseline
 substrate doctor                     # toolchain + config sanity
-substrate gate                       # run everything; green = safe to push
 substrate selftest                   # negative battery: prove the gate can go red
 substrate report                     # advisory maintenance queue (never fails)
 ```

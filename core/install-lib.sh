@@ -34,21 +34,54 @@ replace_preserving_mode() {
     return 1
 }
 
+copy_atomic_preserving_mode() {
+    local path="$1" source="$2" mode="" tmp
+    if [ -L "$path" ]; then
+        warn "$path is a symlink — left untouched"
+        return 1
+    fi
+    mode=$(file_mode "$path") || mode=""
+    if ! tmp=$(mktemp "$path.XXXXXX" 2>/dev/null); then
+        warn "cannot stage next to $path"
+        return 1
+    fi
+    if ! cp "$source" "$tmp"; then
+        rm -f "$tmp"
+        warn "staging copy failed for $path"
+        return 1
+    fi
+    [ -n "$mode" ] && chmod "$mode" "$tmp" 2>/dev/null
+    if mv -f "$tmp" "$path" 2>/dev/null; then
+        return 0
+    fi
+    rm -f "$tmp"
+    warn "$path is not replaceable"
+    return 1
+}
+
 # shellcheck source=./install-assets.sh
 source "$KIT_ROOT/core/install-assets.sh"
+# shellcheck source=./user-harness.sh
+source "$KIT_ROOT/core/user-harness.sh"
 merge_hook_groups() {
     local settings="$1" template="$2"
     jq --argjson extra "$(cat "$template")" '
+        def current_managed_commands:
+            [$extra.hooks | to_entries[]? | .value[]? | .hooks[]? | .command? | select(type == "string")];
         def managed_command:
             (.command // "") as $command
-            | ($command | test("^bash \"\\$\\{CLAUDE_PROJECT_DIR:-\\.\\}/\\.substrate/hooks/[A-Za-z0-9._-]+\\.sh\"$"))
-                or ($command | test("^bash \"\\$HOME/\\.claude/hooks/substrate-launch\\.sh\" [A-Za-z0-9._-]+$"));
+            | ((current_managed_commands | index($command)) != null)
+                or ($command | test("^bash \"\\$\\{CLAUDE_PROJECT_DIR:-\\.\\}/\\.substrate/hooks/[A-Za-z0-9._-]+\\.sh\"([ ][A-Za-z0-9._-]+)*$"))
+                or ($command | test("^bash \"\\$HOME/\\.claude/hooks/substrate-launch\\.sh\" [A-Za-z0-9._-]+([ ][A-Za-z0-9._-]+)*$"));
         def strip_managed($groups):
             [$groups[]?
                 | .hooks = [(.hooks // [])[] | select(managed_command | not)]
                 | select((.hooks | length) > 0)];
         .hooks.PreToolUse = (strip_managed((.hooks.PreToolUse // [])) + ($extra.hooks.PreToolUse // []))
         | .hooks.PostToolUse = (strip_managed((.hooks.PostToolUse // [])) + ($extra.hooks.PostToolUse // []))
+        | .hooks.SessionStart = (strip_managed((.hooks.SessionStart // [])) + ($extra.hooks.SessionStart // []))
+        | .hooks.Stop = (strip_managed((.hooks.Stop // [])) + ($extra.hooks.Stop // []))
+        | .hooks.SessionEnd = (strip_managed((.hooks.SessionEnd // [])) + ($extra.hooks.SessionEnd // []))
     ' "$settings"
 }
 
@@ -132,6 +165,7 @@ install_ci() {
     return "$rc"
 }
 
+
 install_hooks_config() {
     local template="$KIT_ROOT/core/claude-hooks.json" settings=.claude/settings.json merged
     repo_path_safe .claude "Claude configuration directory" || return 1
@@ -154,85 +188,8 @@ install_hooks_config() {
         cp "$template" "$settings" || { warn "failed to write $settings"; return 1; }
     fi
     success "Claude hooks wired in $settings"
-    repo_path_safe .omp/extensions "omp extension directory" || return 1
-    repo_path_safe .omp/extensions/substrate-quality.ts "omp extension" || return 1
-    if [ -e .omp/extensions/substrate-quality.ts ] && [ ! -f .omp/extensions/substrate-quality.ts ]; then
-        warn ".omp/extensions/substrate-quality.ts is not a regular file — left untouched"
-        return 1
-    fi
-    mkdir -p .omp/extensions
-    cp "$KIT_ROOT/core/omp/substrate-quality.ts" .omp/extensions/ || { warn "omp extension install failed"; return 1; }
-    success "omp extension installed: .omp/extensions/substrate-quality.ts"
 }
 
-install_user_harness() {
-    if [ "${SUBSTRATE_NO_USER_HARNESS:-}" = "1" ]; then
-        info "user harness skipped (SUBSTRATE_NO_USER_HARNESS=1)"
-        return 0
-    fi
-    local rc=0 path
-    local omp_root="$HOME/.omp/agent/extensions" omp_dest="$HOME/.omp/agent/extensions/substrate-quality.ts"
-    local claude_root="$HOME/.claude/hooks" claude_dest="$HOME/.claude/hooks/substrate-launch.sh"
-    local template="$KIT_ROOT/core/claude-hooks-user.json" settings="$HOME/.claude/settings.json" merged
-    for path in \
-        "$omp_root" "$omp_dest" \
-        "$claude_root" "$claude_dest" "$settings" \
-        "$HOME/.claude/skills" "$HOME/.claude/agents" \
-        "$HOME/.omp/agent/skills" "$HOME/.omp/agent/agents"; do
-        user_path_safe "$path" "user harness path" || return 1
-    done
-    # agent-level only — ~/.omp/profiles/* must never be touched by this installer
-    if [ -L "$omp_root" ] || [ -L "$omp_dest" ] \
-        || { [ -e "$omp_dest" ] && [ ! -f "$omp_dest" ]; }; then
-        warn "user-level omp extension path is a symlink — left untouched"
-        rc=1
-    elif mkdir -p "$omp_root" 2>/dev/null \
-        && cp "$KIT_ROOT/core/omp/substrate-quality.ts" "$omp_dest" 2>/dev/null; then
-        success "user-level omp extension: ~/.omp/agent/extensions/substrate-quality.ts"
-    else
-        warn "user-level omp extension install failed — sessions rooted outside substrate repos run unguarded"
-        rc=1
-    fi
-
-    if [ -L "$claude_root" ] || [ -L "$claude_dest" ] \
-        || { [ -e "$claude_dest" ] && [ ! -f "$claude_dest" ]; }; then
-        warn "user-level Claude launcher path is a symlink — left untouched"
-        return 1
-    fi
-    if mkdir -p "$claude_root" 2>/dev/null \
-        && cp "$KIT_ROOT/core/substrate-launch.sh" "$claude_dest" 2>/dev/null \
-        && chmod +x "$claude_dest" 2>/dev/null; then
-        success "user-level Claude launcher: ~/.claude/hooks/substrate-launch.sh"
-    else
-        warn "user-level Claude launcher install failed"
-        return 1
-    fi
-    install_user_harness_assets || rc=1
-
-
-    if [ -L "$settings" ]; then
-        warn "$settings is a symlink — left untouched; merge manually from $template"
-        return 1
-    fi
-    if [ -e "$settings" ] && [ ! -f "$settings" ]; then
-        warn "$settings is not a regular file — left untouched"
-        return 1
-    fi
-    if [ -f "$settings" ] && jq -e . "$settings" >/dev/null 2>&1; then
-        if ! merged=$(merge_hook_groups "$settings" "$template"); then
-            warn "user Claude settings merge failed — $settings left untouched"
-            return 1
-        fi
-        replace_preserving_mode "$settings" "$merged" "$template" || return 1
-    elif [ -f "$settings" ]; then
-        warn "$settings exists but is not valid JSON — left untouched; merge manually from $template"
-        return 1
-    else
-        cp "$template" "$settings" || { warn "failed to write $settings"; return 1; }
-    fi
-    success "user-level Claude hooks wired in $settings"
-    return "$rc"
-}
 
 install_git_hook() {
     local path="$1" body="$2" name staged
@@ -263,7 +220,7 @@ install_vcs_hooks() {
         if hooks_dir=$(git rev-parse --git-path hooks 2>/dev/null) \
             && mkdir -p "$hooks_dir"; then
             install_git_hook "$hooks_dir/pre-commit" 'exec bash "$(git rev-parse --show-toplevel)/.substrate/hooks/changed-files-scan.sh"' || rc=1
-            install_git_hook "$hooks_dir/pre-push" 'exec bash "$(git rev-parse --show-toplevel)/.substrate/gate.sh"' || rc=1
+            install_git_hook "$hooks_dir/pre-push" 'exec bash "$(git rev-parse --show-toplevel)/.substrate/push-gate.sh"' || rc=1
         else
             warn "effective Git hooks directory is unavailable"
             rc=1
@@ -341,10 +298,11 @@ install_recipe() {
     fi
 }
 
-wire_jj() {
-    [ -d .jj ] || return 0
+install_jj_workflow_doc() {
+    if [ "${SUBSTRATE_RENDER_VCS:-}" != jj ] && [ ! -d .jj ]; then
+        return 0
+    fi
     repo_path_safe docs/jj-workflow.md "jj workflow documentation" || return 1
-    command -v jj >/dev/null 2>&1 || { warn ".jj present but jj not installed — jj wiring skipped"; return 1; }
     if [ ! -f docs/jj-workflow.md ]; then
         if mkdir -p docs && cp "$KIT_ROOT/core/jj-workflow.md" docs/jj-workflow.md; then
             success "jj workflow doc installed: docs/jj-workflow.md"
@@ -353,6 +311,11 @@ wire_jj() {
             return 1
         fi
     fi
+}
+
+wire_jj_runtime() {
+    [ -d .jj ] || return 0
+    command -v jj >/dev/null 2>&1 || { warn ".jj present but jj not installed — jj wiring skipped"; return 1; }
     local trunk=main
     if jj bookmark list 2>/dev/null | grep -q '^master:' && ! jj bookmark list 2>/dev/null | grep -q '^main:'; then
         trunk=master
@@ -369,6 +332,11 @@ wire_jj() {
         jj bookmark track "$trunk" --remote=origin 2>/dev/null || true
     fi
     success "jj tug wired ($trunk auto-advance; --repo config is machine-local, rerun init per clone)"
+}
+
+wire_jj() {
+    install_jj_workflow_doc || return 1
+    wire_jj_runtime
 }
 
 install_lsp_config() {

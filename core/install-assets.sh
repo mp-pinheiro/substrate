@@ -78,8 +78,7 @@ seed_config() {
         budgets: { max_file_lines: 500 },
         duplication: { min_tokens: 35 },
         report: { max_age_days: 14 },
-        checks: { disabled: [] },
-        push_gate: true
+        checks: { disabled: [] }
     }' > "$staged" || ! mv "$staged" substrate.json; then
         rm -f "$staged"
         die "substrate.json write failed"

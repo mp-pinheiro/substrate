@@ -3,7 +3,7 @@
 The loop for any change, human- or agent-driven:
 
 ```
-scope → edit → substrate gate → commit → push
+scope → edit → direct verification → checkpoint → explicit push
 ```
 
 ## 1. Scope (optional but pays off for non-trivial tasks)
@@ -39,36 +39,54 @@ comment ratchet: src/foo.sh has 1 finding(s), grandfathered allowance is 0.
 
 Fix by deleting the comment or encoding the fact in names/structure. For the rare keeper, append `gate:allow-comment` to the line — hatch semantics in [`docs/contracts.md`](../docs/contracts.md).
 
-## 3. Gate
+## 3. Verify and checkpoint
+
+Run the changed behavior directly. OMP then calls its `substrate_checkpoint` tool; Claude's lifecycle supplies the equivalent session-bound command. The transaction accepts only agent-owned paths, runs the gate, lowers improved baseline ceilings atomically, commits locally with jj/Git, reruns the gate, and records an exact-state receipt. It never pushes.
+
+For a human-driven change:
 
 ```sh
-substrate gate        # or: .substrate/gate.sh, or: just gate
+substrate checkpoint --message 'fix(scope): concise subject' --path path/to/file
 ```
 
-Red output names the file, the line, and the fix — see [working-with-the-gate.md](working-with-the-gate.md) for the failure-to-action map.
+Initial baseline creation and regression acceptance remain explicit:
 
-## 4. Commit
+```sh
+substrate baseline
+substrate baseline --accept-regression
+```
 
-One logical change per commit; short subject, no body. Keep the plan artifact honest: check acceptance boxes only when their `:: verify` command is green — `substrate audit` re-executes every checked claim and fails on regression.
+## 4. Push
 
-## 5. Push
-
-With `push_gate: true` in `substrate.json`, the push hook runs the gate first. A blocked push prints the full gate report plus:
+Push remains a user decision. `jj push` and Git's pre-push hook accept the checkpoint receipt only while the revision, working tree, refs, configuration, vendored checks, and toolchain still match exactly; otherwise they rerun the gate. There is no configuration opt-out. Because jj exposes no native push hook, an unsupervised low-level `jj git push` is outside the installed alias; OMP and Claude intercept the same command when an agent issues it.
 
 ```
 push blocked: fix the failing gate checks first
 ```
 
-## 6. Review (when it matters)
+## 5. Review (when it matters)
 
 The `review` skill runs the gate, reads the diff, and reports findings only with `file:line` citations — tool-grounded, not vibes. Use it before pushing anything you wouldn't want to debug later.
 
+## Repository maintenance
+
+Kit synchronization uses a separate transaction from an agent checkpoint:
+
+```sh
+substrate bootstrap --checkpoint
+substrate update --apply --checkpoint
+```
+
+Substrate renders and gates a scratch candidate before replacing managed paths. The checkpoint commit contains only those paths; unrelated dirty work remains in place. A run without `--checkpoint` can preserve or merge dirty repo-owned scaffold inputs, but leaves them uncommitted. Checkpoint mode refuses those inputs. Other dirty managed overlap or concurrent changes stop the command. If apply, commit, repository runtime wiring, or user-harness synchronization is interrupted, rerun the same command. The repository receipt identifies the unfinished phase. Neither command pushes.
+
+Use `--accept-baseline` only for the first baseline, `--repo-only` to skip user-harness synchronization, and `--json` when another tool will consume the receipt.
+
 ## Daily maintenance report
 
-GitHub refreshes the open `substrate-report` issue every day at 06:00 UTC. Run the same report locally whenever you want a current view:
+OMP and Claude refresh ignored local `substrate-report.md` state at session start when it is due. GitHub refreshes the durable open `substrate-report` issue every day at 06:00 UTC. Render the current report without writing local state with:
 
 ```sh
 substrate report
 ```
 
-The report is advisory. It separates duplicate-code candidates, possible dead code, and baseline limits, and it never fails the gate.
+The report is advisory. It separates duplicate-code candidates, possible dead code, and baseline limits, and its age or generation never changes the gate verdict.

@@ -18,11 +18,13 @@ source "$SUBSTRATE_DIR/gate-lib.sh"
 
 UPDATE_BASELINE=0
 ACCEPT_REGRESSION=0
+TIGHTEN_BASELINE=0
 for arg in "$@"; do
     case "$arg" in
         --update-baseline) UPDATE_BASELINE=1 ;;
+        --tighten) UPDATE_BASELINE=1; TIGHTEN_BASELINE=1 ;;
         --accept-regression) UPDATE_BASELINE=1; ACCEPT_REGRESSION=1 ;;
-        *) printf 'usage: %s [--update-baseline] [--accept-regression]\n' "$0" >&2; exit 2 ;;
+        *) printf 'usage: %s [--update-baseline|--tighten|--accept-regression]\n' "$0" >&2; exit 2 ;;
     esac
 done
 
@@ -119,31 +121,66 @@ ratchet() {
 
     if [ -n "$worse" ]; then
         printf '%s\n' "$worse"
-        warn "FAIL ratchet: metrics above their grandfathered baseline (new debt is rejected)"
-        FAILURES=$((FAILURES + 1))
+        if [ "$ACCEPT_REGRESSION" -eq 1 ]; then
+            warn "ratchet: metrics above baseline — explicit regression acceptance requested"
+        else
+            warn "FAIL ratchet: metrics above their grandfathered baseline (new debt is rejected)"
+            FAILURES=$((FAILURES + 1))
+        fi
     elif [ "$better" -gt 0 ]; then
-        info "ratchet: $better metric(s) improved on baseline — run --update-baseline to lock in"
+        info "ratchet: $better metric(s) improved on baseline — checkpoint locks them in automatically"
     else
         success "ratchet: all metrics at or below baseline"
     fi
 }
 
 write_baseline() {
-    if [ "$FAILURES" -gt 0 ] && [ "$ACCEPT_REGRESSION" -ne 1 ]; then
-        warn "refusing to update baseline with $FAILURES failing check(s) — fix them, or pass --accept-regression to loosen deliberately"
+    if [ "$TIGHTEN_BASELINE" -eq 1 ] && [ ! -f "$BASELINE" ]; then
+        warn "baseline absent — establish initial debt explicitly with: substrate baseline"
         return 1
     fi
-    local new_baseline
-    if ! new_baseline=$(jq -n --argjson m "$CURRENT_METRICS" '{metrics: ($m | to_entries | sort_by(.key) | from_entries)}'); then
-        warn "baseline: serialization failed — not writing"
+    if [ "$FAILURES" -gt 0 ]; then
+        warn "refusing to update baseline with $FAILURES failing check(s) — fix detector failures; use --accept-regression only for metric regressions"
         return 1
+    fi
+    local new_baseline staged
+    if [ "$TIGHTEN_BASELINE" -eq 1 ]; then
+        new_baseline=$(jq -n --slurpfile old "$BASELINE" --argjson m "$CURRENT_METRICS" \
+            '{metrics: (reduce ($m | to_entries[]) as $e (($old[0].metrics // {});
+                if has($e.key) then .[$e.key] = ([.[$e.key], $e.value] | min) else .[$e.key] = $e.value end)
+                | to_entries | sort_by(.key) | from_entries)}') \
+            || { warn "baseline: serialization failed — not writing"; return 1; }
+    else
+        new_baseline=$(jq -n --argjson m "$CURRENT_METRICS" \
+            '{metrics: ($m | to_entries | sort_by(.key) | from_entries)}') \
+            || { warn "baseline: serialization failed — not writing"; return 1; }
     fi
     if [ "$ACCEPT_REGRESSION" -eq 1 ] && [ -f "$BASELINE" ]; then
         warn "accepting regressions — baseline diff:"
         diff <(jq -S . "$BASELINE") <(jq -S . <<< "$new_baseline") || true
     fi
-    printf '%s\n' "$new_baseline" > "$BASELINE"
-    success "baseline written to $BASELINE"
+    if ! staged=$(mktemp "$BASELINE.XXXXXX"); then
+        warn "baseline: cannot stage next to $BASELINE — not writing"
+        return 1
+    fi
+    if ! printf '%s\n' "$new_baseline" > "$staged"; then
+        rm -f "$staged"
+        warn "baseline: staging write failed — not writing"
+        return 1
+    fi
+    [ ! -f "$BASELINE" ] || chmod --reference="$BASELINE" "$staged" 2>/dev/null
+    if [ -f "$BASELINE" ] && cmp -s "$BASELINE" "$staged"; then
+        rm -f "$staged"
+        info "baseline already records the current metric floor"
+        return 0
+    fi
+    if mv -f "$staged" "$BASELINE"; then
+        success "baseline tightened at $BASELINE"
+        return 0
+    fi
+    rm -f "$staged"
+    warn "baseline: atomic replacement failed — original preserved"
+    return 1
 }
 
 info "substrate gate: $REPO_ROOT"
@@ -152,7 +189,7 @@ run_checks
 ratchet
 
 if [ "$UPDATE_BASELINE" -eq 1 ]; then
-    write_baseline
+    write_baseline || FAILURES=$((FAILURES + 1))
 fi
 
 if [ "$FAILURES" -gt 0 ]; then

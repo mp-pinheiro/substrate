@@ -8,11 +8,20 @@ declare const Bun: {
 	): { exitCode: number; stdout: Uint8Array; stderr: Uint8Array };
 };
 
+declare const process: {
+	env: Record<string, string | undefined>;
+	pid: number;
+};
+
 declare module "node:fs" {
 	export function readFileSync(path: string, encoding: string): string;
+	export function readFileSync(path: string): Uint8Array;
 	export function lstatSync(path: string): { isSymbolicLink(): boolean };
 	export function realpathSync(path: string): string;
 	export function existsSync(path: string): boolean;
+	export function mkdirSync(path: string, options?: { recursive?: boolean; mode?: number }): string | undefined;
+	export function writeFileSync(path: string, data: string, options?: { mode?: number }): void;
+	export function renameSync(oldPath: string, newPath: string): void;
 }
 
 declare module "node:path" {
@@ -22,5 +31,17 @@ declare module "node:path" {
 	export function dirname(path: string): string;
 	export function basename(path: string): string;
 	export function isAbsolute(path: string): boolean;
+}
+
+declare module "node:crypto" {
+	type Hash = {
+		update(data: string | Uint8Array): Hash;
+		digest(encoding: "hex"): string;
+	};
+	export function createHash(algorithm: string): Hash;
+}
+
+declare module "node:url" {
+	export function fileURLToPath(url: string): string;
 }
 

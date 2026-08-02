@@ -24,7 +24,7 @@ chmod +x gen.sh
 mkdir -p gen/sub
 printf 'v1\n' > gen/out.txt
 printf 'n1\n' > gen/sub/nested.txt
-jq '.contracts = [{"name": "demo", "regen": "./gen.sh", "paths": ["gen"]}] | .unscanned += ["gen/**", "gen.sh", "*.md"] | .report.max_age_days = 0' \
+jq '.contracts = [{"name": "demo", "regen": "./gen.sh", "paths": ["gen"]}] | .unscanned += ["gen/**", "gen.sh", "*.md"]' \
     substrate.json > s.tmp && mv s.tmp substrate.json
 git add -A
 git commit -qm seed

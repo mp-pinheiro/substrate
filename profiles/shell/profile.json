@@ -5,6 +5,7 @@
     ".bash": { "mode": "ast", "ast_lang": "bash", "markers": ["#"] },
     ".zsh": { "mode": "line", "markers": ["#"], "heredoc": true },
     ".zshrc": { "mode": "line", "markers": ["#"], "heredoc": true },
+    ".zshenv": { "mode": "line", "markers": ["#"], "heredoc": true },
     ".zprofile": { "mode": "line", "markers": ["#"], "heredoc": true }
   },
   "shebang": [

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Maintenance queue (advisory — never fails): duplication clusters, dead-code
-# candidates, ratchet-tightening targets. --write drops substrate-report.md
-# (55-report-freshness keeps it fresh offline); CI upserts the issue extra.
+# candidates, and ratchet-tightening targets. --refresh atomically maintains
+# ignored local state when due; CI upserts the durable issue.
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -81,7 +81,7 @@ report_dead_code() {
 
 report_ratchet() {
     printf '\n## Baseline limits\n\n'
-    printf 'These values are quality ceilings, not failures. Lower them only when the gate reports an improvement.\n\n'
+    printf 'These values are quality ceilings, not failures. Successful agent checkpoints lower improved ceilings automatically.\n\n'
     if ! jq -e . substrate-baseline.json >/dev/null 2>&1; then
         printf "Status: no baseline. Run the gate, then save it with \`substrate gate --update-baseline\`.\n"
         return 0
@@ -89,7 +89,7 @@ report_ratchet() {
     printf '| Metric | Current limit |\n'
     printf '| --- | ---: |\n'
     jq -r '.metrics | to_entries | sort_by(-.value)[] | "| `\(.key)` | \(.value) |"' substrate-baseline.json
-    printf "\nWhen the gate reports an improvement, save the tighter limits with \`substrate gate --update-baseline\`.\n"
+    printf "\nAgent checkpoints save tighter limits automatically. Use \`substrate baseline\` only to adopt initial debt or perform explicit maintenance.\n"
 }
 
 run_report() {
@@ -103,13 +103,78 @@ run_report() {
     report_ratchet
 }
 
+REPORT="$REPO_ROOT/substrate-report.md"
+report_warn() {
+    printf 'report advisory: %s\n' "$*" >&2
+}
+report_is_tracked() {
+    git ls-files --error-unmatch -- substrate-report.md >/dev/null 2>&1
+}
+ensure_report_ignored() {
+    local git_dir exclude
+    git_dir=$(git rev-parse --git-common-dir 2>/dev/null) || return 0
+    case "$git_dir" in
+        /*) ;;
+        *) git_dir="$REPO_ROOT/$git_dir" ;;
+    esac
+    exclude="$git_dir/info/exclude"
+    mkdir -p "$(dirname "$exclude")" || return 1
+    if [ ! -f "$exclude" ] || ! grep -Fqx '/substrate-report.md' "$exclude"; then
+        printf '\n# substrate advisory state\n/substrate-report.md\n' >> "$exclude" || return 1
+    fi
+}
+write_report() {
+    local generated staged
+    [ ! -L "$REPORT" ] || { report_warn "$REPORT is a symlink — not writing"; return 1; }
+    generated=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    staged=$(mktemp "$REPORT.XXXXXX") || { report_warn "cannot stage $REPORT"; return 1; }
+    if { printf 'generated: %s\n\n' "$generated"; run_report "$generated"; } > "$staged" \
+        && mv -f "$staged" "$REPORT"; then
+        printf 'report written: %s\n' "$REPORT"
+        return 0
+    fi
+    rm -f "$staged"
+    report_warn "generation failed — existing report preserved"
+    return 1
+}
+report_due() {
+    local max_age first generated_epoch now_epoch age_days
+    max_age=$(jq -r '.report.max_age_days // 14' substrate.json 2>/dev/null)
+    case "$max_age" in
+        ''|*[!0-9]*) report_warn "invalid report.max_age_days; using 14"; max_age=14 ;;
+    esac
+    [ "$max_age" -ne 0 ] || return 1
+    [ -f "$REPORT" ] || return 0
+    IFS= read -r first < "$REPORT" || return 0
+    case "$first" in
+        'generated: '*) ;;
+        *) return 0 ;;
+    esac
+    generated_epoch=$(date -d "${first#generated: }" +%s 2>/dev/null) || return 0
+    now_epoch=$(date -u +%s)
+    [ "$generated_epoch" -le "$now_epoch" ] || return 0
+    age_days=$(((now_epoch - generated_epoch) / 86400))
+    [ "$age_days" -ge "$max_age" ]
+}
+
 case "${1:-}" in
     --write)
-        generated=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-        { printf 'generated: %s\n\n' "$generated"; run_report "$generated"; } > "$REPO_ROOT/substrate-report.md"
-        printf 'report written: %s\n' "$REPO_ROOT/substrate-report.md"
+        ensure_report_ignored || report_warn "cannot register local ignore"
+        write_report || true
+        ;;
+    --refresh)
+        if report_is_tracked; then
+            report_warn "$REPORT is tracked — automatic refresh skipped; untrack it to keep advisory state local"
+        else
+            ensure_report_ignored || report_warn "cannot register local ignore"
+            if report_due; then
+                write_report || true
+            else
+                printf 'report current: %s\n' "$REPORT"
+            fi
+        fi
         ;;
     '') run_report ;;
-    *) printf 'usage: report.sh [--write]\n' >&2; exit 2 ;;
+    *) printf 'usage: report.sh [--write|--refresh]\n' >&2; exit 2 ;;
 esac
 exit 0

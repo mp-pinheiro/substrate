@@ -25,7 +25,6 @@ mkdir -p "$T/git-repo"
     printf '#!/usr/bin/env bash\nset -euo pipefail\nls "$@"\n' > components/x.sh
     chmod +x components/x.sh
     env -u CI "$KIT_ROOT/bin/substrate" init --profile shell >/dev/null 2>&1 || fail "git: init failed"
-    jq '.report.max_age_days = 0' substrate.json > s.tmp && mv s.tmp substrate.json
     [ -x .git/hooks/pre-commit ] || fail "git: pre-commit not installed"
     [ -x .git/hooks/pre-push ] || fail "git: pre-push not installed"
     grep -q '^# substrate-managed$' .git/hooks/pre-commit || fail "git: pre-commit lacks marker"
@@ -48,12 +47,18 @@ mkdir -p "$T/git-repo"
     printf 'plain text\n' > orphan.xyz
     git add orphan.xyz
     git commit -qm 'feat: orphan' || fail "git: orphan commit blocked by pre-commit (scan must not own unclaimed policy)"
+    jq '.push_gate = false' substrate.json > "$T/push-gate-optout.json"
+    mv "$T/push-gate-optout.json" substrate.json
     git push -q origin main 2>/dev/null && fail "git: push not blocked by red gate (unclaimed source)"
     git ls-remote --heads "$T/git-origin.git" | grep -q main && fail "git: ref reached remote despite red gate"
+    git restore -- substrate.json
 
     git rm -q orphan.xyz
     git commit -qm 'fix: drop orphan' || fail "git: fix commit blocked"
-    git push -q origin main || fail "git: push blocked despite green gate"
+    out=$(.substrate/push-gate.sh 2>&1) || fail "git: receipt seed failed: $out"
+    grep -q 'green receipt recorded' <<< "$out" || fail "git: receipt seed was not recorded: $out"
+    out=$(git push origin main 2>&1) || fail "git: push blocked despite green gate: $out"
+    grep -q 'exact-state receipt accepted' <<< "$out" || fail "git: push did not reuse its exact receipt: $out"
     git ls-remote --heads "$T/git-origin.git" | grep -q main || fail "git: green push produced no remote ref"
 ) || exit 1
 
@@ -102,26 +107,32 @@ mkdir -p "$T/jj-repo"
     jj git init --colocate >/dev/null 2>&1 || { printf 'vcs-hooks-test: jj unavailable — jj case skipped\n'; exit 0; }
     jj config set --repo user.name substrate >/dev/null 2>&1
     jj config set --repo user.email substrate@localhost >/dev/null 2>&1
+    jj metaedit --update-author @ >/dev/null 2>&1
     git remote add origin "$T/jj-origin.git"
     mkdir -p components
     printf '#!/usr/bin/env bash\nset -euo pipefail\nls "$@"\n' > components/x.sh
     chmod +x components/x.sh
     env -u CI "$KIT_ROOT/bin/substrate" init --profile shell >/dev/null 2>&1 || fail "jj: init failed"
-    jq '.report.max_age_days = 0' substrate.json > s.tmp && mv s.tmp substrate.json
     jj config get aliases.push >/dev/null 2>&1 || fail "jj: push alias not configured"
     out=$(env -u CI .substrate/gate.sh --update-baseline 2>&1) || fail "jj: baseline not green: $out"
     jj commit -m 'feat: seed' >/dev/null 2>&1
     jj bookmark create main -r @- >/dev/null 2>&1
 
     printf 'plain text\n' > orphan.xyz
+    jq '.push_gate = false' substrate.json > "$T/jj-push-gate-optout.json"
+    mv "$T/jj-push-gate-optout.json" substrate.json
     out=$(env -u CI jj push -b main 2>&1)
     rc=$?
     [ "$rc" -ne 0 ] || fail "jj: push not blocked by red gate"
     grep -q 'push blocked' <<< "$out" || fail "jj: block message missing: $out"
     git ls-remote --heads "$T/jj-origin.git" | grep -q main && fail "jj: ref reached remote despite red gate"
+    jj restore substrate.json >/dev/null 2>&1
 
     rm orphan.xyz
+    out=$(env -u CI .substrate/push-gate.sh 2>&1) || fail "jj: receipt seed failed: $out"
+    grep -q 'green receipt recorded' <<< "$out" || fail "jj: receipt seed was not recorded: $out"
     out=$(env -u CI jj push -b main 2>&1) || fail "jj: green push failed: $out"
+    grep -q 'exact-state receipt accepted' <<< "$out" || fail "jj: push did not reuse its exact receipt: $out"
     git ls-remote --heads "$T/jj-origin.git" | grep -q main || fail "jj: green push produced no remote ref"
 ) || exit 1
 

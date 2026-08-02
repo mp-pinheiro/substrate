@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # substrate — deterministic gates for agentic development, installable in any repo.
-# Commands: bootstrap, init, gate, baseline, doctor, update, selftest. See docs/contracts.md.
+# Commands: bootstrap, init, gate, checkpoint, baseline, doctor, update, selftest, audit, report.
 set -uo pipefail
 
-KIT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPT=$(readlink -f "${BASH_SOURCE[0]}") || { printf 'substrate: cannot resolve executable path\n' >&2; exit 2; }
+KIT_ROOT="$(cd "$(dirname "$SCRIPT")/.." && pwd)"
 
 info()    { printf '\033[0;34m[+]\033[0m %s\n' "$*"; }
 success() { printf '\033[0;32m[ok]\033[0m %s\n' "$*"; }
@@ -16,13 +17,15 @@ usage: substrate <command> [args]
 
   bootstrap [--profile a,b] [--force]       kickstart or synchronize the current repo
   init --profile a,b [--vcs auto|git|jj]   install the gate into a new repo
-  gate [--update-baseline|--accept-regression]
+  gate [--update-baseline|--tighten|--accept-regression] | gate --deep [--no-cache|--print-key]
   baseline [--update|--accept-regression]
+  checkpoint --message <message> --path <path>...  gate, tighten, commit locally
   doctor                                    config, langmap freshness, toolchain
   update [--apply] [--force]                inspect or re-vendor the engine only
+  maintenance flags: --checkpoint [--message <message>] [--accept-baseline] [--repo-only] [--json]
   selftest                                  sandboxed negative-test battery
   audit [plan.md ...]                       execute plan acceptance oracles
-  report                                    advisory maintenance queue (always exits 0)
+  report [--write|--refresh]                advisory maintenance queue (always exits 0)
 EOF
     exit 2
 }
@@ -40,6 +43,10 @@ profile_dir() {
 
 # shellcheck source=../core/install-lib.sh
 source "$KIT_ROOT/core/install-lib.sh"
+# shellcheck source=../core/doctor.sh
+source "$KIT_ROOT/core/doctor.sh"
+# shellcheck source=../core/maintenance.sh
+source "$KIT_ROOT/core/maintenance.sh"
 
 
 build_langmap() {
@@ -70,7 +77,14 @@ vendor_core() {
        "$KIT_ROOT"/core/check-comments.sh "$KIT_ROOT"/core/comment-ratchet.sh \
        "$KIT_ROOT"/core/selftest.sh "$KIT_ROOT"/core/audit.sh \
        "$KIT_ROOT"/core/report.sh "$KIT_ROOT"/core/gated-push.sh \
-       "$KIT_ROOT"/core/install-jj.sh "$staging/" || die "vendor copy failed: core scripts"
+       "$KIT_ROOT"/core/push-gate.sh "$KIT_ROOT"/core/checkpoint.sh \
+       "$KIT_ROOT"/core/maintenance.sh "$KIT_ROOT"/core/maintenance-cli.sh \
+       "$KIT_ROOT"/core/maintenance-lib.sh "$KIT_ROOT"/core/maintenance-receipt.sh \
+       "$KIT_ROOT"/core/maintenance-sync.sh "$KIT_ROOT"/core/maintenance-transaction.sh \
+       "$KIT_ROOT"/core/receipt-lib.sh \
+       "$KIT_ROOT"/core/gitleaks-lib.sh "$KIT_ROOT"/core/gitleaks-deep.sh \
+       "$KIT_ROOT"/core/install-gitleaks.sh "$KIT_ROOT"/core/install-jj.sh "$staging/" \
+       || die "vendor copy failed: core scripts"
     cp "$KIT_ROOT"/core/hooks/*.sh "$staging/hooks/" || die "vendor copy failed: hooks"
     cp "$KIT_ROOT"/core/checks.d/*.sh "$staging/checks.d/" || die "vendor copy failed: core checks"
     cp "$KIT_ROOT"/VERSION "$staging/VERSION" || die "vendor copy failed: VERSION"
@@ -106,7 +120,34 @@ vendor_core() {
 
 
 
-cmd_init() {
+install_repo_scaffold() {
+    local force="$1"
+    shift
+    local profiles=("$@") rc=0
+    vendor_core "${profiles[@]}"
+    install_templates "${profiles[@]}" || rc=1
+    install_ci "$force" "${profiles[@]}" || rc=1
+    install_hooks_config || rc=1
+    migrate_repo_omp_extension || rc=1
+    install_lsp_config "${profiles[@]}" || rc=1
+    install_harness_assets || rc=1
+    install_recipe || rc=1
+    install_jj_workflow_doc || rc=1
+    return "$rc"
+}
+
+sync_repo_runtime() {
+    local rc=0
+    install_vcs_hooks || rc=1
+    wire_jj_runtime || rc=1
+    return "$rc"
+}
+
+sync_user_harness() {
+    install_user_harness
+}
+
+cmd_init_apply() {
     local profiles_csv="" force=0
     while [ $# -gt 0 ]; do
         case "$1" in
@@ -155,17 +196,17 @@ cmd_init() {
         success "substrate.json seeded — review the unscanned ledger"
     fi
 
-    vendor_core "${profiles[@]}"
+    if ! install_repo_scaffold "$force" "${profiles[@]}"; then
+        warn "repository scaffold INCOMPLETE — fix the warnings above and rerun substrate bootstrap"
+        exit 1
+    fi
+    if [ "${SUBSTRATE_MAINTENANCE_RENDER:-}" = 1 ]; then
+        success "repository scaffold candidate rendered"
+        return 0
+    fi
     local init_rc=0
-    install_templates "${profiles[@]}" || init_rc=1
-    install_ci "$force" "${profiles[@]}" || init_rc=1
-    install_hooks_config || init_rc=1
-    install_user_harness || init_rc=1
-    install_vcs_hooks || init_rc=1
-    install_lsp_config "${profiles[@]}" || init_rc=1
-    install_harness_assets || init_rc=1
-    install_recipe || init_rc=1
-    wire_jj || init_rc=1
+    sync_repo_runtime || init_rc=1
+    sync_user_harness || init_rc=1
 
     if [ "$init_rc" -ne 0 ]; then
         warn "bootstrap INCOMPLETE — fix the warnings above and rerun substrate bootstrap"
@@ -186,14 +227,14 @@ next steps (in order):
 EOF
 }
 
-cmd_bootstrap() {
+cmd_bootstrap_apply() {
     local arg has_profile=0 profiles_csv
     repo_path_safe substrate.json "substrate configuration" || die "unsafe substrate.json destination"
     for arg in "$@"; do
         [ "$arg" = "--profile" ] && has_profile=1
     done
     if [ "$has_profile" -eq 1 ]; then
-        cmd_init "$@"
+        cmd_init_apply "$@"
         return
     fi
     [ -f substrate.json ] \
@@ -201,10 +242,10 @@ cmd_bootstrap() {
     jq -e '(.profiles | type == "array") and (.profiles | length > 0)' substrate.json >/dev/null 2>&1 \
         || die "substrate.json is corrupt or has no profiles"
     profiles_csv=$(jq -r '.profiles | join(",")' substrate.json)
-    cmd_init --profile "$profiles_csv" "$@"
+    cmd_init_apply --profile "$profiles_csv" "$@"
 }
 
-cmd_update() {
+cmd_update_direct() {
     local apply=0 force=0 arg
     for arg in "$@"; do
         case "$arg" in
@@ -238,151 +279,69 @@ cmd_update() {
     fi
 
     vendor_core "${profiles[@]}"
-    if [ -f .omp/extensions/substrate-quality.ts ]; then
-        repo_path_safe .omp/extensions/substrate-quality.ts "omp extension" \
-            || die "unsafe omp extension destination"
-        cp "$KIT_ROOT/core/omp/substrate-quality.ts" .omp/extensions/substrate-quality.ts \
-            || die "failed to refresh installed omp extension"
-        info "refreshed .omp/extensions/substrate-quality.ts"
+    migrate_repo_omp_extension \
+        || die "repo-local omp extension migration failed — resolve the warning and rerun"
+    if [ "${SUBSTRATE_MAINTENANCE_RENDER:-}" != 1 ]; then
+        sync_user_harness \
+            || die "user-level harness refresh failed — rerun after fixing the warning"
     fi
-    install_user_harness \
-        || die "user-level harness refresh failed — rerun after fixing the warning"
     success "re-vendored .substrate at kit $kit_v (config, baseline, templates untouched)"
 }
 
-cmd_doctor() {
-    [ -d .substrate ] || die "no .substrate here — run: substrate init"
-    jq -e . substrate.json >/dev/null 2>&1 || die "substrate.json missing or corrupt"
-    success "substrate.json parses"
-
-    local profiles=()
-    mapfile -t profiles < <(jq -r '.profiles[]' substrate.json)
-    local fresh
-    fresh=$(mktemp)
-    build_langmap "$fresh" "${profiles[@]}"
-    if cmp -s "$fresh" .substrate/langmap.json; then
-        success "langmap fresh"
-    else
-        warn "langmap stale vs profiles — run: substrate update --apply"
-    fi
-    rm -f "$fresh"
-
-    local event matcher command hooks_missing=0
-    if [ -f .claude/settings.json ] && jq -e . .claude/settings.json >/dev/null 2>&1; then
-        while IFS=$'\t' read -r event matcher command; do
-            [ -n "$command" ] || continue
-            if ! jq -e --arg event "$event" --arg matcher "$matcher" --arg command "$command" '
-                [.hooks[$event][]?
-                    | select(.matcher == $matcher)
-                    | .hooks[]?
-                    | select((.type == "command") and (.command == $command))]
-                | length > 0
-            ' .claude/settings.json >/dev/null 2>&1; then
-                warn "$event hook registration missing or malformed: $command"
-                hooks_missing=1
-            fi
-        done < <(jq -r '
-            .hooks | to_entries[] | .key as $event | .value[]
-            | .matcher as $matcher | .hooks[]
-            | [$event, $matcher, .command] | @tsv
-        ' "$KIT_ROOT/core/claude-hooks.json")
-        [ "$hooks_missing" -eq 0 ] && success "claude hooks wired"
-    else
-        warn ".claude/settings.json absent or invalid — write-time hooks unarmed (run init)"
-    fi
-    if [ -f .omp/extensions/substrate-quality.ts ]; then
-        success "omp extension installed"
-    else
-        warn "omp extension absent — the omp harness runs ungated (run init)"
-    fi
-    if [ -f "$HOME/.omp/agent/extensions/substrate-quality.ts" ]; then
-        if cmp -s "$HOME/.omp/agent/extensions/substrate-quality.ts" "$KIT_ROOT/core/omp/substrate-quality.ts"; then
-            success "user-level omp extension current"
-        else
-            warn "user-level omp extension stale — run: substrate init"
-        fi
-    else
-        warn "no user-level omp extension — sessions rooted outside this repo are unguarded"
-    fi
-    info "harness hooks arm at session start — restart your agent after init/update"
-
-    local key lbin lhint p d
-    for p in "${profiles[@]}"; do
-        d=$(profile_dir "$p") || continue
-        while IFS=$'\t' read -r key lbin lhint; do
-            [ -n "$key" ] || continue
-            if command -v "$lbin" >/dev/null 2>&1; then
-                success "lsp $key: $lbin present"
-            else
-                info "lsp $key: $lbin absent — inline diagnostics unavailable; install: $lhint"
-            fi
-        done < <(jq -r '(.lsp // {}) | to_entries[] | "\(.key)\t\(.value.bin)\t\(.value.hint)"' "$d/profile.json")
-    done
-
-    local c cb
-    for c in checks.d/*.sh; do
-        [ -f "$c" ] || continue
-        cb=$(basename "$c")
-        if [ ! -f ".substrate/checks.d/$cb" ]; then
-            warn "repo check $cb not vendored — it does NOT run; run: substrate update --apply"
-        elif ! cmp -s "$c" ".substrate/checks.d/$cb"; then
-            warn "repo check $cb drifted from its vendored copy — run: substrate update --apply"
-        else
-            success "repo check $cb vendored and current"
-        fi
-    done
-
-    if [ -d .jj ]; then
-        if jj config get experimental-advance-branches.enabled-branches >/dev/null 2>&1; then
-            success "jj trunk auto-advance configured"
-        else
-            warn "jj repo without auto-advance — machine-local config; run: substrate init (wire_jj) per clone"
-        fi
-        if grep -q 'enforce-jj.sh' .claude/settings.json 2>/dev/null; then
-            success "jj workflow hooks wired"
-        else
-            warn "jj repo but enforce-jj not in .claude/settings.json — rerun init"
-        fi
-        [ -f docs/jj-workflow.md ] || warn "docs/jj-workflow.md missing — rerun init"
-    fi
-
-    local p d bin hint
-    for p in "${profiles[@]}"; do
-        d=$(profile_dir "$p") || { warn "profile $p not found"; continue; }
-        while IFS=$'\t' read -r bin hint; do
-            [ -n "$bin" ] || continue
-            if command -v "$bin" >/dev/null 2>&1; then
-                success "$p: $bin present"
-            else
-                warn "$p: $bin MISSING — $hint"
-            fi
-        done < <(jq -r '(.toolchain // [])[] | "\(.bin)\t\(.hint)"' "$d/profile.json")
-    done
-    for bin in jq ast-grep bunx; do
-        if command -v "$bin" >/dev/null 2>&1; then
-            success "core: $bin present"
-        else
-            warn "core: $bin missing (ast-grep falls back to bunx; bunx needs bun)"
-        fi
-    done
-    local pkg
-    for bin in ast-grep jscpd; do
-        case "$bin" in
-            ast-grep) pkg="@ast-grep/cli" ;;
-            *) pkg="$bin" ;;
-        esac
-        if command -v "$bin" >/dev/null 2>&1; then
-            success "$bin: local binary (offline-safe)"
-        else
-            warn "$bin: bunx fallback — gate fetches from npm on a cold cache (breaks offline); install with: bun install -g $pkg"
-        fi
-    done
-    info "kit $(cat "$KIT_ROOT/VERSION"), vendored $(cat .substrate/VERSION 2>/dev/null || echo none)"
+cmd_init() {
+    maintenance_run init "$@"
 }
+
+cmd_bootstrap() {
+    maintenance_run bootstrap "$@"
+}
+
+cmd_update() {
+    local arg apply=0
+    for arg in "$@"; do
+        [ "$arg" != --apply ] || apply=1
+    done
+    if [ "$apply" -eq 1 ]; then
+        maintenance_run update "$@"
+    else
+        cmd_update_direct "$@"
+    fi
+}
+
+cmd_gate() {
+    [ -x .substrate/gate.sh ] || die "no .substrate here — run: substrate init"
+    if [ "${1:-}" = --deep ]; then
+        shift
+        [ "$#" -le 1 ] || usage
+        case "${1:-}" in
+            ""|--no-cache|--print-key) ;;
+            *) usage ;;
+        esac
+        [ -x .substrate/gitleaks-deep.sh ] || die "deep scan runtime missing — run: substrate update --apply"
+        .substrate/gate.sh || return
+        exec .substrate/gitleaks-deep.sh "$@"
+    fi
+    exec .substrate/gate.sh "$@"
+}
+
+if [ "${1:-}" = __maintenance-render ]; then
+    shift
+    operation="${1:-}"
+    shift || true
+    case "$operation" in
+        init|bootstrap) cmd_init_apply "$@" ;;
+        update) cmd_update_direct "$@" ;;
+        *) exit 2 ;;
+    esac
+    exit
+fi
+
 case "${1:-}" in
+
     bootstrap) shift; cmd_bootstrap "$@" ;;
     init)     shift; cmd_init "$@" ;;
-    gate)     shift; [ -x .substrate/gate.sh ] || die "no .substrate here — run: substrate init"; exec .substrate/gate.sh "$@" ;;
+    gate)     shift; cmd_gate "$@" ;;
+    checkpoint) shift; [ -x .substrate/checkpoint.sh ] || die "no checkpoint runtime here — run: substrate update --apply"; exec .substrate/checkpoint.sh "$@" ;;
     baseline)
         shift
         flag="${1:---update}"

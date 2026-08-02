@@ -66,17 +66,21 @@ Messages **must be [Conventional Commits](https://www.conventionalcommits.org)**
 `describe` / `squash` messages that don't match.
 
 Use path-scoped `jj commit <files> -m "…"` to split unrelated changes sitting together in `@`.
+
+Those commands are for a human shell. OMP and Claude agents finish owned work through `substrate checkpoint`; their enforcement blocks a direct `jj commit` and lets the checkpoint gate, tighten, and commit the exact owned paths. Kit maintenance uses the same boundary: `substrate bootstrap --checkpoint` and `substrate update --apply --checkpoint` create their own path-scoped local commits while leaving unrelated `@` changes in place. Neither path pushes.
+
 When work is ready to leave your machine:
 
 ```
-jj push                           # gated: runs .substrate/gate.sh, then pushes main
-jj git push                       # raw push — no gate; prefer jj push
+jj push                           # guarded: exact receipt or gate, then push main
+jj git push                       # low-level transport; guarded only inside an agent harness
 ```
 
-`jj push` is a substrate-installed alias (`substrate init` wires it per clone): it runs the
-vendored gate and only delegates to `jj git push` when green. jj itself runs no hooks
-(jj-vcs/jj#403), so bare `jj git push` stays ungated by construction — the agent-harness
-push gate and this alias are the interception points.
+`jj push` is a substrate-installed alias (`substrate init` wires it per clone): it calls the
+receipt-aware push guard and delegates to `jj git push` only when green. OMP and Claude
+intercept a direct agent-issued `jj git push` with the same guard. jj itself exposes no native
+push hook (jj-vcs/jj#403), so a direct command from an unsupervised shell is outside that
+interception; use `jj push`.
 
 If a push ever says **"Nothing changed"**, `main` didn't move — advance it by hand with
 `jj tug` (= `jj bookmark advance --to @-`) and re-push. That should only happen for feature

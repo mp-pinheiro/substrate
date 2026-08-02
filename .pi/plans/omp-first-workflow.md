@@ -1,18 +1,19 @@
 # Plan: OMP-first Substrate workflow
-state: active
+state: committed
+issue: https://github.com/mp-pinheiro/substrate/issues/4
 
 ## Goal
 Make a mutating OMP task mechanically converge through edit feedback, verification, a green local gate, monotonic baseline tightening, and a local jj checkpoint without the user asking for any step; keep push explicit, full-history secret scanning off the workstation hot path, maintenance advisory, and every action visibly attributable to the exact Substrate runtime that executed it. The motivating dotfiles scan took 29.88 s at 570% CPU for full history versus about 5.3 s on one core for a pending jj range that caught both the working-copy secret and an add-then-remove commit.
 
 ## Files in scope
-- `bin/substrate`, `core/install-lib.sh`, `core/install-assets.sh` — symlink-safe CLI root, checkpoint/deep/status commands, managed installation and migration.
-- `core/omp/substrate-quality.ts`, `substrate-profiles/kit-ts/types/pi-surface.d.ts` — one authoritative OMP extension, lifecycle guard, checkpoint tool, ownership ledger, runtime health.
+- `bin/substrate`, `core/{install-lib,install-assets,user-harness,doctor}.sh` — symlink-safe CLI root, checkpoint/deep/status commands, managed installation and migration.
+- `core/omp/substrate-quality.ts`, `core/omp/substrate-quality/*.ts`, `substrate-profiles/kit-ts/types/pi-surface.d.ts` — one authoritative OMP extension, lifecycle guard, checkpoint tool, ownership ledger, runtime health.
 - `core/checkpoint.sh` (new), `core/gate.sh`, `core/gate-lib.sh` — shared checkpoint transaction, local/deep modes, exact-state receipt, atomic tightening.
-- `core/hooks/changed-files-scan.sh`, `core/hooks/protect-paths.sh` — Bash-proof governance protection and cheap edit feedback.
+- `core/hooks/{changed-files-scan,protect-paths,protect-command,agent-lifecycle}.sh` — Bash-proof governance protection, ownership tracking, and cheap edit feedback.
 - `core/checks.d/50-gitleaks.sh`, `core/ci/github-gate.yml` — pending-only local scan and one CI-owned full-history scan.
 - `core/report.sh`, `core/checks.d/55-report-freshness.sh`, `core/ci/github-report.yml` — non-blocking automatic local maintenance and scheduled issue.
 - `core/gated-push.sh`, `core/hooks/gate-before-push.sh`, `core/claude-hooks*.json`, `core/substrate-launch.sh` — receipt-aware push and Claude parity.
-- `test/agent-workflow-test.sh` (new), `test/gitleaks-scope-test.sh` (new), `test/install-path-test.sh` (new), `test/{bootstrap,user-harness,vcs-hooks,report-freshness,report-e2e,parity}-test.sh` — end-to-end firing oracles.
+- `test/{bootstrap,maintenance,user-harness,checkpoint,gitleaks-scope,gitleaks-deep,baseline,receipt,vcs-hooks,report-freshness,report-e2e,parity}-test.sh` — end-to-end firing oracles.
 - `README.md`, `docs/contracts.md`, `docs/jj-workflow.md`, `guides/daily-workflow.md`, `guides/working-with-the-gate.md` — installed and daily workflow contracts.
 
 ## Contracts
@@ -25,7 +26,7 @@ Make a mutating OMP task mechanically converge through edit feedback, verificati
 - Existing baselines tighten automatically only after a green run, component-wise, through a same-directory atomic replace. Initial debt adoption and every regression acceptance remain explicit and visible.
 - A same-session gate receipt is reusable only for the exact post-checkpoint tree and gate-input fingerprint; any file, ref, config, baseline, engine, or invoked-tool change invalidates it.
 - `substrate-report.md` remains ignored advisory state, refreshes automatically when due, and never turns a deterministic code gate red; CI retains the durable scheduled issue.
-- The user-scoped OMP extension is authoritative; managed repo-local legacy copies migrate away. Doctor and `/substrate status` report the actual loaded path, content hash, engine version, repo root, last scan, checkpoint, and receipt.
+- The user-scoped OMP extension is authoritative; managed repo-local legacy copies migrate away. Doctor and `/substrate` report the actual loaded path, aggregate source hash, engine version, repo root, last scan, checkpoint, and receipt.
 - OMP-first is not OMP-only: Claude stop hooks, Git hooks, the jj push alias, and CI consume the same checkpoint/gate contract. Push is always gated and always user-initiated.
 
 ## Pattern to copy
@@ -38,14 +39,15 @@ Make a mutating OMP task mechanically converge through edit feedback, verificati
 - No rewrite of `.pi/plans/completion.md`; it remains frozen historical evidence.
 
 ## Acceptance
-- [ ] installed CLI resolves its support root and doctor reports the actually loaded OMP path and expected content hash :: test/install-path-test.sh && test/user-harness-test.sh
-- [ ] successful mutating tasks gate, tighten, checkpoint, and stop cleanly while red or forgotten checkpoints re-enter work :: test/agent-workflow-test.sh
-- [ ] dirty overlap, concurrent drift, direct jj commit, and Bash governance tampering fail without absorbing user work :: test/agent-workflow-test.sh
-- [ ] pending Gitleaks handles added, modified, renamed, deleted, working-copy, and add-then-remove secrets in Git and jj with one local invocation :: test/gitleaks-scope-test.sh
-- [ ] deep-scan ownership and cache invalidation preserve full-history coverage without duplicate CI scans :: test/gitleaks-scope-test.sh
-- [ ] automatic tightening is atomic and monotonic while initial debt and regressions remain explicit :: test/vcs-hooks-test.sh
-- [ ] report maintenance refreshes automatically and never blocks the code gate :: test/report-freshness-test.sh && test/report-e2e.sh
-- [ ] push stays explicit, rejects stale receipts, and remains gated outside OMP :: test/vcs-hooks-test.sh
-- [ ] Claude and OMP lifecycle semantics remain mechanically equivalent :: test/parity-test.sh
-- [ ] negative battery green :: bin/substrate selftest
-- [ ] gate green :: substrate gate
+- [x] installed CLI resolves its support root and doctor reports the actually loaded OMP path and expected content hash :: test/bootstrap-test.sh && test/user-harness-test.sh
+- [x] successful mutating tasks gate, tighten, checkpoint, and stop cleanly while red or forgotten checkpoints re-enter work :: test/checkpoint-test.sh && test/parity-test.sh
+- [x] dirty overlap, concurrent drift, direct jj commit, and Bash governance tampering fail without absorbing user work :: test/checkpoint-test.sh && test/user-harness-test.sh
+- [x] pending Gitleaks handles added, modified, renamed, deleted, working-copy, and add-then-remove secrets in Git and jj with one local invocation :: test/gitleaks-scope-test.sh
+- [x] deep-scan ownership and cache invalidation preserve full-history coverage without duplicate CI scans :: test/gitleaks-deep-test.sh
+- [x] automatic tightening is atomic and monotonic while initial debt and regressions remain explicit :: test/baseline-test.sh
+- [x] report maintenance refreshes automatically and never blocks the code gate :: test/report-freshness-test.sh && test/report-e2e.sh
+- [x] push stays explicit, rejects stale receipts, and remains gated outside OMP :: test/receipt-test.sh && test/vcs-hooks-test.sh
+- [x] Claude and OMP lifecycle semantics remain mechanically equivalent :: test/parity-test.sh
+- [x] negative battery green :: bin/substrate selftest
+- [x] repository maintenance isolates candidate gating, preserves unrelated work, checkpoints exact Git/jj paths, recovers interrupted apply/commit states, separates external sync, and never pushes :: test/maintenance-test.sh
+- [x] gate green :: substrate gate

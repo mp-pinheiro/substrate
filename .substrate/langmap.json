@@ -109,6 +109,14 @@
     "heredoc": true,
     "profile": "shell"
   },
+  ".zshenv": {
+    "mode": "line",
+    "markers": [
+      "#"
+    ],
+    "heredoc": true,
+    "profile": "shell"
+  },
   ".zprofile": {
     "mode": "line",
     "markers": [

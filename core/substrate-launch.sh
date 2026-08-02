@@ -2,10 +2,12 @@
 # User-level Claude hook dispatcher (~/.claude/hooks/): resolves the repo from
 # the tool's target path (else the session root), walks up to the vendored
 # hook, exits 0 where none exists — safe to register machine-globally.
-# Usage: substrate-launch.sh <hook-name>  (stdin payload passes through)
+# Usage: substrate-launch.sh <hook-name> [hook-args...]  (stdin payload passes through)
 set -uo pipefail
 
 hook="${1:-}"
+shift || true
+hook_args=("$@")
 [ -n "$hook" ] || exit 0
 case "$hook" in
     */* | .*) exit 0 ;;
@@ -39,9 +41,15 @@ project_hook_registered() {
     local settings="$1" name="$2" command
     command="bash \"\${CLAUDE_PROJECT_DIR:-.}/.substrate/hooks/$name\""
     jq -e --arg command "$command" '
-        [(.hooks.PreToolUse // [])[], (.hooks.PostToolUse // [])[]]
+        [
+            (.hooks.PreToolUse // [])[],
+            (.hooks.PostToolUse // [])[],
+            (.hooks.SessionStart // [])[],
+            (.hooks.Stop // [])[],
+            (.hooks.SessionEnd // [])[]
+        ]
         | any(.[] | .hooks[]?;
-            (.type == "command") and (.command == $command))
+            (.type == "command") and ((.command // "") | startswith($command)))
     ' "$settings" >/dev/null 2>&1
 }
 
@@ -72,7 +80,7 @@ while :; do
             && project_hook_registered "$dir/.claude/settings.json" "$hook"; then
             exit 0
         fi
-        exec bash "$dir/.substrate/hooks/$hook" <<< "$payload"
+        exec bash "$dir/.substrate/hooks/$hook" "${hook_args[@]}" <<< "$payload"
     fi
     [ "$dir" = "/" ] && exit 0
     dir="$(dirname "$dir")"

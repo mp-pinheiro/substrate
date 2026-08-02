@@ -1,0 +1,165 @@
+#!/usr/bin/env bash
+# Diagnostic command sourced by bin/substrate.
+
+cmd_doctor() {
+    [ -d .substrate ] || die "no .substrate here — run: substrate init"
+    jq -e . substrate.json >/dev/null 2>&1 || die "substrate.json missing or corrupt"
+    success "substrate.json parses"
+
+    local profiles=()
+    mapfile -t profiles < <(jq -r '.profiles[]' substrate.json)
+    local fresh
+    fresh=$(mktemp)
+    build_langmap "$fresh" "${profiles[@]}"
+    if cmp -s "$fresh" .substrate/langmap.json; then
+        success "langmap fresh"
+    else
+        warn "langmap stale vs profiles — run: substrate update --apply"
+    fi
+    rm -f "$fresh"
+
+    local event matcher command hooks_missing=0
+    if [ -f .claude/settings.json ] && jq -e . .claude/settings.json >/dev/null 2>&1; then
+        while IFS=$'\t' read -r event matcher command; do
+            [ -n "$command" ] || continue
+            if ! jq -e --arg event "$event" --arg matcher "$matcher" --arg command "$command" '
+                [.hooks[$event][]?
+                    | select(.matcher == $matcher)
+                    | .hooks[]?
+                    | select((.type == "command") and (.command == $command))]
+                | length > 0
+            ' .claude/settings.json >/dev/null 2>&1; then
+                warn "$event hook registration missing or malformed: $command"
+                hooks_missing=1
+            fi
+        done < <(jq -r '
+            .hooks | to_entries[] | .key as $event | .value[]
+            | .matcher as $matcher | .hooks[]
+            | [$event, $matcher, .command] | @tsv
+        ' "$KIT_ROOT/core/claude-hooks.json")
+        [ "$hooks_missing" -eq 0 ] && success "claude hooks wired"
+    else
+        warn ".claude/settings.json absent or invalid — write-time hooks unarmed (run init)"
+    fi
+    if [ -e .omp/extensions/substrate-quality.ts ]; then
+        local legacy_hash=""
+        if [ -f .omp/extensions/substrate-quality.ts ]; then
+            read -r legacy_hash _ < <(sha256sum .omp/extensions/substrate-quality.ts) || legacy_hash=unknown
+        else
+            legacy_hash=non-regular
+        fi
+        warn "repo-local omp extension can shadow the authoritative user copy (sha256 $legacy_hash) — run: substrate bootstrap"
+    else
+        success "repo-local omp extension absent (user-level runtime is authoritative)"
+    fi
+    local omp_dest="$HOME/.omp/agent/extensions/substrate-quality.ts"
+    local omp_module_root="$HOME/.omp/agent/extensions/substrate-quality" expected_hash=""
+    if [ -f "$omp_dest" ] && [ -f "$omp_module_root/runtime.ts" ] \
+        && [ -f "$omp_module_root/lifecycle.ts" ] && [ -f "$omp_module_root/identity.ts" ]; then
+        if cmp -s "$omp_dest" "$KIT_ROOT/core/omp/substrate-quality.ts" \
+            && cmp -s "$omp_module_root/runtime.ts" "$KIT_ROOT/core/omp/substrate-quality/runtime.ts" \
+            && cmp -s "$omp_module_root/lifecycle.ts" "$KIT_ROOT/core/omp/substrate-quality/lifecycle.ts" \
+            && cmp -s "$omp_module_root/identity.ts" "$KIT_ROOT/core/omp/substrate-quality/identity.ts"; then
+            read -r expected_hash _ < <(
+                cat "$KIT_ROOT/core/omp/substrate-quality.ts" \
+                    "$KIT_ROOT/core/omp/substrate-quality/runtime.ts" \
+                    "$KIT_ROOT/core/omp/substrate-quality/lifecycle.ts" \
+                    "$KIT_ROOT/core/omp/substrate-quality/identity.ts" |
+                    sha256sum
+            )
+            success "user-level omp extension current (sha256 ${expected_hash:0:12})"
+        else
+            warn "user-level omp extension stale — run: substrate bootstrap"
+        fi
+    else
+        warn "no user-level omp extension — OMP sessions run ungated"
+    fi
+    local runtime="$HOME/.omp/run/substrate-quality.json" runtime_hash="" runtime_extension=""
+    if [ -f "$runtime" ] && jq -e . "$runtime" >/dev/null 2>&1; then
+        runtime_hash=$(jq -r '.extensionHash // empty' "$runtime")
+        runtime_extension=$(jq -r '.extensionPath // empty' "$runtime")
+        if [ -n "$expected_hash" ] && [ "$runtime_hash" = "$expected_hash" ] \
+            && [ "$runtime_extension" = "$(realpath "$omp_dest")" ]; then
+            success "omp runtime loaded: $runtime_extension (sha256 ${runtime_hash:0:12})"
+        else
+            warn "omp runtime differs from the installed extension: ${runtime_extension:-unknown} (sha256 ${runtime_hash:-unknown}) — restart OMP"
+        fi
+    else
+        info "omp runtime not observed yet — start or restart OMP, then run /substrate"
+    fi
+    info "harness hooks arm at session start — restart your agent after bootstrap/update"
+
+    local key lbin lhint p d
+    for p in "${profiles[@]}"; do
+        d=$(profile_dir "$p") || continue
+        while IFS=$'\t' read -r key lbin lhint; do
+            [ -n "$key" ] || continue
+            if command -v "$lbin" >/dev/null 2>&1; then
+                success "lsp $key: $lbin present"
+            else
+                info "lsp $key: $lbin absent — inline diagnostics unavailable; install: $lhint"
+            fi
+        done < <(jq -r '(.lsp // {}) | to_entries[] | "\(.key)\t\(.value.bin)\t\(.value.hint)"' "$d/profile.json")
+    done
+
+    local c cb
+    for c in checks.d/*.sh; do
+        [ -f "$c" ] || continue
+        cb=$(basename "$c")
+        if [ ! -f ".substrate/checks.d/$cb" ]; then
+            warn "repo check $cb not vendored — it does NOT run; run: substrate update --apply"
+        elif ! cmp -s "$c" ".substrate/checks.d/$cb"; then
+            warn "repo check $cb drifted from its vendored copy — run: substrate update --apply"
+        else
+            success "repo check $cb vendored and current"
+        fi
+    done
+
+    if [ -d .jj ]; then
+        if jj config get experimental-advance-branches.enabled-branches >/dev/null 2>&1; then
+            success "jj trunk auto-advance configured"
+        else
+            warn "jj repo without auto-advance — machine-local config; run: substrate init (wire_jj) per clone"
+        fi
+        if grep -q 'enforce-jj.sh' .claude/settings.json 2>/dev/null; then
+            success "jj workflow hooks wired"
+        else
+            warn "jj repo but enforce-jj not in .claude/settings.json — rerun init"
+        fi
+        [ -f docs/jj-workflow.md ] || warn "docs/jj-workflow.md missing — rerun init"
+    fi
+
+    local p d bin hint
+    for p in "${profiles[@]}"; do
+        d=$(profile_dir "$p") || { warn "profile $p not found"; continue; }
+        while IFS=$'\t' read -r bin hint; do
+            [ -n "$bin" ] || continue
+            if command -v "$bin" >/dev/null 2>&1; then
+                success "$p: $bin present"
+            else
+                warn "$p: $bin MISSING — $hint"
+            fi
+        done < <(jq -r '(.toolchain // [])[] | "\(.bin)\t\(.hint)"' "$d/profile.json")
+    done
+    for bin in jq ast-grep bunx; do
+        if command -v "$bin" >/dev/null 2>&1; then
+            success "core: $bin present"
+        else
+            warn "core: $bin missing (ast-grep falls back to bunx; bunx needs bun)"
+        fi
+    done
+    local pkg
+    for bin in ast-grep jscpd; do
+        case "$bin" in
+            ast-grep) pkg="@ast-grep/cli" ;;
+            *) pkg="$bin" ;;
+        esac
+        if command -v "$bin" >/dev/null 2>&1; then
+            success "$bin: local binary (offline-safe)"
+        else
+            warn "$bin: bunx fallback — gate fetches from npm on a cold cache (breaks offline); install with: bun install -g $pkg"
+        fi
+    done
+    info "kit root $KIT_ROOT"
+    info "kit $(cat "$KIT_ROOT/VERSION"), vendored $(cat .substrate/VERSION 2>/dev/null || echo none)"
+}

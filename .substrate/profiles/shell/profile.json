@@ -5,6 +5,7 @@
     ".bash": { "mode": "ast", "ast_lang": "bash", "markers": ["#"] },
     ".zsh": { "mode": "line", "markers": ["#"], "heredoc": true },
     ".zshrc": { "mode": "line", "markers": ["#"], "heredoc": true },
+    ".zshenv": { "mode": "line", "markers": ["#"], "heredoc": true },
     ".zprofile": { "mode": "line", "markers": ["#"], "heredoc": true }
   },
   "shebang": [
@@ -23,6 +24,14 @@
   "slop_fixtures": ["fixtures/slop.sh", "fixtures/slop-noext"],
   "check_fixtures": [{ "file": "fixtures/bad-shellcheck.sh", "fails": "60-shellcheck.sh" }],
   "lsp": {
-    "bashls": { "bin": "bash-language-server", "hint": "bun install -g bash-language-server" }
+    "bashls": {
+      "bin": "bash-language-server",
+      "hint": "bun install -g bash-language-server",
+      "fileTypes": [
+        ".sh", ".bash", ".zsh",
+        ".profile", ".bashrc", ".bash_profile", ".bash_login", ".bash_logout", ".bash_aliases",
+        ".zshrc", ".zshenv", ".zprofile", ".zlogin", ".zlogout"
+      ]
+    }
   }
 }

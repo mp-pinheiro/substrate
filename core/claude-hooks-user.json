@@ -15,6 +15,10 @@
         "hooks": [
           {
             "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/substrate-launch.sh\" protect-command.sh"
+          },
+          {
+            "type": "command",
             "command": "bash \"$HOME/.claude/hooks/substrate-launch.sh\" enforce-jj.sh"
           },
           {
@@ -34,7 +38,44 @@
         "hooks": [
           {
             "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/substrate-launch.sh\" agent-lifecycle.sh observe"
+          },
+          {
+            "type": "command",
             "command": "bash \"$HOME/.claude/hooks/substrate-launch.sh\" changed-files-scan.sh"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/substrate-launch.sh\" agent-lifecycle.sh start"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/substrate-launch.sh\" agent-lifecycle.sh stop"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/hooks/substrate-launch.sh\" agent-lifecycle.sh end"
           }
         ]
       }

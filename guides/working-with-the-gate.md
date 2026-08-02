@@ -42,10 +42,10 @@ invalid JSON: config/foo.json
 Fix the file; jq/yq must parse every tracked data file.
 
 ```
-potential secrets in git history — run: gitleaks detect --no-banner
+potential secrets in pending Git/jj work
 [!] FAIL 50-gitleaks
 ```
-Rotate the secret first, then scrub history. Never just delete the file — the leak is in history.
+Remove the secret and rotate it if it was published or otherwise exposed. Local gates scan pending work; `substrate gate --deep` and CI scan reachable history.
 
 ```
 fixtures/bad-vet.go:9: ... (profile check output)
@@ -55,14 +55,16 @@ Profile checks (60–79) print tool-native findings, each line `file:line — pr
 
 ## Ratchets: improving and locking in
 
-Improvements print a hint instead of auto-tightening:
+A plain gate reports improvements without writing the baseline:
 
 ```
 [+] dup_pct: 0.26 improved on baseline 0.28 — run --update-baseline to lock it in
 ```
 
+Agent checkpoints and repository maintenance with `--checkpoint` lower existing ceilings automatically after a green run. Manual baseline changes remain explicit:
+
 ```sh
-substrate baseline --update              # refuses while any check fails
+substrate baseline --update              # establish debt or lock in a reviewed improvement
 substrate baseline --accept-regression   # deliberate loosening; prints the exact diff
 ```
 
