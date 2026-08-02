@@ -11,6 +11,8 @@ declare module "@oh-my-pi/pi-coding-agent" {
 		content: ToolContent[];
 	};
 	export type ToolCtx = { cwd: string };
+	export type BeforeAgentStartEvent = { systemPrompt: string[] };
+	export type BeforeAgentStartResult = { systemPrompt: string[] } | undefined;
 	export type HookResult =
 		| { block: boolean; reason: string }
 		| { content: ToolContent[] }
@@ -20,6 +22,13 @@ declare module "@oh-my-pi/pi-coding-agent" {
 		on(
 			event: "tool_call" | "tool_result",
 			fn: (event: ToolEvent, ctx: ToolCtx) => Promise<HookResult> | HookResult,
+		): void;
+		on(
+			event: "before_agent_start",
+			fn: (
+				event: BeforeAgentStartEvent,
+				ctx: ToolCtx,
+			) => Promise<BeforeAgentStartResult> | BeforeAgentStartResult,
 		): void;
 	};
 }

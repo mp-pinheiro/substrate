@@ -11,6 +11,13 @@ const HARD: Array<[RegExp, string]> = [
 	[/(^|\/)CLAUDE\.md$/, "governance doc — propose the edit to the user instead"],
 ];
 
+const SUBSTRATE_POLICY = [
+	"This repository is governed by Substrate's deterministic quality gate.",
+	"Treat every `[substrate — fix before proceeding]` report as blocking: resolve it before unrelated work.",
+	"Run `substrate gate` before declaring work complete and before commit or push.",
+	"Do not bypass checks, edit generated or protected assets, or relax the baseline unless the user explicitly requests that policy change.",
+].join("\n");
+
 // walk up for the vendored gate so subdirectory sessions resolve the repo
 function findGateRoot(cwd: string): string | null {
 	let dir = resolve(cwd);
@@ -94,7 +101,7 @@ function loadConfig(cwd: string): Config {
 }
 
 function toolPath(input: Record<string, unknown>): string {
-	return String(input.path ?? input.file_path ?? "");
+	return String(input.path ?? input.file_path ?? input.file ?? "");
 }
 function resolveThroughExistingParent(path: string): string {
 	let current = path;
@@ -119,6 +126,11 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 	if (g.__substrateQualityLoaded) return;
 	g.__substrateQualityLoaded = true;
 	pi.setLabel("Substrate gates");
+
+	pi.on("before_agent_start", async (event, ctx) => {
+		if (!findGateRoot(ctx.cwd) || event.systemPrompt.includes(SUBSTRATE_POLICY)) return;
+		return { systemPrompt: [...event.systemPrompt, SUBSTRATE_POLICY] };
+	});
 
 	// mirrors: protect-paths.sh
 	pi.on("tool_call", async (event, ctx) => {
@@ -237,7 +249,7 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 		};
 	});
 
-	// mirrors: changed-files-scan.sh — every tool not on this read-only list is scanned, so unknown tools stay covered
+	// mirrors: changed-files-scan.sh — only proven read-only tools/actions skip scanning, so unknown tools stay covered
 	const READ_ONLY_TOOLS: Record<string, true> = {
 		read: true,
 		grep: true,
@@ -246,10 +258,21 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 		hub: true,
 		ask: true,
 		web_search: true,
-		lsp: true,
+	};
+	const LSP_READ_ONLY_ACTIONS: Record<string, true> = {
+		diagnostics: true,
+		definition: true,
+		type_definition: true,
+		implementation: true,
+		references: true,
+		hover: true,
+		symbols: true,
+		status: true,
+		capabilities: true,
 	};
 	pi.on("tool_result", async (event, ctx) => {
 		if (READ_ONLY_TOOLS[event.toolName]) return;
+		if (event.toolName === "lsp" && LSP_READ_ONLY_ACTIONS[String(event.input.action ?? "")]) return;
 		const path = toolPath(event.input);
 		const root = findGateRoot(path ? dirname(resolve(ctx.cwd, path)) : ctx.cwd);
 		if (!root) return;

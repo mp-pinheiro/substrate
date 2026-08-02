@@ -34,6 +34,8 @@ Run `substrate bootstrap` again whenever the kit changes. Existing repositories 
 
 What lands in the repo: `.substrate/` (vendored, pinned core), `substrate.json` (profiles, reviewed exclusions, budgets, protected paths), `substrate-baseline.json` (grandfathered debt; only the gate writes it), Claude and omp hooks, `.omp/lsp.json` (seeded once from active profile declarations), managed agents and skills for both harnesses, managed CI workflows, and a `just gate` recipe. Agent and skill roots carrying `.substrate-managed.json` are fully kit-owned and converge exactly; unmarked same-name assets remain repo-owned.
 
+Agents and skills are optional helpers, not the enforcement layer. Omp enforcement comes from the automatically loaded `substrate-quality.ts` extension: it injects the gate policy into the main agent, blocks protected operations, scans mutating tool results (including LSP refactors), and runs the full gate before a push.
+
 ## Editor feedback
 
 Profiles may declare optional language servers for omp. `substrate bootstrap` seeds `.omp/lsp.json` from the active profiles only when the file does not exist; later runs preserve repository edits. `substrate doctor` reports whether each server binary is available and prints an installation hint when it is missing. Substrate does not install LSP binaries, and a missing server disables inline diagnostics without failing the gate.
