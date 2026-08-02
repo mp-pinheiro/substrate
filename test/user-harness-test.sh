@@ -40,7 +40,8 @@ cmp -s "$HOME/.claude/skills/review/SKILL.md" "$KIT_ROOT/skills/review/SKILL.md"
 [ -e "$HOME/.omp/profiles" ] && fail "HOME/.omp/profiles was created — installer crossed into profile stacks"
 
 # The user-level omp extension resolves each write target, not the session cwd.
-mkdir -p "$T/nowhere"
+mkdir -p "$T/nowhere" "$T/repo/components"
+printf '#!/usr/bin/env bash\nls\n# now we check the thing\nls\n' > "$T/repo/components/gapfill.sh"
 cat > "$T/omp-probe.ts" <<'TS'
 const handlers: Record<string, Array<(event: any, context: any) => Promise<any>>> = {};
 const pi = {
@@ -52,21 +53,61 @@ const pi = {
 const extension = await import(process.argv[2]);
 extension.default(pi);
 const protect = handlers.tool_call[0];
-const cwd = process.argv[3];
-const results = [];
-for (const path of process.argv.slice(4)) {
-	results.push(await protect({ toolName: "write", input: { path } }, { cwd }));
+const policy = handlers.before_agent_start[0];
+const scan = handlers.tool_result[0];
+const outsideCwd = process.argv[3];
+const repoCwd = process.argv[4];
+const scanFile = process.argv[5];
+const writes = [];
+for (const path of process.argv.slice(6)) {
+	writes.push(await protect({ toolName: "write", input: { path } }, { cwd: outsideCwd }));
 }
-console.log(JSON.stringify(results));
+const policyRepo = await policy({ systemPrompt: ["base"] }, { cwd: repoCwd });
+const policyOutside = await policy({ systemPrompt: ["base"] }, { cwd: outsideCwd });
+const lsp = await scan(
+	{
+		toolName: "lsp",
+		input: { action: "rename", file: scanFile },
+		content: [{ type: "text", text: "rename applied" }],
+		isError: false,
+	},
+	{ cwd: outsideCwd },
+);
+const lspRead = await scan(
+	{
+		toolName: "lsp",
+		input: { action: "references", file: scanFile },
+		content: [{ type: "text", text: "references found" }],
+		isError: false,
+	},
+	{ cwd: outsideCwd },
+);
+console.log(
+	JSON.stringify({
+		writes,
+		policy: { repo: policyRepo, outside: policyOutside ?? null },
+		lsp,
+		lspRead: lspRead ?? null,
+	}),
+);
 TS
 ln -s "$T/nowhere" "$T/repo/escaped-parent"
-omp_results=$(bun "$T/omp-probe.ts" "$KIT_ROOT/core/omp/substrate-quality.ts" "$T/nowhere" \
-    "$T/repo/missing/deep/substrate-baseline.json" \
-    "$T/repo/escaped-parent/missing/file.sh")
-jq -e '.[0].block == true and (.[0].reason | contains("baseline"))' <<< "$omp_results" >/dev/null \
-    || fail "user-level omp extension missed a cross-repo protected write: $omp_results"
-jq -e '.[1].block == true and (.[1].reason | contains("outside the repo"))' <<< "$omp_results" >/dev/null \
-    || fail "user-level omp extension missed a missing-parent symlink escape: $omp_results"
+omp_results=$(bun "$T/omp-probe.ts" "$KIT_ROOT/core/omp/substrate-quality.ts" \
+	"$T/nowhere" "$T/repo" "$T/repo/components/gapfill.sh" \
+	"$T/repo/missing/deep/substrate-baseline.json" \
+	"$T/repo/escaped-parent/missing/file.sh")
+jq -e '.writes[0].block == true and (.writes[0].reason | contains("baseline"))' <<< "$omp_results" >/dev/null \
+	|| fail "user-level omp extension missed a cross-repo protected write: $omp_results"
+jq -e '.writes[1].block == true and (.writes[1].reason | contains("outside the repo"))' <<< "$omp_results" >/dev/null \
+	|| fail "user-level omp extension missed a missing-parent symlink escape: $omp_results"
+jq -e '.policy.repo.systemPrompt[-1] | contains("governed by Substrate")' <<< "$omp_results" >/dev/null \
+	|| fail "user-level omp extension did not inject repository policy: $omp_results"
+jq -e '.policy.outside == null' <<< "$omp_results" >/dev/null \
+	|| fail "user-level omp extension injected policy outside a substrate repo: $omp_results"
+jq -e '.lsp.content[-1].text | contains("components/gapfill.sh")' <<< "$omp_results" >/dev/null \
+	|| fail "user-level omp extension skipped a mutating cross-repo lsp result: $omp_results"
+jq -e '.lspRead == null' <<< "$omp_results" >/dev/null \
+	|| fail "user-level omp extension scanned a read-only lsp result: $omp_results"
 
 count1=$(jq '[(.hooks.PreToolUse // [])[].hooks[].command, (.hooks.PostToolUse // [])[].hooks[].command] | map(select(test("substrate-launch"))) | length' "$HOME/.claude/settings.json")
 [ "$count1" -ge 1 ] || fail "no substrate-launch registrations in user settings"
@@ -150,4 +191,4 @@ fi
 [ -L "$HOME2/.claude/settings.json" ] || fail "user settings symlink was replaced"
 [ "$settings_before" = "$(sha256sum "$T/external-settings.json")" ] \
     || fail "user settings symlink target changed"
-printf 'user-harness-test: install, idempotency, no-op, cross-repo, walk, stand-down, gap-fill green\n'
+printf 'user-harness-test: install, policy, lsp scan, idempotency, no-op, cross-repo, walk, stand-down, gap-fill green\n'
