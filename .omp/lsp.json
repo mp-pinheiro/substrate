@@ -1,6 +1,11 @@
 {
   "servers": {
     "bashls": {
+      "fileTypes": [
+        ".sh", ".bash", ".zsh",
+        ".profile", ".bashrc", ".bash_profile", ".bash_login", ".bash_logout", ".bash_aliases",
+        ".zshrc", ".zshenv", ".zprofile", ".zlogin", ".zlogout"
+      ],
       "disabled": false
     },
     "ruff": {
