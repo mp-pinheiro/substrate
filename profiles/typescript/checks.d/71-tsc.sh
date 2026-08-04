@@ -10,6 +10,10 @@ fi
 
 override=$(cfg_check .command)
 if [ -n "$override" ]; then
+    if ! find . -maxdepth 3 -type d -name node_modules 2>/dev/null | grep -q .; then
+        warn "node_modules absent — tsc override skipped locally, CI runs it"
+        exit 0
+    fi
     errf=$(mktemp)
     out=$(eval "$override" 2>"$errf")
     rc=$?
@@ -20,7 +24,11 @@ if [ -n "$override" ]; then
     if grep -q 'error TS' <<< "$out"; then
         exit 1
     fi
-    die_infra "configured tsc command failed (rc=$rc) — ${err:-no stderr output}"
+    if [ -n "${CI:-}" ]; then
+        die_infra "configured tsc command failed (rc=$rc) — ${err:-no stderr output}"
+    fi
+    warn "configured tsc command failed (rc=$rc) — check skipped locally, CI runs it — ${err:-no stderr output}"
+    exit 0
 fi
 
 require_bin_ci bun "profile toolchain — https://bun.sh" || exit 0
