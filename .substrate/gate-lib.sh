@@ -151,3 +151,37 @@ require_bin_ci() {
     warn "$1 not installed — check skipped locally, CI runs it ($2)"
     return 1
 }
+
+resolve_sg() {
+    if have ast-grep; then
+        SG=(ast-grep)
+    elif have bunx; then
+        SG=(bunx --yes @ast-grep/cli@0.45.0)
+    elif [ -n "${CI:-}" ]; then
+        die_infra "ast-grep unavailable in CI (install @ast-grep/cli or bun) — cannot pass blind"
+    else
+        warn "ast-grep unavailable — check skipped locally, CI runs it"
+        return 1
+    fi
+}
+
+sg_scan() {
+    local lang="$1" pattern="$2"; shift 2
+    SG=()
+    resolve_sg || exit 0
+    local errf out rc
+    errf=$(mktemp)
+    out=$("${SG[@]}" run --lang "$lang" --pattern "$pattern" --json=stream "$@" 2>"$errf")
+    rc=$?
+    if [ "$rc" -eq 1 ] && [ -z "$out" ]; then
+        rm -f "$errf"
+        return 1
+    fi
+    if [ "$rc" -ne 0 ]; then
+        cat "$errf" >&2
+        rm -f "$errf"
+        die_infra "ast-grep failed on pattern '$pattern' (rc=$rc) — cannot pass blind"
+    fi
+    rm -f "$errf"
+    printf '%s' "$out"
+}
