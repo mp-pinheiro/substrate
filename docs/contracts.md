@@ -73,13 +73,17 @@ Executable bash. Environment: `REPO_ROOT` (cwd), `SUBSTRATE_DIR`, `CONFIG`, `LAN
 - exit 1 — findings; the report is stdout, every line actionable (`file:line — problem — fix`)
 - exit >=2 — infrastructure failure; the runner fails the gate with "cannot pass blind"
 
-Ratcheted measurements: `metric <name> <value>` (lower is better — the only direction in v1). The RUNNER compares against `baseline.metrics[name]`: regression fails, improvement prints a lock-in hint, `--update-baseline` (refused while red) writes emitted values. Per-file ratchets are just namespaced metrics: `metric "comments:src/x.go" 2`.
+Ratcheted measurements: `metric <name> <value>` (lower is better) and `metric_hi <name> <value>` (higher is better — coverage, type-coverage). The RUNNER compares against `baseline.metrics[name]` using the direction in `baseline.direction[name]` (absent = lower): regression fails, improvement prints a lock-in hint, `--update-baseline` (refused while red) writes emitted values, `--tighten` (used by every checkpoint) lowers/raises existing ceilings component-wise and garbage-collects orphaned keys. Per-file ratchets are just namespaced metrics: `metric "comments:src/x.go" 2`. `--accept-regression` accepts specific keys (`--accept-regression=key1,key2`); unlisted keys keep their ceiling.
 
-Ordering: core checks 05–59, profile checks 60–79, repo-local checks 80–99. `checks.disabled` in substrate.json removes by filename; disabling is diff-visible.
+Per-check configuration: `cfg_check .key` (string) or `cfg_check_json .key` (JSON) reads `substrate.json`'s `checks.config[<current-check-name>]`. The gate runner exports `SUBSTRATE_CHECK_NAME` before each check. Checks read config at runtime and fall back to defaults when absent — the check script stays vendored and byte-frozen; customization lives in config.
+
+Per-path profile scoping: `substrate.json`'s `scopes` map restricts which profiles are active per path prefix. A file under `app/` is only claimed if its profile is in `scopes["app/"].profiles`. Files outside all scopes are unaffected. Scope-excluded files are not flagged by `05-unclaimed-source.sh`.
+
+Ordering: core checks 05–59, profile checks 60–79, repo-local checks 80–99. `checks.disabled` in substrate.json removes by filename; `checks.config` tunes execution per check; `scopes` restricts profile claims per path. All are diff-visible.
 
 ## Baseline (`substrate-baseline.json`, repo root, tracked)
 
-`{"metrics": {"dup_pct": 0.28, "comments:src/x.go": 2}}`. The checkpoint transaction lowers existing ceilings component-wise only after a green run, stages the new JSON beside the original, and atomically replaces it before committing. Initial debt adoption remains explicit; `--accept-regression` is the only loosening path and prints the exact diff. When the file exists, an absent metric key means zero tolerance.
+`{"metrics": {"dup_pct": 0.28, "comments:src/x.go": 2}, "direction": {"coverage": "hi"}}`. The checkpoint transaction lowers/raises existing ceilings component-wise only after a green run (and drops orphaned keys), stages the new JSON beside the original, and atomically replaces it before committing. Initial debt adoption remains explicit; `--accept-regression[=key1,key2]` is the only loosening path and prints the exact diff. When the file exists, an absent metric key means zero tolerance.
 
 ## Hook contract
 
@@ -107,7 +111,7 @@ Repository runtime wiring runs after the repository commit. User-scoped harness 
 - Maintenance flags: `--checkpoint` creates the local commit; `--message <message>` overrides its Conventional Commit message; `--accept-baseline` explicitly adopts initial debt; `--repo-only` skips user-harness synchronization; `--json` prints the receipt. Symlink escapes, non-regular destinations, manifest escapes, ownership conflicts, and unchained Git hooks fail the transaction.
 - `gate [...]` — run `.substrate/gate.sh`; `gate --deep [--no-cache]` additionally runs the cached full-history secret scan.
 - `checkpoint --message <message> [--session <id> | --path <path> ...]` — verify ownership, run the gate, tighten the baseline, commit locally, rerun the gate, and record an exact-state receipt. It never pushes.
-- `baseline [--update|--accept-regression]` — explicitly establish initial debt or accept a reviewed regression.
+- `baseline [--update|--accept-regression[=key1,key2]]` — explicitly establish initial debt or accept a reviewed regression (optionally limited to specific metric keys).
 - `doctor` — config validity, langmap freshness (regenerate + compare), installed/loaded harness identity, and toolchain presence per active profile with hints.
 - `update [--apply] [--force] [maintenance flags]` — without `--apply`, inspect vendored engine drift. With `--apply`, run the repository transaction for the engine, then refresh repository runtime and the user harness.
 - `selftest` — sandbox copy of the repo (inventory files only), then: steady must be green (or baseline-pending warns only); per-profile slop fixture injected must go red AND be named in the report; detector tool shimmed to fail must go red with "cannot pass blind"; corrupt baseline must hard-exit. Any deviation = selftest fails.
