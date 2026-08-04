@@ -113,7 +113,7 @@ profile_files_ext() {
 
 # langmap accessors; empty output = unclaimed. Extension first, then shebang
 # fallback so extensionless executables (bin/*, hooks) stay claimed source.
-lang_entry() {
+lang_entry_unscoped() {
     local f="$1" ext=".${1##*.}" e first
     e=$(jq -c --arg e "$ext" '.[$e] // empty' "$LANGMAP")
     if [ -z "$e" ] && [ -f "$f" ]; then
@@ -132,6 +132,32 @@ lang_entry() {
     fi
     [ -n "$e" ] && printf '%s\n' "$e"
     return 0
+}
+
+lang_entry() {
+    local e
+    e=$(lang_entry_unscoped "$1")
+    if [ -n "$e" ] && ! scope_allows "$1" "$(jq -r '.profile' <<< "$e")"; then
+        return 0
+    fi
+    [ -n "$e" ] && printf '%s\n' "$e"
+    return 0
+}
+
+scope_allows() {
+    local f="$1" profile="$2"
+    jq -e '.scopes // empty | length > 0' "$CONFIG" >/dev/null 2>&1 || return 0
+    local scope_path profiles_json restricted=0
+    while IFS=$'\t' read -r scope_path profiles_json; do
+        [ -n "$scope_path" ] || continue
+        case "$f" in
+            "$scope_path"*)
+                restricted=1
+                jq -e --arg p "$profile" 'index($p) != null' <<< "$profiles_json" >/dev/null 2>&1 && return 0
+                ;;
+        esac
+    done < <(jq -r '.scopes | to_entries[] | "\(.key)\t\(.value.profiles)"' "$CONFIG" 2>/dev/null)
+    [ "$restricted" -eq 0 ]
 }
 
 claimed() {

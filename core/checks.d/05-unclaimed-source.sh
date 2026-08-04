@@ -10,6 +10,7 @@ mapfile -t UNSCANNED < <(cfg_json '.unscanned // []' | jq -r '.[]')
 rc=0
 while IFS= read -r f; do
     claimed "$f" && continue
+    [ -n "$(lang_entry_unscoped "$f")" ] && continue
     skip=0
     for g in ${UNSCANNED[@]+"${UNSCANNED[@]}"}; do
         # shellcheck disable=SC2254 # globs are the contract here
