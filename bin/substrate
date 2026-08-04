@@ -351,6 +351,7 @@ case "${1:-}" in
         case "$flag" in
             --update) exec .substrate/gate.sh --update-baseline ;;
             --accept-regression) exec .substrate/gate.sh --accept-regression ;;
+            --accept-regression=*) exec .substrate/gate.sh "$flag" ;;
             *) usage ;;
         esac ;;
     doctor)   shift; cmd_doctor "$@" ;;

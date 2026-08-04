@@ -17,12 +17,13 @@
     { "src": "tsconfig.json", "dest": "tsconfig.json" },
     { "src": "dependency-cruiser.cjs", "dest": ".dependency-cruiser.cjs" }
   ],
-  "checks": ["71-tsc.sh", "72-depcruise.sh", "74-constructs.sh"],
+  "checks": ["71-tsc.sh", "72-depcruise.sh", "74-no-as-any.sh", "75-no-inline-sql.sh"],
   "slop_fixtures": ["fixtures/slop.ts"],
   "check_fixtures": [
     { "file": "fixtures/bad-tsc.ts", "fails": "71-tsc.sh" },
     { "file": "fixtures/bad-cycle", "fails": "72-depcruise.sh" },
-    { "file": "fixtures/bad-constructs.ts", "fails": "74-constructs.sh" }
+    { "file": "fixtures/bad-as-any.ts", "fails": "74-no-as-any.sh" },
+    { "file": "fixtures/bad-inline-sql.ts", "fails": "75-no-inline-sql.sh" }
   ],
   "lsp": {
     "typescript-language-server": { "bin": "typescript-language-server", "hint": "bun install -g typescript-language-server typescript" }
