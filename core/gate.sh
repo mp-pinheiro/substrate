@@ -18,13 +18,15 @@ source "$SUBSTRATE_DIR/gate-lib.sh"
 
 UPDATE_BASELINE=0
 ACCEPT_REGRESSION=0
+ACCEPT_KEYS=""
 TIGHTEN_BASELINE=0
 for arg in "$@"; do
     case "$arg" in
         --update-baseline) UPDATE_BASELINE=1 ;;
         --tighten) UPDATE_BASELINE=1; TIGHTEN_BASELINE=1 ;;
         --accept-regression) UPDATE_BASELINE=1; ACCEPT_REGRESSION=1 ;;
-        *) printf 'usage: %s [--update-baseline|--tighten|--accept-regression]\n' "$0" >&2; exit 2 ;;
+        --accept-regression=*) UPDATE_BASELINE=1; ACCEPT_REGRESSION=1; ACCEPT_KEYS="${arg#--accept-regression=}" ;;
+        *) printf 'usage: %s [--update-baseline|--tighten|--accept-regression[=key1,key2]]\n' "$0" >&2; exit 2 ;;
     esac
 done
 
@@ -120,10 +122,30 @@ ratchet() {
     fi
 
     if [ -n "$worse" ]; then
-        printf '%s\n' "$worse"
-        if [ "$ACCEPT_REGRESSION" -eq 1 ]; then
+        if [ "$ACCEPT_REGRESSION" -eq 1 ] && [ -n "$ACCEPT_KEYS" ]; then
+            local accepted="" rejected=""
+            while IFS= read -r line; do
+                [ -n "$line" ] || continue
+                local key="${line%%:*}"
+                case ",$ACCEPT_KEYS," in
+                    *",$key,"*) accepted="${accepted:+$accepted$'\n'}$line" ;;
+                    *) rejected="${rejected:+$rejected$'\n'}$line" ;;
+                esac
+            done <<< "$worse"
+            if [ -n "$rejected" ]; then
+                printf '%s\n' "$rejected"
+                warn "FAIL ratchet: non-accepted metrics above their grandfathered baseline"
+                FAILURES=$((FAILURES + 1))
+            fi
+            if [ -n "$accepted" ]; then
+                printf '%s\n' "$accepted"
+                warn "ratchet: accepted regression(s) per --accept-regression=$ACCEPT_KEYS"
+            fi
+        elif [ "$ACCEPT_REGRESSION" -eq 1 ]; then
+            printf '%s\n' "$worse"
             warn "ratchet: metrics above baseline — explicit regression acceptance requested"
         else
+            printf '%s\n' "$worse"
             warn "FAIL ratchet: metrics above their grandfathered baseline (new debt is rejected)"
             FAILURES=$((FAILURES + 1))
         fi
@@ -146,8 +168,21 @@ write_baseline() {
     local new_baseline staged
     if [ "$TIGHTEN_BASELINE" -eq 1 ]; then
         new_baseline=$(jq -n --slurpfile old "$BASELINE" --argjson m "$CURRENT_METRICS" \
-            '{metrics: (reduce ($m | to_entries[]) as $e (($old[0].metrics // {});
-                if has($e.key) then .[$e.key] = ([.[$e.key], $e.value] | min) else .[$e.key] = $e.value end)
+            '($old[0].metrics // {}) as $old_m
+            | {metrics: (reduce ($m | to_entries[]) as $e ({};
+                .[$e.key] = ([$old_m[$e.key] // $e.value, $e.value] | min))
+                | to_entries | sort_by(.key) | from_entries)}') \
+            || { warn "baseline: serialization failed — not writing"; return 1; }
+    elif [ "$ACCEPT_REGRESSION" -eq 1 ] && [ -n "$ACCEPT_KEYS" ]; then
+        new_baseline=$(jq -n --slurpfile old "$BASELINE" --argjson m "$CURRENT_METRICS" --arg keys "$ACCEPT_KEYS" \
+            '($old[0].metrics // {}) as $old_m
+            | ($keys | split(",") | map(select(length > 0))) as $accepted
+            | {metrics: (reduce ($m | to_entries[]) as $e ({};
+                if ($accepted | index($e.key)) then
+                    .[$e.key] = $e.value
+                else
+                    .[$e.key] = ([$old_m[$e.key] // $e.value, $e.value] | min)
+                end)
                 | to_entries | sort_by(.key) | from_entries)}') \
             || { warn "baseline: serialization failed — not writing"; return 1; }
     else
