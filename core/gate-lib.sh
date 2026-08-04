@@ -20,10 +20,19 @@ cfg_json() {
     jq -c "$1" "$CONFIG"
 }
 
-# metric <name> <value>  — lower is better; runner ratchets it against the baseline
 metric() {
     jq -cn --arg n "$1" --arg v "$2" '{name: $n, value: ($v | tonumber)}' >> "$METRICS" \
         || die_infra "metric emission failed for $1=$2"
+}
+
+metric_hi() {
+    jq -cn --arg n "$1" --arg v "$2" '{name: $n, value: ($v | tonumber), dir: "hi"}' >> "$METRICS" \
+        || die_infra "metric_hi emission failed for $1=$2"
+}
+
+cfg_check() {
+    jq -r --arg n "${SUBSTRATE_CHECK_NAME:-}" \
+        '(.checks.config // {})[$n]'"${1:-}"' // empty' "$CONFIG" 2>/dev/null
 }
 
 inventory() {
@@ -184,4 +193,9 @@ sg_scan() {
     fi
     rm -f "$errf"
     printf '%s' "$out"
+}
+
+cfg_check_json() {
+    jq -c --arg n "${SUBSTRATE_CHECK_NAME:-}" \
+        '(.checks.config // {})[$n]'"${1:-}"' // empty' "$CONFIG" 2>/dev/null
 }
