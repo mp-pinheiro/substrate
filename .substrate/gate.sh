@@ -76,6 +76,7 @@ run_checks() {
             warn "$name: disabled in substrate.json"
             continue
         fi
+        export SUBSTRATE_CHECK_NAME="$name"
         out=$(bash "$chk" 2>&1)
         rc=$?
         if [ "$rc" -eq 0 ]; then
@@ -94,9 +95,12 @@ run_checks() {
 }
 
 CURRENT_METRICS='{}'
+CURRENT_DIR='{}'
 ratchet() {
     CURRENT_METRICS=$(jq -sc 'map({(.name): .value}) | add // {}' "$METRICS") \
         || { warn "metrics aggregation failed"; FAILURES=$((FAILURES + 1)); return 1; }
+    CURRENT_DIR=$(jq -sc '[.[] | select(.dir == "hi") | {(.name): "hi"}] | add // {}' "$METRICS") \
+        || { warn "direction aggregation failed"; FAILURES=$((FAILURES + 1)); return 1; }
 
     if [ ! -f "$BASELINE" ]; then
         local total
@@ -105,20 +109,19 @@ ratchet() {
         return 0
     fi
 
-    local base worse better
+    local base base_dir worse better
     base=$(jq -c '.metrics // {}' "$BASELINE") || { warn "ratchet: cannot read baseline metrics"; FAILURES=$((FAILURES + 1)); return 1; }
+    base_dir=$(jq -c '.direction // {}' "$BASELINE") || { warn "ratchet: cannot read baseline direction"; FAILURES=$((FAILURES + 1)); return 1; }
 
-    if ! worse=$(jq -rn --argjson c "$CURRENT_METRICS" --argjson b "$base" \
-        '$c | to_entries[] | select(.value > (($b[.key]) // 0) + 1e-9) | "\(.key): \(.value) (baseline \($b[.key] // 0))"'); then
+    if ! worse=$(jq -rn --argjson c "$CURRENT_METRICS" --argjson b "$base" --argjson d "$CURRENT_DIR" --argjson bd "$base_dir" \
+        '$c | to_entries[] | select(if (($d[.key] // $bd[.key] // "lo")) == "hi" then .value < (($b[.key]) // 0) - 1e-9 else .value > (($b[.key]) // 0) + 1e-9 end) | "\(.key): \(.value) (baseline \($b[.key] // 0))"'); then
         warn "ratchet: baseline comparison failed"
-        FAILURES=$((FAILURES + 1))
-        return 1
+        FAILURES=$((FAILURES + 1)); return 1
     fi
-    if ! better=$(jq -rn --argjson c "$CURRENT_METRICS" --argjson b "$base" \
-        '[$b | to_entries[] | select((($c[.key]) // 0) < .value - 1e-9) | .key] | length'); then
+    if ! better=$(jq -rn --argjson c "$CURRENT_METRICS" --argjson b "$base" --argjson d "$CURRENT_DIR" --argjson bd "$base_dir" \
+        '[$b | to_entries[] | select(if (($d[.key] // $bd[.key] // "lo")) == "hi" then (($c[.key]) // 0) > .value + 1e-9 else (($c[.key]) // 0) < .value - 1e-9 end) | .key] | length'); then
         warn "ratchet: baseline comparison failed"
-        FAILURES=$((FAILURES + 1))
-        return 1
+        FAILURES=$((FAILURES + 1)); return 1
     fi
 
     if [ -n "$worse" ]; then
@@ -134,7 +137,7 @@ ratchet() {
             done <<< "$worse"
             if [ -n "$rejected" ]; then
                 printf '%s\n' "$rejected"
-                warn "FAIL ratchet: non-accepted metrics above their grandfathered baseline"
+                warn "FAIL ratchet: non-accepted metrics regressed"
                 FAILURES=$((FAILURES + 1))
             fi
             if [ -n "$accepted" ]; then
@@ -143,16 +146,16 @@ ratchet() {
             fi
         elif [ "$ACCEPT_REGRESSION" -eq 1 ]; then
             printf '%s\n' "$worse"
-            warn "ratchet: metrics above baseline — explicit regression acceptance requested"
+            warn "ratchet: metrics regressed — explicit regression acceptance requested"
         else
             printf '%s\n' "$worse"
-            warn "FAIL ratchet: metrics above their grandfathered baseline (new debt is rejected)"
+            warn "FAIL ratchet: metrics regressed beyond their grandfathered baseline"
             FAILURES=$((FAILURES + 1))
         fi
     elif [ "$better" -gt 0 ]; then
         info "ratchet: $better metric(s) improved on baseline — checkpoint locks them in automatically"
     else
-        success "ratchet: all metrics at or below baseline"
+        success "ratchet: all metrics at or better than baseline"
     fi
 }
 
@@ -166,28 +169,23 @@ write_baseline() {
         return 1
     fi
     local new_baseline staged
-    if [ "$TIGHTEN_BASELINE" -eq 1 ]; then
-        new_baseline=$(jq -n --slurpfile old "$BASELINE" --argjson m "$CURRENT_METRICS" \
-            '($old[0].metrics // {}) as $old_m
-            | {metrics: (reduce ($m | to_entries[]) as $e ({};
-                .[$e.key] = ([$old_m[$e.key] // $e.value, $e.value] | min))
-                | to_entries | sort_by(.key) | from_entries)}') \
-            || { warn "baseline: serialization failed — not writing"; return 1; }
-    elif [ "$ACCEPT_REGRESSION" -eq 1 ] && [ -n "$ACCEPT_KEYS" ]; then
-        new_baseline=$(jq -n --slurpfile old "$BASELINE" --argjson m "$CURRENT_METRICS" --arg keys "$ACCEPT_KEYS" \
-            '($old[0].metrics // {}) as $old_m
+    if [ "$TIGHTEN_BASELINE" -eq 1 ] || { [ "$ACCEPT_REGRESSION" -eq 1 ] && [ -n "$ACCEPT_KEYS" ]; }; then
+        new_baseline=$(jq -n --slurpfile old "$BASELINE" --argjson m "$CURRENT_METRICS" --argjson dir "$CURRENT_DIR" --arg keys "${ACCEPT_KEYS:-}" \
+            '($old[0].metrics // {}) as $old_m | ($old[0].direction // {}) as $old_d
             | ($keys | split(",") | map(select(length > 0))) as $accepted
             | {metrics: (reduce ($m | to_entries[]) as $e ({};
                 if ($accepted | index($e.key)) then
                     .[$e.key] = $e.value
+                elif (($dir[$e.key] // $old_d[$e.key] // "lo")) == "hi" then
+                    .[$e.key] = ([$old_m[$e.key] // $e.value, $e.value] | max)
                 else
                     .[$e.key] = ([$old_m[$e.key] // $e.value, $e.value] | min)
                 end)
-                | to_entries | sort_by(.key) | from_entries)}') \
+                | to_entries | sort_by(.key) | from_entries), direction: $dir}') \
             || { warn "baseline: serialization failed — not writing"; return 1; }
     else
-        new_baseline=$(jq -n --argjson m "$CURRENT_METRICS" \
-            '{metrics: ($m | to_entries | sort_by(.key) | from_entries)}') \
+        new_baseline=$(jq -n --argjson m "$CURRENT_METRICS" --argjson dir "$CURRENT_DIR" \
+            '{metrics: ($m | to_entries | sort_by(.key) | from_entries), direction: $dir}') \
             || { warn "baseline: serialization failed — not writing"; return 1; }
     fi
     if [ "$ACCEPT_REGRESSION" -eq 1 ] && [ -f "$BASELINE" ]; then
