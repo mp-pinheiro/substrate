@@ -141,7 +141,7 @@ Workflow: enemy-first (attack the cutover commit plan before executing), then a 
 - No auto-push changes; publication stays user-owned.
 
 ## Acceptance
-- [ ] engine binary pinned and attested :: jq -e '.version and .binary_sha256' .substrate/engine.json
+- [ ] engine binary pinned and attested :: bash -c 'grep -q "\"version\"" .substrate/engine.json && grep -q "\"binary_sha256\"" .substrate/engine.json'
 - [ ] vendored bash engine deleted :: bash -c '! test -e .substrate/gate.sh && ! test -e .substrate/checkpoint.sh && ! test -e .substrate/hooks/agent-lifecycle.sh'
 - [ ] hook registrations no longer spawn per-hook bash scripts :: bash -c '! grep -q ".substrate/hooks/" .claude/settings.json'
 - [ ] duplication-tax checks retired :: bash -c '! test -e checks.d/80-vendor-drift.sh && ! test -e checks.d/81-harness-parity.sh'
