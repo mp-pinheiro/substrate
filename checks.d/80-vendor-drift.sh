@@ -24,7 +24,7 @@ pair() {
 CORE_SCRIPTS=(
     gate.sh gate-lib.sh check-comments.sh comment-ratchet.sh selftest.sh audit.sh report.sh
     gated-push.sh push-gate.sh checkpoint.sh receipt-lib.sh gitleaks-lib.sh gitleaks-deep.sh
-    maintenance.sh maintenance-cli.sh maintenance-lib.sh maintenance-receipt.sh
+    maintenance.sh maintenance-cli.sh maintenance-lib.sh maintenance-receipt.sh restructure.sh
     maintenance-sync.sh maintenance-transaction.sh install-gitleaks.sh install-jj.sh
 )
 for f in "${CORE_SCRIPTS[@]}"; do

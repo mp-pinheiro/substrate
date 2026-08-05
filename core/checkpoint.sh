@@ -60,7 +60,10 @@ fi
 
 requested_file=$(mktemp)
 current_file=$(mktemp)
+leftover_file=$(mktemp)
 baseline_backup=$(mktemp)
+candidate=""
+archive=""
 baseline_mode=$(stat -c '%a' substrate-baseline.json 2>/dev/null || printf '644')
 cp substrate-baseline.json "$baseline_backup" || exit 2
 baseline_changed=0
@@ -73,7 +76,9 @@ cleanup() {
             mv -f "$staged" substrate-baseline.json 2>/dev/null || true
         fi
     fi
-    rm -f "$requested_file" "$current_file" "$baseline_backup"
+    rm -f "$requested_file" "$current_file" "$leftover_file" "$baseline_backup"
+    [ -z "$archive" ] || rm -f "$archive"
+    [ -z "$candidate" ] || rm -rf "$candidate"
     rmdir "$lock" 2>/dev/null || true
 }
 trap cleanup EXIT HUP INT TERM
@@ -104,11 +109,8 @@ normalized=()
 declare -A seen=()
 for path in "${paths[@]}"; do
     path="${path#./}"
-    case "$path" in
-        ''|/*|..|../*|*/../*|*/..|-*)
-            printf 'checkpoint blocked: unsafe path: %s\n' "$path" >&2
-            exit 2 ;;
-    esac
+    substrate_safe_path "$path" \
+        || { printf 'checkpoint blocked: unsafe path: %s\n' "$path" >&2; exit 2; }
     if [ -n "${seen[$path]:-}" ]; then
         continue
     fi
@@ -122,16 +124,68 @@ for path in "${paths[@]}"; do
 done
 printf '%s\n' "${normalized[@]}" | LC_ALL=C sort -u > "$requested_file"
 changed_paths > "$current_file"
-if ! cmp -s "$requested_file" "$current_file"; then
-    printf 'checkpoint blocked: supplied ownership does not exactly match the working copy\n' >&2
-    diff "$requested_file" "$current_file" >&2 || true
+missing=$(comm -23 "$requested_file" "$current_file")
+if [ -n "$missing" ]; then
+    printf 'checkpoint blocked: supplied paths are not pending working-copy changes:\n%s\n' "$missing" >&2
     exit 2
 fi
+comm -13 "$requested_file" "$current_file" > "$leftover_file"
 
-if ! gate_output=$(.substrate/gate.sh --tighten 2>&1); then
-    printf '%s\n' "$gate_output" >&2
-    printf 'checkpoint blocked: gate or baseline tightening failed\n' >&2
-    exit 1
+if [ ! -s "$leftover_file" ]; then
+    if ! gate_output=$(.substrate/gate.sh --tighten 2>&1); then
+        printf '%s\n' "$gate_output" >&2
+        printf 'checkpoint blocked: gate or baseline tightening failed\n' >&2
+        exit 1
+    fi
+else
+    # Path-scoped mode: gate the exact commit tree (base revision + owned
+    # paths) in an isolated candidate so unowned pending work can neither
+    # fail nor sneak into the agent's commit. gate:allow-comment
+    if grep -qx 'substrate-baseline.json' "$leftover_file"; then
+        printf 'checkpoint blocked: substrate-baseline.json carries changes outside agent ownership — resolve it before a path-scoped checkpoint\n' >&2
+        exit 2
+    fi
+    base=$(current_gate_revision)
+    if [ -z "$base" ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+        printf 'checkpoint blocked: path-scoped checkpoint needs git object access to revision %s\n' "${base:-unknown}" >&2
+        exit 2
+    fi
+    candidate=$(mktemp -d) || exit 2
+    archive=$(mktemp) || exit 2
+    if ! git archive --format=tar --output="$archive" "$base" \
+        || ! tar -xf "$archive" -C "$candidate"; then
+        printf 'checkpoint blocked: could not stage the candidate tree from %s\n' "$base" >&2
+        exit 2
+    fi
+    while IFS= read -r path; do
+        if [ -e "$path" ] || [ -L "$path" ]; then
+            mkdir -p "$candidate/$(dirname "$path")" || exit 2
+            cp -P --preserve=mode "$path" "$candidate/$path" || exit 2
+        else
+            rm -f "$candidate/$path"
+        fi
+    done < "$requested_file"
+    [ -x "$candidate/.substrate/gate.sh" ] \
+        || { printf 'checkpoint blocked: revision %s does not carry the vendored gate runtime\n' "$base" >&2; exit 2; }
+    if ! git -C "$candidate" init -q --initial-branch=main \
+        || ! git -C "$candidate" config user.name substrate-checkpoint \
+        || ! git -C "$candidate" config user.email substrate@localhost \
+        || ! git -C "$candidate" add -f -A \
+        || ! git -C "$candidate" commit -q --allow-empty -m 'chore: seed checkpoint candidate'; then
+        printf 'checkpoint blocked: candidate repository staging failed\n' >&2
+        exit 2
+    fi
+    if ! gate_output=$(cd "$candidate" && unset SUBSTRATE_FILE_LIST && .substrate/gate.sh --tighten 2>&1); then
+        printf '%s\n' "$gate_output" >&2
+        printf 'checkpoint blocked: gate failed for the agent-owned paths (unowned pending work was excluded)\n' >&2
+        exit 1
+    fi
+    if ! cmp -s "$candidate/substrate-baseline.json" substrate-baseline.json; then
+        staged=$(mktemp substrate-baseline.json.XXXXXX) || exit 2
+        cp "$candidate/substrate-baseline.json" "$staged" || exit 2
+        chmod "$baseline_mode" "$staged" || exit 2
+        mv -f "$staged" substrate-baseline.json || exit 2
+    fi
 fi
 printf '%s\n' "$gate_output"
 commit_paths=("${normalized[@]}")
@@ -162,16 +216,18 @@ committed=1
 printf '%s\n' "$commit_output"
 
 changed_paths > "$current_file"
-if [ -s "$current_file" ]; then
-    printf 'checkpoint incomplete: working copy is not clean after commit\n' >&2
-    cat "$current_file" >&2
+if ! cmp -s "$current_file" "$leftover_file"; then
+    printf 'checkpoint incomplete: post-commit pending paths diverge from the expected remainder\n' >&2
+    diff "$leftover_file" "$current_file" >&2 || true
     exit 1
 fi
-if ! verify_output=$(.substrate/gate.sh 2>&1); then
-    printf '%s\ncheckpoint incomplete: post-commit gate failed; receipt not written\n' "$verify_output" >&2
-    exit 1
+if [ ! -s "$leftover_file" ]; then
+    if ! verify_output=$(.substrate/gate.sh 2>&1); then
+        printf '%s\ncheckpoint incomplete: post-commit gate failed; receipt not written\n' "$verify_output" >&2
+        exit 1
+    fi
+    printf '%s\n' "$verify_output"
 fi
-printf '%s\n' "$verify_output"
 
 receipt=$(write_gate_receipt checkpoint "$commit" "$vcs" "$session") \
     || { printf 'checkpoint incomplete: exact-state receipt write failed\n' >&2; exit 1; }
@@ -184,4 +240,8 @@ if [ "$json" -eq 1 ]; then
     printf '%s\n' "$receipt"
 else
     printf 'checkpoint complete: %s (%s)\n' "${commit:0:12}" "$message"
+fi
+if [ -s "$leftover_file" ]; then
+    printf 'checkpoint left unowned pending paths in place:\n' >&2
+    while IFS= read -r path; do printf '  %s\n' "$path"; done < "$leftover_file" >&2
 fi
