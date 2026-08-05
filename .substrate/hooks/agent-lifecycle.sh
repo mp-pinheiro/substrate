@@ -126,9 +126,11 @@ case "$action" in
         fi
         state=$(cat "$STATE")
         current=$(snapshot)
-        changed=$(jq -cn --argjson before "$(jq '.observed.entries' <<< "$state")" --argjson after "$(jq '.entries' <<< "$current")" '
-            (($before | keys) + ($after | keys) | unique)
-            | map(select($before[.] != $after[.]))')
+        changed=$(jq -c --argjson current "$current" '
+            .observed.entries as $before
+            | $current.entries as $after
+            | (($before | keys) + ($after | keys) | unique)
+            | map(select($before[.] != $after[.]))' <<< "$state")
         before_revision=$(jq -r '.observed.revision' <<< "$state")
         current_revision=$(jq -r '.revision' <<< "$current")
         maintenance_receipt="$METADATA/substrate/maintenance-receipt.json"
@@ -207,26 +209,56 @@ case "$action" in
         [ -f "$STATE" ] || exit 0
         state=$(cat "$STATE")
         current=$(snapshot)
-        owned_pending=$(jq -cn --argjson paths "$(jq '.entries | keys' <<< "$current")" \
-            --argjson owned "$(jq '.ownedPaths' <<< "$state")" '$paths - ($paths - $owned)')
-        completed=$(jq -r '.completedCommit // empty' <<< "$state")
-        revision=$(jq -r '.revision' <<< "$current")
+        # PERF: one jq derives every stop input from the in-memory documents.
+        # Fields are NUL-delimited: inspection errors can carry newlines.
+        {
+            IFS= read -r -d '' owned_count
+            IFS= read -r -d '' owned_joined
+            IFS= read -r -d '' unowned_count
+            IFS= read -r -d '' unowned_joined
+            IFS= read -r -d '' completed
+            IFS= read -r -d '' revision
+            IFS= read -r -d '' initial_revision
+            IFS= read -r -d '' tracking
+            IFS= read -r -d '' current_error
+            IFS= read -r -d '' owned_paths_count
+            IFS= read -r -d '' fingerprint_changed
+            IFS= read -r -d '' entries_count
+            IFS= read -r -d '' stop_active
+            IFS= read -r -d '' already_blocked
+            IFS= read -r -d '' next
+        } < <(jq -jn --argjson state "$state" --argjson current "$current" --argjson payload "$payload" '
+            ($current.entries | keys) as $paths
+            | $state.ownedPaths as $owned
+            | ($paths - ($paths - $owned)) as $pending
+            | ($paths - $owned) as $unowned
+            | ($pending | length), "\u0000",
+              ($pending | join(", ")), "\u0000",
+              ($unowned | length), "\u0000",
+              ($unowned | join(", ")), "\u0000",
+              ($state.completedCommit // empty), "\u0000",
+              ($current.revision), "\u0000",
+              ($state.initial.revision), "\u0000",
+              ($state.trackingError // empty), "\u0000",
+              ($current.error // empty), "\u0000",
+              ($owned | length), "\u0000",
+              (if $current.fingerprint != $state.observed.fingerprint then 1 else 0 end), "\u0000",
+              ($current.entries | length), "\u0000",
+              ($payload.stop_hook_active // false), "\u0000",
+              ($state.stopBlocked // false), "\u0000",
+              ($state | .stopBlocked = true | tojson), "\u0000"')
         revision_bypass=0
-        if [ "$revision" != "$(jq -r '.initial.revision' <<< "$state")" ] && [ "$revision" != "$completed" ]; then
+        if [ "$revision" != "$initial_revision" ] && [ "$revision" != "$completed" ]; then
             revision_bypass=1
         fi
-        tracking=$(jq -r '.trackingError // empty' <<< "$state")
-        current_error=$(jq -r '.error // empty' <<< "$current")
-        if [ "$(jq '.ownedPaths | length' <<< "$state")" -gt 0 ] \
-            && [ "$(jq -r '.fingerprint' <<< "$current")" != "$(jq -r '.observed.fingerprint' <<< "$state")" ]; then
+        if [ "$owned_paths_count" -gt 0 ] && [ "$fingerprint_changed" = 1 ]; then
             tracking="working copy changed outside an observed Claude tool call"
         fi
-        if [ -n "$tracking" ] && [ "$(jq '.entries | length' <<< "$current")" -eq 0 ]; then
+        if [ -n "$tracking" ] && [ "$entries_count" -eq 0 ]; then
             tracking=""
         fi
         auto_note=""
-        stop_active=$(jq -r '.stop_hook_active // false' <<< "$payload")
-        if [ "$(jq 'length' <<< "$owned_pending")" -gt 0 ] && [ -z "$tracking" ] \
+        if [ "$owned_count" -gt 0 ] && [ -z "$tracking" ] \
             && [ -z "$current_error" ] && [ "$stop_active" != true ]; then
             if auto_output=$("$SUBSTRATE_DIR/checkpoint.sh" --session "$session" \
                 --message 'chore(agent): checkpoint owned work at session stop' --json 2>&1); then
@@ -237,28 +269,22 @@ case "$action" in
             fi
             auto_note=" Automatic checkpoint failed: $(printf '%s\n' "$auto_output" | tail -n 1)."
         fi
-        if [ "$(jq 'length' <<< "$owned_pending")" -eq 0 ] && [ "$revision_bypass" -eq 0 ] \
+        if [ "$owned_count" -eq 0 ] && [ "$revision_bypass" -eq 0 ] \
             && [ -z "$tracking" ] && [ -z "$current_error" ]; then
             exit 0
         fi
-        unowned=$(jq -cn --argjson paths "$(jq '.entries | keys' <<< "$current")" \
-            --argjson owned "$(jq '.ownedPaths' <<< "$state")" '$paths - $owned')
         reason="[substrate — completion blocked]"
-        [ "$(jq 'length' <<< "$owned_pending")" -eq 0 ] \
-            || reason="$reason Agent-owned pending paths: $(jq -r 'join(", ")' <<< "$owned_pending")."
-        [ "$(jq 'length' <<< "$unowned")" -eq 0 ] \
-            || reason="$reason Unowned pending paths: $(jq -r 'join(", ")' <<< "$unowned")."
+        [ "$owned_count" -eq 0 ] || reason="$reason Agent-owned pending paths: $owned_joined."
+        [ "$unowned_count" -eq 0 ] || reason="$reason Unowned pending paths: $unowned_joined."
         [ "$revision_bypass" -eq 0 ] || reason="$reason Repository revision changed without a checkpoint receipt."
         [ -z "$tracking" ] || reason="$reason Ownership error: $tracking."
         [ -z "$current_error" ] || reason="$reason Inspection error: $current_error."
         reason="$reason$auto_note"
         reason="$reason Run direct verification, then: substrate checkpoint --session $session --message 'type(scope): subject'. Never push."
-        already_blocked=$(jq -r '.stopBlocked // false' <<< "$state")
         if [ "$stop_active" = true ] || [ "$already_blocked" = true ]; then
             jq -cn --arg message "$reason" '{systemMessage:$message}'
             exit 0
         fi
-        next=$(jq -c '.stopBlocked=true' <<< "$state")
         write_state "$STATE" "$next" || exit 2
         jq -cn --arg reason "$reason" '{decision:"block",reason:$reason}' >&2
         exit 2

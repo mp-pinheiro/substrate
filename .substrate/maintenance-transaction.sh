@@ -186,23 +186,28 @@ maintenance_mark_unit_applied() {
 
 maintenance_apply_units() {
     local candidate="$1" transaction_receipt="$2" stable_receipt="$3"
-    local unit desired current count=0 fail_after total index
+    local unit desired current count=0 fail_after stream
     fail_after=${SUBSTRATE_MAINTENANCE_FAIL_AFTER:-0}
-    total=$(jq '.repository.units | length' "$transaction_receipt") || return 1
-    for ((index=0; index<total; index++)); do
-        unit=$(jq -r --argjson index "$index" '.repository.units[$index].path' "$transaction_receipt") || return 1
-        desired=$(jq -r --argjson index "$index" '.repository.units[$index].desired' "$transaction_receipt") || return 1
-        current=$(maintenance_path_state "$unit") || return 1
+    stream=$(mktemp) || return 1
+    # PERF: one NUL-framed jq pass; per-unit receipt writes never reorder units or touch path/desired.
+    jq -j '(.repository.units // [])[] | (.path, .desired) | (., "\u0000")' "$transaction_receipt" \
+        > "$stream" || { rm -f "$stream"; return 1; }
+    while IFS= read -r -d '' unit <&3; do
+        IFS= read -r -d '' desired <&3 || { rm -f "$stream"; return 1; }
+        current=$(maintenance_path_state "$unit") || { rm -f "$stream"; return 1; }
         if [ "$current" != "$desired" ]; then
-            maintenance_apply_unit "$candidate" "$unit" "$desired" || return 1
+            maintenance_apply_unit "$candidate" "$unit" "$desired" || { rm -f "$stream"; return 1; }
         fi
-        maintenance_mark_unit_applied "$transaction_receipt" "$stable_receipt" "$unit" || return 1
+        maintenance_mark_unit_applied "$transaction_receipt" "$stable_receipt" "$unit" \
+            || { rm -f "$stream"; return 1; }
         count=$((count + 1))
         if [ "${SUBSTRATE_MAINTENANCE_TESTING:-}" = 1 ] && [ "$fail_after" -eq "$count" ]; then
             maintenance_update_receipt "$transaction_receipt" "$stable_receipt" '.repository.status="incomplete"' || true
+            rm -f "$stream"
             return 75
         fi
-    done
+    done 3< "$stream"
+    rm -f "$stream"
 }
 
 

@@ -53,7 +53,15 @@ fi
 [ ${#changed[@]} -eq 0 ] && exit 0
 
 # pass-only memo; baseline+config signatures namespace it so allowance edits invalidate it wholesale
-sig() { stat -c '%.9Y:%s' "$1" 2>/dev/null || printf '0'; }
+# WHY: content, not mtime:size — an edit that restores mtime at equal size is invisible to stat, so
+# the memo (and the namespace a same-size allowance edit must rotate) skipped what actually changed
+sig() {
+    local h
+    # SAFETY: stdin, not an argument — sha256sum option-parses a leading dash and backslash-escapes
+    # newline paths; 2>/dev/null precedes the redirect so an unreadable input stays silent
+    h=$(sha256sum 2>/dev/null < "$1") || { printf '0'; return; }
+    printf '%s' "${h%% *}"
+}
 ns=$(printf '%s|%s|%s' "$REPO_ROOT" "$(sig substrate-baseline.json)" "$(sig "$CONFIG")" | sha256sum)
 CACHE="${TMPDIR:-/tmp}/substrate-scan-$(id -u)-${ns:0:16}"
 if [ -f "$CACHE" ] && [ "$(wc -l < "$CACHE")" -gt 4096 ]; then

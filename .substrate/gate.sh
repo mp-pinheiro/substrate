@@ -106,6 +106,19 @@ build_claims() {
         | [$p, ($j.profile // ""), ($j.ast_lang // ""), ($j.mode // ""), $e] | join("\u001f")' \
         "$CLAIMS.raw" > "$CLAIMS" || die_infra "claims table build failed"
     rm -f "$CLAIMS.raw"
+    # Capture sink for byte-comparing runner implementations; the rename
+    # publishes the finished table so no reader can see it half-written.
+    if [ -n "${SUBSTRATE_CLAIMS_OUT:-}" ]; then
+        local staged mode
+        staged=$(mktemp "$SUBSTRATE_CLAIMS_OUT.XXXXXX") \
+            || die_infra "claims capture: cannot stage next to $SUBSTRATE_CLAIMS_OUT"
+        mode=$(printf '%04o' "$((0666 & ~0$(umask)))")
+        if ! cp "$CLAIMS" "$staged" || ! chmod "$mode" "$staged" \
+            || ! mv -f "$staged" "$SUBSTRATE_CLAIMS_OUT"; then
+            rm -f "$staged"
+            die_infra "claims capture: cannot write $SUBSTRATE_CLAIMS_OUT"
+        fi
+    fi
 }
 
 FAILURES=0
