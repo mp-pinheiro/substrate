@@ -21,7 +21,10 @@ cat > .substrate/checks.d/58-baseline-probe.sh <<'SH'
 set -uo pipefail
 source "$SUBSTRATE_DIR/gate-lib.sh"
 while IFS=$'\t' read -r name value; do
-    metric "$name" "$value"
+    case "$name" in
+        hi:*) metric_hi "$name" "$value" ;;
+        *) metric "$name" "$value" ;;
+    esac
 done < <(jq -r 'to_entries[] | [.key, .value] | @tsv' "$REPO_ROOT/.git/probe-metrics.json")
 SH
 chmod +x .substrate/checks.d/58-baseline-probe.sh
@@ -71,8 +74,20 @@ if ! out=$(.substrate/gate.sh --tighten 2>&1); then
     fail "tightening with a locked baseline failed: $out"
 fi
 [ "$(stat -c '%a' substrate-baseline.json)" = 444 ] || fail "atomic replacement changed baseline mode"
-jq -e '.metrics["probe:alpha"] == 3 and .metrics["probe:beta"] == 30 and .metrics["probe:gamma"] == 0' \
-    substrate-baseline.json >/dev/null || fail "tightening dropped an absent ceiling or missed a zero-tolerance metric"
+jq -e '.metrics["probe:alpha"] == 3 and (.metrics | has("probe:beta") | not) and .metrics["probe:gamma"] == 0' \
+    substrate-baseline.json >/dev/null \
+    || fail "tightening kept a lower-is-better orphan or missed a zero-tolerance metric"
+grep -Fq 'pruning resolved ceiling(s): probe:beta' <<< "$out" \
+    || fail "orphan prune was silent — a vanished check must not pass unreported"
+
+printf '{"probe:alpha":3,"hi:cov":90}\n' > .git/probe-metrics.json
+.substrate/gate.sh --tighten >/dev/null 2>&1 || fail "recording a higher-is-better metric failed"
+jq -e '.metrics["hi:cov"] == 90 and .direction["hi:cov"] == "hi"' substrate-baseline.json >/dev/null \
+    || fail "higher-is-better metric was not recorded with its direction"
+printf '{"probe:alpha":3}\n' > .git/probe-metrics.json
+.substrate/gate.sh --tighten >/dev/null 2>&1 || fail "tightening with an idle hi metric failed"
+jq -e '.metrics["hi:cov"] == 90 and .direction["hi:cov"] == "hi"' substrate-baseline.json >/dev/null \
+    || fail "higher-is-better orphan lost its floor or direction — absence there means no floor, not zero tolerance"
 
 printf '{"probe:alpha":2,"probe:gamma":0}\n' > .git/probe-metrics.json
 before=$(sha256sum substrate-baseline.json)
@@ -92,4 +107,4 @@ fi
 grep -Fq 'atomic replacement failed' "$T/atomic.out" || fail "atomic write failure was not actionable"
 [ "$before" = "$(sha256sum substrate-baseline.json)" ] || fail "atomic write failure changed the original baseline"
 
-printf 'baseline-test: monotonic, explicit loosening, preserved ceilings, atomic rollback green\n'
+printf 'baseline-test: monotonic, explicit loosening, reported orphan prune, hi-floor retention, atomic rollback green\n'

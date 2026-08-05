@@ -281,7 +281,8 @@ write_baseline() {
         new_baseline=$(jq -n --slurpfile old "$BASELINE" --argjson m "$CURRENT_METRICS" --argjson dir "$CURRENT_DIR" --arg keys "${ACCEPT_KEYS:-}" \
             '($old[0].metrics // {}) as $old_m | ($old[0].direction // {}) as $old_d
             | ($keys | split(",") | map(select(length > 0))) as $accepted
-            | {metrics: (reduce ($m | to_entries[]) as $e ({};
+            | ($old_m | with_entries(select((.key | in($m) | not) and ($old_d[.key] == "hi")))) as $kept
+            | {metrics: (reduce ($m | to_entries[]) as $e ($kept;
                 if ($accepted | index($e.key)) then
                     .[$e.key] = $e.value
                 elif (($dir[$e.key] // $old_d[$e.key] // "lo")) == "hi" then
@@ -289,12 +290,20 @@ write_baseline() {
                 else
                     .[$e.key] = ([$old_m[$e.key] // $e.value, $e.value] | min)
                 end)
-                | to_entries | sort_by(.key) | from_entries), direction: $dir}') \
+                | to_entries | sort_by(.key) | from_entries),
+               direction: ($dir + ($old_d | with_entries(select(.key | in($kept)))))}') \
             || { warn "baseline: serialization failed — not writing"; return 1; }
     else
         new_baseline=$(jq -n --argjson m "$CURRENT_METRICS" --argjson dir "$CURRENT_DIR" \
             '{metrics: ($m | to_entries | sort_by(.key) | from_entries), direction: $dir}') \
             || { warn "baseline: serialization failed — not writing"; return 1; }
+    fi
+    if [ -f "$BASELINE" ]; then
+        local pruned
+        pruned=$(jq -rn --slurpfile old "$BASELINE" --argjson nb "$new_baseline" \
+            '((($old[0].metrics // {}) | keys) - (($nb.metrics // {}) | keys)) | join(", ")') || pruned=""
+        [ -z "$pruned" ] \
+            || warn "baseline: pruning resolved ceiling(s): $pruned — a key vanishes when its debt is fixed OR its check stopped running; confirm the latter is intended"
     fi
     if [ "$ACCEPT_REGRESSION" -eq 1 ] && [ -f "$BASELINE" ]; then
         warn "accepting regressions — baseline diff:"
