@@ -35,7 +35,7 @@ maintenance_verify_transition() {
     [ "$actual" = "$expected" ]
 }
 maintenance_repository_receipt_matches() {
-    local path="${1:-}" current expected total index unit desired manifest dirty inside outside fingerprint
+    local path="${1:-}" current expected stream unit desired manifest dirty inside outside fingerprint
     [ -n "$path" ] || path=$(maintenance_receipt_path) || return 1
     [ -f "$path" ] || return 1
     jq -e --arg version "$(cat .substrate/VERSION 2>/dev/null)" --arg vcs "$(maintenance_vcs)" '
@@ -65,12 +65,15 @@ maintenance_repository_receipt_matches() {
     fingerprint=$(maintenance_json_fingerprint "$outside") || return 1
     expected=$(jq -r '.repository.preservedDirtyFingerprint' "$path") || return 1
     [ "$fingerprint" = "$expected" ] || return 1
-    total=$(jq '.repository.units | length' "$path") || return 1
-    for ((index=0; index<total; index++)); do
-        unit=$(jq -r --argjson index "$index" '.repository.units[$index].path' "$path") || return 1
-        desired=$(jq -r --argjson index "$index" '.repository.units[$index].desired' "$path") || return 1
-        [ "$(maintenance_path_state "$unit")" = "$desired" ] || return 1
-    done
+    stream=$(mktemp) || return 1
+    # PERF: one jq streams every unit field NUL-framed; NUL is the only byte a path cannot hold.
+    jq -j '(.repository.units // [])[] | (.path, .desired) | (., "\u0000")' "$path" > "$stream" \
+        || { rm -f "$stream"; return 1; }
+    while IFS= read -r -d '' unit <&3; do
+        IFS= read -r -d '' desired <&3 || { rm -f "$stream"; return 1; }
+        [ "$(maintenance_path_state "$unit")" = "$desired" ] || { rm -f "$stream"; return 1; }
+    done 3< "$stream"
+    rm -f "$stream"
 }
 
 maintenance_receipt_matches() {
@@ -90,22 +93,25 @@ maintenance_compare_dirty_state() {
     [ "$fingerprint" = "$expected" ]
 }
 maintenance_applied_path_authorized() {
-    local stable="$1" base="$2" path="$3" receipt total index unit desired
+    local stable="$1" base="$2" path="$3" receipt stream unit desired rc
     [ -f "$stable" ] || return 1
     receipt=$(cat "$stable") || return 1
     [ "$(jq -r '.repository.status' <<< "$receipt")" = applied ] || return 1
     [ "$(jq -r '.repository.fromRevision // ""' <<< "$receipt")" = "$base" ] || return 1
-    total=$(jq '.repository.units | length' <<< "$receipt") || return 1
-    for ((index=0; index<total; index++)); do
-        unit=$(jq -r --argjson index "$index" '.repository.units[$index].path' <<< "$receipt") || return 1
+    stream=$(mktemp) || return 1
+    jq -j '(.repository.units // [])[] | (.path, .desired) | (., "\u0000")' <<< "$receipt" > "$stream" \
+        || { rm -f "$stream"; return 1; }
+    while IFS= read -r -d '' unit <&3; do
+        IFS= read -r -d '' desired <&3 || { rm -f "$stream"; return 1; }
         case "$path" in
             "$unit"|"$unit"/*)
-                desired=$(jq -r --argjson index "$index" '.repository.units[$index].desired' <<< "$receipt") \
-                    || return 1
                 [ "$(maintenance_path_state "$unit")" = "$desired" ]
-                return
+                rc=$?
+                rm -f "$stream"
+                return "$rc"
                 ;;
         esac
-    done
+    done 3< "$stream"
+    rm -f "$stream"
     return 1
 }
