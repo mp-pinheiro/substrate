@@ -58,6 +58,7 @@ Goal: `cmd/substrate-engine` (module `github.com/mp-pinheiro/substrate`, go.mod 
 - Session-ledger golden vectors (incl. non-ASCII paths) + A/B parity harness: same stdin → both engines → identical stdout/stderr/exit/state.
 - Gate self-hosting: go.mod + `.go` files land WITH go-profile activation in `substrate.json` + langmap regen + re-vendor in the SAME commit, or 05-unclaimed-source reds the kit gate (amendment A12).
 - Build wiring: justfile, CI build job, dual-leg hook-parity job (provisions toolchain via `test/ci-toolchain.sh` — amendment A29).
+- Code conventions bound by the go profile (`profiles/go/templates/golangci.yml`): forbidigo bans `fmt.Print*` everywhere (the `main.go` exclusion lifts only the panic rule) — protocol writers use `json.NewEncoder(os.Stdout)` / `fmt.Fprintf(os.Stdout, ...)`; wrapcheck + errcheck + errorlint mean every error crossing a package boundary is wrapped and checked — porting bash that ignores errors freely pays this per work item. State both in the P1 child plan before drafting porters.
 Key oracles: A/B parity across the hook scenario matrix on both legs → `bash test/ab-hooks-test.sh`; ledger vectors byte-green → `bash test/golden-ledger-test.sh`; every oracle self-builds (`go build -o <mktemp-dir>/substrate-engine ./cmd/substrate-engine && env SUBSTRATE_ENGINE=go SUBSTRATE_ENGINE_BIN=... bash test/...`) — no PATH/`just` assumptions, unique build dirs (amendments A1, A25).
 Workflow: fan out one porter per package with the contract file as spec; A/B harness is the merge gate; enemy pass on `internal/policy` regex transliteration and `internal/lifecycle` before shims flip on.
 
@@ -118,7 +119,7 @@ Workflow: enemy-first (attack the cutover commit plan before executing), then a 
 - A15 TS→engine per-event ABI (tool_call/tool_result/session_stop/before_agent_start subcommands with I/O schemas) is a named work item before the TS compute layer is deleted.
 - A16 `--route`/stand-down specified once (P5); matcher covers both registration forms.
 - A17 `maintenance-lib` engine verbs are P4 scope; P5 shims consume them.
-- A18 #11 lands first; P1 ports post-#11 semantics. If #11 slips, P1 ports current semantics behind the same vectors and #11 re-lands on Go (costlier; flagged).
+- A18 RESOLVED 2026-08-05: #11 is landed in source — 0.1 xd:// exclusion (`runtime.ts:50`), 0.2 trackingError non-clobber (`substrate-quality.ts:324`), 0.3 reconcileInitial, 0.4 anchored commit regex (`protect-command.sh:24`), L3 rebaseline, path-scoped candidate mode (`checkpoint.sh`), per-root runtime state (`identity.ts:52-53`), stop-hook auto-checkpoint, L2 restructure. P1 ports current semantics; no re-land cost.
 - A19 Session-ledger bytes are a frozen surface from P1 through P4 (bash checkpoint.sh reads Go-written state); reader/writer pairs per phase window are traced in the P1 child plan.
 - A20 protect-command port reproduces whatever regex behavior is current at P1 time (post-#11 0.4 expected); vectors updated with #11.
 - A25 Parallel-audit safety: unique build dirs per oracle (no shared /tmp binary; ETXTBSY).
@@ -128,11 +129,11 @@ Workflow: enemy-first (attack the cutover commit plan before executing), then a 
 - A29 Hook-parity CI job provisions its toolchain (scratch-repo gates fail closed on missing tools).
 - A30 Cutover/rollback rehearsal provenance: pre-P5 world synthesized from the P5-parent revision; CI fetch depth set.
 
-## Open decisions (user)
-1. Internal Go tests: waive the "no unit tests" rule for `go test ./internal/...` (recommended: waive for golden-vector and state-machine tests only; the acceptance layer stays e2e bash), or keep e2e-only.
-2. Go profile activation at P1 (recommended) vs ledgering `**/*.go` unscanned until P3 (governance hole: four phases of unscanned engine source).
-3. Flat single-platform engine.json accepted (recommended; revisit only if release automation needs a matrix).
-4. Confirm #11-first sequencing (A18) — its Phase 0/1 rewrites the exact semantics P1 freezes.
+## Decided (2026-08-05, session ruling — user directed "proceed")
+1. Internal Go tests: NARROW WAIVER — `go test ./internal/...` allowed for golden-vector byte tests and state-machine transition tables only, run in the CI build job; the acceptance/oracle layer stays e2e bash (A5 unchanged). Fallback if revisited: hidden `substrate-engine debug <encoder>` verbs driven from bash.
+2. Go profile: ACTIVATE at P1, same commit as `go.mod` (A12). Grounded: activation adds `75-go-build.sh` + `76-golangci.sh`; check count is light but lint impact is real — see the P1 conventions line (forbidigo/wrapcheck/errcheck). CI provisions go + golangci-lint in P1 build wiring.
+3. engine.json: FLAT single-platform `{version, binary_sha256, path?}` (A10). Per-host stores absorb platform variance; revisit only when release automation needs a matrix.
+4. #11 sequencing: DEPENDENCY SATISFIED — every #11 phase verified landed in source (see A18). Remaining action for the user: review and close #11 or split residuals; P1 freezes current semantics.
 
 ## Non-goals
 - No policy-semantics, gate-contract, receipt-guarantee, or ratchet-model changes — host-language change only.
