@@ -39,8 +39,9 @@ fi
 
 INVENTORY=$(mktemp)
 METRICS=$(mktemp)
-export INVENTORY METRICS
-cleanup() { rm -f "$INVENTORY" "$METRICS"; }
+CLAIMS=$(mktemp)
+export INVENTORY METRICS CLAIMS
+cleanup() { rm -f "$INVENTORY" "$METRICS" "$CLAIMS" "$CLAIMS.raw"; }
 trap cleanup EXIT
 
 build_inventory() {
@@ -65,10 +66,94 @@ build_inventory() {
     [ -s "$INVENTORY" ] || die_infra "inventory is empty — wrong directory, or VCS not initialized"
 }
 
+# Resolve every inventory claim once; checks read the exported CLAIMS table
+# instead of spawning jq per file per check.
+build_claims() {
+    local f ext entry interp row match ejson
+    local -A ext_map=()
+    while IFS=$'\t' read -r ext entry; do
+        ext_map[$ext]=$entry
+    done < <(jq -r 'to_entries[] | select(.key != "__shebang__") | [.key, (.value | tojson)] | join("\t")' "$LANGMAP")
+    local shebang_rows=()
+    mapfile -t shebang_rows < <(
+        jq -r '(.__shebang__ // [])[] | [(.match | join(" ")), (.entry | tojson)] | join("\t")' "$LANGMAP")
+    local scopes_active=0
+    jq -e '.scopes // empty | length > 0' "$CONFIG" >/dev/null 2>&1 && scopes_active=1
+    while IFS= read -r f; do
+        ext=".${f##*.}"
+        entry=${ext_map[$ext]:-}
+        if [ -z "$entry" ] && [ -f "$f" ]; then
+            interp=$(shebang_interp "$f")
+            if [ -n "$interp" ]; then
+                for row in ${shebang_rows[@]+"${shebang_rows[@]}"}; do
+                    match=${row%%$'\t'*}
+                    ejson=${row#*$'\t'}
+                    case " $match " in
+                        *" $interp "*) entry=$ejson; break ;;
+                    esac
+                done
+            fi
+        fi
+        [ -n "$entry" ] || continue
+        if [ "$scopes_active" -eq 1 ] && ! scope_allows "$f" "$(jq -r '.profile' <<< "$entry")"; then
+            continue
+        fi
+        printf '%s\t%s\n' "$f" "$entry"
+    done < "$INVENTORY" > "$CLAIMS.raw"
+    # \u001f keeps empty columns intact: tab is IFS whitespace and would
+    # collapse the ast_lang gap in line/exempt-mode rows on read.
+    jq -R -r 'split("\t") as [$p, $e] | ($e | fromjson) as $j
+        | [$p, ($j.profile // ""), ($j.ast_lang // ""), ($j.mode // ""), $e] | join("\u001f")' \
+        "$CLAIMS.raw" > "$CLAIMS" || die_infra "claims table build failed"
+    rm -f "$CLAIMS.raw"
+}
+
 FAILURES=0
+format_duration() {
+    local ms="$1"
+    if [ "$ms" -ge 1000 ]; then
+        printf '%d.%01ds' $((ms / 1000)) $((ms % 1000 / 100))
+    else
+        printf '%dms' "$ms"
+    fi
+}
+RUN_DIR=""
+RUN_NAMES=()
+RUN_PIDS=()
+report_check() {
+    local idx="$1" name rc ms out took
+    name=${RUN_NAMES[idx]}
+    wait "${RUN_PIDS[idx]}"
+    read -r rc ms < "$RUN_DIR/$name.rc" || { rc=70; ms=0; }
+    [ -f "$RUN_DIR/$name.metrics" ] && cat "$RUN_DIR/$name.metrics" >> "$METRICS"
+    out=$(cat "$RUN_DIR/$name.out" 2>/dev/null)
+    took=$(format_duration "$ms")
+    if [ "$rc" -eq 0 ]; then
+        [ -n "$out" ] && printf '%s\n' "$out"
+        success "$name ($took)"
+    elif [ "$rc" -eq 1 ]; then
+        printf '%s\n' "$out"
+        warn "FAIL $name ($took)"
+        FAILURES=$((FAILURES + 1))
+    else
+        printf '%s\n' "$out"
+        warn "FAIL $name: infrastructure failure (rc=$rc) — the gate cannot pass blind"
+        FAILURES=$((FAILURES + 1))
+    fi
+}
+# Checks are contract-isolated (own tmpdirs, per-check METRICS shard), so they
+# run concurrently up to SUBSTRATE_GATE_JOBS; reporting stays in name order.
 run_checks() {
-    local disabled chk name out rc
+    local disabled chk name max running=0 next=0 count=0
     disabled=$(cfg_json '.checks.disabled // []')
+    RUN_DIR=$(mktemp -d)
+    RUN_NAMES=()
+    RUN_PIDS=()
+    max=${SUBSTRATE_GATE_JOBS:-$(nproc 2>/dev/null || printf '4')}
+    case "$max" in
+        ''|*[!0-9]*) max=4 ;;
+    esac
+    [ "$max" -ge 1 ] || max=1
     for chk in "$SUBSTRATE_DIR"/checks.d/*.sh; do
         [ -f "$chk" ] || continue
         name=$(basename "$chk")
@@ -76,22 +161,32 @@ run_checks() {
             warn "$name: disabled in substrate.json"
             continue
         fi
-        export SUBSTRATE_CHECK_NAME="$name"
-        out=$(bash "$chk" 2>&1)
-        rc=$?
-        if [ "$rc" -eq 0 ]; then
-            [ -n "$out" ] && printf '%s\n' "$out"
-            success "$name"
-        elif [ "$rc" -eq 1 ]; then
-            printf '%s\n' "$out"
-            warn "FAIL $name"
-            FAILURES=$((FAILURES + 1))
-        else
-            printf '%s\n' "$out"
-            warn "FAIL $name: infrastructure failure (rc=$rc) — the gate cannot pass blind"
-            FAILURES=$((FAILURES + 1))
+        RUN_NAMES[count]=$name
+        (
+            export SUBSTRATE_CHECK_NAME="$name"
+            export METRICS="$RUN_DIR/$name.metrics"
+            : > "$METRICS"
+            start=$(date +%s%N)
+            out=$(bash "$chk" 2>&1)
+            rc=$?
+            end=$(date +%s%N)
+            printf '%s\n' "$out" > "$RUN_DIR/$name.out"
+            printf '%s %s\n' "$rc" "$(( (end - start) / 1000000 ))" > "$RUN_DIR/$name.rc"
+        ) &
+        RUN_PIDS[count]=$!
+        count=$((count + 1))
+        running=$((running + 1))
+        if [ "$running" -ge "$max" ]; then
+            report_check "$next"
+            next=$((next + 1))
+            running=$((running - 1))
         fi
     done
+    while [ "$next" -lt "$count" ]; do
+        report_check "$next"
+        next=$((next + 1))
+    done
+    rm -rf "$RUN_DIR"
 }
 
 CURRENT_METRICS='{}'
@@ -216,8 +311,10 @@ write_baseline() {
     return 1
 }
 
+GATE_START=$(date +%s%N)
 info "substrate gate: $REPO_ROOT"
 build_inventory
+build_claims
 run_checks
 ratchet
 
@@ -225,8 +322,9 @@ if [ "$UPDATE_BASELINE" -eq 1 ]; then
     write_baseline || FAILURES=$((FAILURES + 1))
 fi
 
+GATE_TOOK=$(format_duration $(( ($(date +%s%N) - GATE_START) / 1000000 )))
 if [ "$FAILURES" -gt 0 ]; then
-    warn "gate: $FAILURES check(s) failed"
+    warn "gate: $FAILURES check(s) failed ($GATE_TOOK)"
     exit 1
 fi
-success "gate: all checks passed"
+success "gate: all checks passed ($GATE_TOOK)"
