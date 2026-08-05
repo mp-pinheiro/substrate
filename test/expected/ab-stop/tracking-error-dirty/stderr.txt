@@ -1,0 +1,1 @@
+{"decision":"block","reason":"[substrate — completion blocked] Unowned pending paths: user.sh. Ownership error: jj diff failed: probe. Run direct verification, then: substrate checkpoint --session <SESSION> --message 'type(scope): subject'. Never push."}

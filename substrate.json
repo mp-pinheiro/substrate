@@ -33,7 +33,8 @@
     "profiles/*/fixtures/**",
     "profiles/*/templates/**",
     "substrate-profiles/*/fixtures/**",
-    "substrate-profiles/*/templates/**"
+    "substrate-profiles/*/templates/**",
+    "test/golden/**"
   ],
   "protected_paths": [
     ".env*",

@@ -1,0 +1,14 @@
+{
+  "format": 1,
+  "tools": {
+    "bash": "5.2.21(1)-release",
+    "jq": "jq-1.7.1",
+    "jq_sha256": "5942c9b0934e510ee61eb3e30273f1b3fe2590df93933a93d7c58b81d19c8ff5"
+  },
+  "fixture_sha256": "71c51774b6ced30d7232c71e83770a6098e70802fed040be5107fef3390c3157",
+  "vectors": {
+    "baseline.json": "52c568aad137e86ea47fef31b6d0487857b89be10256e3fb4fc1677c7a65cc22",
+    "metrics.jsonl": "32ddf3938a8ed57ec852ff224ee5b83072d095da7510ad9746260f0f1689e982",
+    "claims.0x1f": "ea0557dc2a1ee38bec25cec641365b846c5dc5919fd47b341b50b90958224029"
+  }
+}

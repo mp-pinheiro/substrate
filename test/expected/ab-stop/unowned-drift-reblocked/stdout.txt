@@ -1,0 +1,1 @@
+{"systemMessage":"[substrate — completion blocked] Unowned pending paths: user.sh. Repository revision changed without a checkpoint receipt. Run direct verification, then: substrate checkpoint --session <SESSION> --message 'type(scope): subject'. Never push."}

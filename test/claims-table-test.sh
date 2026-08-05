@@ -61,9 +61,7 @@ while IFS= read -r line; do
 done < "$T/fallback.txt"
 [ "$expected_max" -gt 3 ] || fail "fixture lost its line-mode workflow claims (expected_max=$expected_max)"
 
-sed -i 's|rm -f "$CLAIMS.raw"|rm -f "$CLAIMS.raw"; cp "$CLAIMS" "${SUBSTRATE_CLAIMS_COPY:-/dev/null}"|' \
-    .substrate/gate.sh
-export SUBSTRATE_CLAIMS_COPY="$T/claims.tsv"
+export SUBSTRATE_CLAIMS_OUT="$T/claims.tsv"
 .substrate/gate.sh --update-baseline >/dev/null 2>&1 || fail "gate --update-baseline failed"
 [ -s "$T/claims.tsv" ] || fail "runner did not produce a claims table"
 

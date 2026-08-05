@@ -1,0 +1,1 @@
+{"decision":"block","reason":"[substrate — completion blocked] Repository revision changed without a checkpoint receipt. Inspection error: jj log: probe failure. Run direct verification, then: substrate checkpoint --session <SESSION> --message 'type(scope): subject'. Never push."}

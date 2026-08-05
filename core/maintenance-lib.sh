@@ -61,7 +61,7 @@ maintenance_path_state() {
         sorted=$(mktemp) || { rm -f "$records" "$nodes"; return 1; }
         find "$path" -mindepth 1 -print0 > "$nodes" \
             || { rm -f "$records" "$nodes" "$sorted"; return 1; }
-        sort -z "$nodes" > "$sorted" \
+        LC_ALL=C sort -z "$nodes" > "$sorted" \
             || { rm -f "$records" "$nodes" "$sorted"; return 1; }
         mode=$(stat -c '%a' "$path") || { rm -f "$records" "$nodes" "$sorted"; return 1; }
         printf 'dir\0.\0%s\0' "$mode" > "$records"
@@ -134,7 +134,7 @@ maintenance_collect_dirty_paths() {
         git ls-files -z --others --exclude-standard >> "$raw" \
             || { rm -f "$raw"; return 1; }
     fi
-    sort -zu "$raw" > "$output"
+    LC_ALL=C sort -zu "$raw" > "$output"
     local rc=$?
     rm -f "$raw"
     return "$rc"
@@ -255,13 +255,16 @@ maintenance_dirty_path_seedable() {
 }
 
 maintenance_units_match_preimage() {
-    local receipt="$1" total index unit preimage
-    total=$(jq '.repository.units | length' "$receipt") || return 1
-    for ((index=0; index<total; index++)); do
-        unit=$(jq -r --argjson index "$index" '.repository.units[$index].path' "$receipt") || return 1
-        preimage=$(jq -r --argjson index "$index" '.repository.units[$index].preimage' "$receipt") || return 1
-        [ "$(maintenance_path_state "$unit")" = "$preimage" ] || return 1
-    done
+    local receipt="$1" stream unit preimage
+    stream=$(mktemp) || return 1
+    # PERF: one jq streams every unit field NUL-framed; NUL is the only byte a path cannot hold.
+    jq -j '(.repository.units // [])[] | (.path, .preimage) | (., "\u0000")' "$receipt" > "$stream" \
+        || { rm -f "$stream"; return 1; }
+    while IFS= read -r -d '' unit <&3; do
+        IFS= read -r -d '' preimage <&3 || { rm -f "$stream"; return 1; }
+        [ "$(maintenance_path_state "$unit")" = "$preimage" ] || { rm -f "$stream"; return 1; }
+    done 3< "$stream"
+    rm -f "$stream"
 }
 
 maintenance_manifest_add() {

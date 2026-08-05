@@ -1,0 +1,1 @@
+{"decision":"block","reason":"[substrate — completion blocked] Agent-owned pending paths: owned.sh. Ownership error: working copy changed outside an observed Claude tool call. Run direct verification, then: substrate checkpoint --session <SESSION> --message 'type(scope): subject'. Never push."}
