@@ -2,7 +2,11 @@ import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 
 const HARD: Array<[RegExp, string]> = [
-	[/(^|\/)substrate-baseline\.json$/, "baseline changes only via the gate (--update-baseline)"],
+	[/^substrate-baseline\.json$/, "baseline changes only via the gate (--update-baseline)"],
+	[
+		/\/substrate-baseline\.json$/,
+		"not the repo baseline, but that basename is governed anywhere in the tree — the rule is name-based so it can rule on paths whose parents do not exist yet; rename the file if it is not a substrate baseline",
+	],
 	[/(^|\/)\.substrate(\/|$)/, "vendored substrate core — change the kit and run: substrate update"],
 	[/(^|\/)CLAUDE\.md$/, "governance doc — propose the edit to the user instead"],
 ];
