@@ -49,6 +49,14 @@ const repo = process.argv[4];
 const dirtyRepo = process.argv[5];
 const ctx = probe.context(repo);
 await callAll("session_start", {}, ctx);
+const deviceEvent = {
+	toolName: "write",
+	toolCallId: "device-write",
+	input: { path: "xd://retain" },
+	content: [{ type: "text", text: "memories stored" }],
+	isError: false,
+};
+const deviceResult = (await resultAll(deviceEvent, ctx)) ?? null;
 const slopEvent = writeEvent("slop-write", `${repo}/owned.sh`);
 await callAll("tool_call", slopEvent, ctx);
 appendFileSync(
@@ -117,6 +125,7 @@ const pushBlocks = await callAll(
 console.log(
 	JSON.stringify({
 		beforeStop,
+		deviceResult,
 		autoStop,
 		dirtySubset,
 		checkpoint,
@@ -134,6 +143,8 @@ omp_results=$(bun "$T/omp-lifecycle.ts" "$KIT_ROOT/core/omp/substrate-quality.ts
     || fail "OMP lifecycle probe failed"
 jq -e '.beforeStop.decision == "block" and (.beforeStop.reason | contains("Agent-owned pending paths: owned.sh")) and (.beforeStop.reason | contains("Automatic checkpoint failed"))' \
     <<< "$omp_results" >/dev/null || fail "OMP stop did not block red owned work with the auto-failure detail: $omp_results"
+jq -e '.deviceResult == null and (.beforeStop.reason | contains("Ownership tracking error") | not)' \
+    <<< "$omp_results" >/dev/null || fail "OMP tracked a non-filesystem device write as repo ownership: $omp_results"
 jq -e '.checkpoint.details.status == "passed" and (.checkpoint.isError // false) == false' \
     <<< "$omp_results" >/dev/null || fail "OMP checkpoint did not commit owned work: $omp_results"
 jq -e '.afterStop == null' <<< "$omp_results" >/dev/null \
