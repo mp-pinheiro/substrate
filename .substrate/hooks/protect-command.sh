@@ -21,11 +21,11 @@ if printf '%s' "$cmd" | grep -Eq '(^|[[:space:]/])substrate[[:space:]]+verify([[
     exit 2
 fi
 
-if printf '%s' "$cmd" | grep -Eq '(^|[;&|][[:space:]]*|[[:space:]])(jj[[:space:]]+(commit|describe|squash)|git[[:space:]]+commit)([[:space:]"\\]|$)'; then
+if printf '%s' "$cmd" | grep -Eq '(^|[;&|(`][[:space:]]*)(jj[[:space:]]+(commit|describe|squash)|git[[:space:]]+commit)([[:space:]"\\]|$)'; then
     printf 'BLOCKED: commits must use the Substrate checkpoint transaction after direct verification; do not run jj commit, jj describe, jj squash, or git commit directly\n' >&2
     exit 2
 fi
-if printf '%s' "$cmd" | grep -Eq '(^|[;&|][[:space:]]*|[[:space:]])[^[:space:]]*\.substrate/checkpoint\.sh([[:space:]"\\]|$)'; then
+if printf '%s' "$cmd" | grep -Eq '(^|[;&|(`][[:space:]]*)[^[:space:]]*\.substrate/checkpoint\.sh([[:space:]"\\]|$)'; then
     printf 'BLOCKED: invoke checkpoints through the harness lifecycle, not the vendored script directly\n' >&2
     exit 2
 fi
@@ -40,6 +40,22 @@ if printf '%s' "$cmd" | grep -Eq '(^|[;&|][[:space:]]*|[[:space:]])substrate[[:s
         printf 'BLOCKED: Claude checkpoint command must carry its current lifecycle session id\n' >&2
         exit 2
     fi
+fi
+if printf '%s' "$cmd" | grep -Eq '(^|[;&|][[:space:]]*|[[:space:]])substrate[[:space:]]+restructure([[:space:]]|$)'; then
+    session=$(jq -r '.session_id // empty' <<< "$input")
+    case "$session" in
+        ''|*[!A-Za-z0-9._-]*)
+            printf 'BLOCKED: Claude restructure command has no valid lifecycle session\n' >&2
+            exit 2 ;;
+    esac
+    if ! printf '%s' "$cmd" | grep -Eq -- "--session([=[:space:]])['\"]?${session}(['\"[:space:]]|$)"; then
+        printf 'BLOCKED: Claude restructure command must carry its current lifecycle session id\n' >&2
+        exit 2
+    fi
+fi
+if printf '%s' "$cmd" | grep -Eq '(^|[;&|(`][[:space:]]*)[^[:space:]]*\.substrate/restructure\.sh([[:space:]"\\]|$)'; then
+    printf 'BLOCKED: invoke restructures through the harness lifecycle, not the vendored script directly\n' >&2
+    exit 2
 fi
 if printf '%s' "$cmd" | grep -Eq '(^|[[:space:]])(--update-baseline|--tighten|--accept-regression)([[:space:]]|$)'; then
     printf 'BLOCKED: baseline mutations are checkpoint-owned; initial debt or regressions require the user to run the explicit baseline command\n' >&2

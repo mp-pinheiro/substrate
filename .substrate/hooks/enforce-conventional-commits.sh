@@ -12,7 +12,7 @@ command -v jq >/dev/null 2>&1 || exit 0
 cmd=$(jq -r '.tool_input.command // .command // empty' 2>/dev/null)
 [ -n "$cmd" ] || exit 0
 
-printf '%s' "$cmd" | grep -Eq 'jj[[:space:]]+(commit|describe|squash)([[:space:]]|$)' || exit 0
+printf '%s' "$cmd" | grep -Eq '(^|[;&|(`][[:space:]]*)jj[[:space:]]+(commit|describe|squash)([[:space:]]|$)' || exit 0
 printf '%s' "$cmd" | grep -Eq '(-m|--message)([[:space:]=])' || exit 0
 
 conv='(-m|--message)[[:space:]=]+["'"'"']?(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([^)]+\))?!?:[[:space:]]'
