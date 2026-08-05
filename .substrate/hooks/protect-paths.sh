@@ -49,8 +49,11 @@ esac
 
 check_hard() {
     case "$1" in
-        substrate-baseline.json|*/substrate-baseline.json)
+        substrate-baseline.json)
             echo "blocked: baseline changes only via the gate (--update-baseline)" >&2
+            exit 2 ;;
+        */substrate-baseline.json)
+            echo "blocked: $1 is not the repo baseline, but that basename is governed anywhere in the tree — the rule is name-based so it can rule on paths whose parents do not exist yet; rename the file if it is not a substrate baseline" >&2
             exit 2 ;;
         .substrate/*|*/.substrate/*)
             echo "blocked: $1 is vendored substrate core — change the kit and run: substrate update" >&2

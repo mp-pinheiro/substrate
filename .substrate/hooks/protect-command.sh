@@ -90,7 +90,7 @@ block_if_named() {
     fi
 }
 
-block_if_named 'substrate-baseline.json' baseline
+block_if_named 'substrate-baseline.json' 'baseline — governed basename anywhere in the tree'
 block_if_named '.substrate' 'vendored engine'
 block_if_named 'CLAUDE.md' governance
 if [ -f "$CONFIG" ]; then
