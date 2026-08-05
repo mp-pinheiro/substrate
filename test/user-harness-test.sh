@@ -112,8 +112,8 @@ omp_results=$(bun "$T/omp-probe.ts" "$HOME/.omp/agent/extensions/substrate-quali
 	"$T/nowhere" "$T/repo" "$T/repo/components/gapfill.sh" \
 	"$T/repo/missing/deep/substrate-baseline.json" \
 	"$T/repo/escaped-parent/missing/file.sh")
-jq -e '.writes[0].block == true and (.writes[0].reason | contains("baseline"))' <<< "$omp_results" >/dev/null \
-	|| fail "user-level omp extension missed a cross-repo protected write: $omp_results"
+jq -e '.writes[0].block == true and (.writes[0].reason | contains("governed basename anywhere in the tree") or contains("governed anywhere in the tree"))' <<< "$omp_results" >/dev/null \
+	|| fail "user-level omp extension missed a cross-repo protected write, or lost the nested-lookalike verdict: $omp_results"
 jq -e '.writes[1].block == true and (.writes[1].reason | contains("outside the repo"))' <<< "$omp_results" >/dev/null \
 	|| fail "user-level omp extension missed a missing-parent symlink escape: $omp_results"
 jq -e '.policy.repo.systemPrompt[-1] | contains("governed by Substrate")' <<< "$omp_results" >/dev/null \
@@ -179,7 +179,8 @@ out=$(cd "$T/nowhere" && printf '%s' "$probe_missing" \
     | CLAUDE_PROJECT_DIR="$T/nowhere" bash "$LAUNCH" protect-paths.sh 2>&1)
 rc=$?
 [ "$rc" -eq 2 ] || fail "missing-parent target bypassed launcher routing (rc=$rc: $out)"
-printf '%s' "$out" | grep -q 'baseline' || fail "missing-parent target verdict lost: $out"
+printf '%s' "$out" | grep -q 'governed anywhere in the tree' \
+	|| fail "missing-parent verdict lost the nested-lookalike distinction (a root-baseline message here misleads): $out"
 
 # subdirectory + relative payload path: upward walk from the target
 mkdir -p "$T/repo/components"
