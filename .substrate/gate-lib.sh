@@ -71,6 +71,27 @@ unscanned_match() {
     return 1
 }
 
+# claims cache: the runner resolves every inventory claim once into CLAIMS;
+# standalone check runs (no CLAIMS in the environment) keep per-file resolution.
+_CLAIMS_STATE=""
+declare -A _CLAIM_PROFILE=() _CLAIM_AST=() _CLAIM_MODE=() _CLAIM_ENTRY=()
+load_claims() {
+    [ -z "$_CLAIMS_STATE" ] || return 0
+    if [ -z "${CLAIMS:-}" ] || [ ! -f "$CLAIMS" ]; then
+        _CLAIMS_STATE=none
+        return 0
+    fi
+    local p prof ast mode entry
+    while IFS=$'\x1f' read -r p prof ast mode entry; do
+        [ -n "$p" ] || continue
+        _CLAIM_PROFILE[$p]=$prof
+        _CLAIM_AST[$p]=$ast
+        _CLAIM_MODE[$p]=$mode
+        _CLAIM_ENTRY[$p]=$entry
+    done < "$CLAIMS"
+    _CLAIMS_STATE=table
+}
+
 scan_target() {
     claimed "$1" && ! unscanned_match "$1"
 }
@@ -78,6 +99,13 @@ scan_target() {
 # style scanners (comments, duplication, budgets) skip exempt-mode claims —
 # exempt means another tool owns the file's style, not that it may not parse
 scan_source() {
+    load_claims
+    if [ "$_CLAIMS_STATE" = table ]; then
+        [ -n "${_CLAIM_ENTRY[$1]:-}" ] || return 1
+        unscanned_match "$1" && return 1
+        [ "${_CLAIM_MODE[$1]}" != "exempt" ]
+        return $?
+    fi
     local e
     e=$(lang_entry "$1")
     [ -n "$e" ] || return 1
@@ -89,6 +117,18 @@ scan_source() {
 # entries, one per line; scan_target keeps exempt-mode claims in scope.
 profile_files() {
     local want="$1" lang="${2:-}" pred="${3:-scan_source}" f entry
+    load_claims
+    if [ "$_CLAIMS_STATE" = table ]; then
+        while IFS= read -r f; do
+            [ "${_CLAIM_PROFILE[$f]:-}" = "$want" ] || continue
+            if [ -n "$lang" ]; then
+                [ "${_CLAIM_AST[$f]:-}" = "$lang" ] || continue
+            fi
+            "$pred" "$f" || continue
+            printf '%s\n' "$f"
+        done < "$INVENTORY"
+        return 0
+    fi
     while IFS= read -r f; do
         "$pred" "$f" || continue
         entry=$(lang_entry "$f")
@@ -113,28 +153,39 @@ profile_files_ext() {
 
 # langmap accessors; empty output = unclaimed. Extension first, then shebang
 # fallback so extensionless executables (bin/*, hooks) stay claimed source.
+shebang_interp() {
+    local first interp
+    local -a parts=()
+    IFS= read -r first < "$1" || first=""
+    case "$first" in
+        '#!'*)
+            read -r -a parts <<< "${first#\#!}"
+            interp=$(basename "${parts[0]:-}")
+            [ "$interp" = "env" ] && interp=$(basename "${parts[1]:-}")
+            printf '%s\n' "$interp"
+            ;;
+    esac
+    return 0
+}
+
 lang_entry_unscoped() {
-    local f="$1" ext=".${1##*.}" e first
+    local f="$1" ext=".${1##*.}" e interp
     e=$(jq -c --arg e "$ext" '.[$e] // empty' "$LANGMAP")
     if [ -z "$e" ] && [ -f "$f" ]; then
-        IFS= read -r first < "$f" || first=""
-        case "$first" in
-            '#!'*)
-                local -a parts=()
-                read -r -a parts <<< "${first#\#!}"
-                local interp
-                interp=$(basename "${parts[0]:-}")
-                [ "$interp" = "env" ] && interp=$(basename "${parts[1]:-}")
-                e=$(jq -c --arg i "$interp" \
-                    'first((.__shebang__ // [])[] | select(.match | index($i)) | .entry) // empty' "$LANGMAP")
-                ;;
-        esac
+        interp=$(shebang_interp "$f")
+        [ -z "$interp" ] || e=$(jq -c --arg i "$interp" \
+            'first((.__shebang__ // [])[] | select(.match | index($i)) | .entry) // empty' "$LANGMAP")
     fi
     [ -n "$e" ] && printf '%s\n' "$e"
     return 0
 }
 
 lang_entry() {
+    load_claims
+    if [ "$_CLAIMS_STATE" = table ]; then
+        [ -n "${_CLAIM_ENTRY[$1]:-}" ] && printf '%s\n' "${_CLAIM_ENTRY[$1]}"
+        return 0
+    fi
     local e
     e=$(lang_entry_unscoped "$1")
     if [ -n "$e" ] && ! scope_allows "$1" "$(jq -r '.profile' <<< "$e")"; then
@@ -161,6 +212,11 @@ scope_allows() {
 }
 
 claimed() {
+    load_claims
+    if [ "$_CLAIMS_STATE" = table ]; then
+        [ -n "${_CLAIM_ENTRY[$1]:-}" ]
+        return $?
+    fi
     [ -n "$(lang_entry "$1")" ]
 }
 

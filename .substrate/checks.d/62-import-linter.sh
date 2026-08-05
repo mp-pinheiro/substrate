@@ -5,14 +5,9 @@ set -uo pipefail
 # shellcheck source=../gate-lib.sh
 source "$SUBSTRATE_DIR/gate-lib.sh"
 
-if [ ! -f "$REPO_ROOT/.importlinter" ]; then
-    warn "no .importlinter at repo root — import contracts inactive (substrate init installs a template)"
-    exit 0
-fi
-if ! grep -Eq '^[[:space:]]*root_packages?[[:space:]]*=' "$REPO_ROOT/.importlinter"; then
-    warn ".importlinter is the unconfigured template — uncomment root_packages and a contract to activate"
-    exit 0
-fi
+[ -n "$(profile_files python | head -n 1)" ] || exit 0
+[ -f "$REPO_ROOT/.importlinter" ] || exit 0
+grep -Eq '^[[:space:]]*root_packages?[[:space:]]*=' "$REPO_ROOT/.importlinter" || exit 0
 
 require_bin_ci lint-imports "pipx install import-linter" || exit 0
 

@@ -32,15 +32,16 @@ trap 'rm -rf "$tmp"' EXIT
 
 # run_tsc <label> <paths_json> [extra decl...] — 0 clean, 1 findings, 2 infra
 run_tsc() {
-    local label="$1" paths="$2" out rc f
+    local label="$1" paths="$2" out rc f dir
     shift 2
+    dir=$(mktemp -d -p "$tmp")
     jq -n --argjson paths "$paths" '{
         compilerOptions: {
             noEmit: true, strict: true, target: "esnext", module: "esnext",
             moduleResolution: "bundler", skipLibCheck: true, types: [],
             paths: $paths
         }
-    }' > "$tmp/tsconfig.json"
+    }' > "$dir/tsconfig.json"
     local abs_files=()
     for f in "$ambient" "$@" "${files[@]}"; do
         case "$f" in
@@ -48,9 +49,9 @@ run_tsc() {
             *) abs_files+=("$REPO_ROOT/$f") ;;
         esac
     done
-    jq --args '.files = $ARGS.positional' "${abs_files[@]}" < "$tmp/tsconfig.json" > "$tmp/t2.json" \
-        && mv "$tmp/t2.json" "$tmp/tsconfig.json"
-    out=$(bunx --bun -p typescript@6.0.3 tsc -p "$tmp/tsconfig.json" 2>&1)
+    jq --args '.files = $ARGS.positional' "${abs_files[@]}" < "$dir/tsconfig.json" > "$dir/t2.json" \
+        && mv "$dir/t2.json" "$dir/tsconfig.json"
+    out=$(bunx --bun -p typescript@6.0.3 tsc -p "$dir/tsconfig.json" 2>&1)
     rc=$?
     [ "$rc" -eq 0 ] && return 0
     printf '%s\n' "$out"
@@ -63,9 +64,12 @@ run_tsc() {
 
 if [ -f "$sdk_types" ]; then
     printf 'kit-tsc: checking against installed omp SDK types\n'
+    # sequential on purpose: concurrent bunx invocations of the same package
+    # race the cache link step (Failed to link typescript: EEXIST)
     run_tsc "installed SDK" "$(jq -n --arg p "$sdk_types" '{"@oh-my-pi/pi-coding-agent": [$p]}')" || exit 1
     if ! run_tsc "recorded surface" '{}' "$surface"; then
-        printf 'recorded surface disagrees with the installed SDK — refresh %s\n' "substrate-profiles/kit-ts/types/pi-surface.d.ts"
+        printf 'recorded surface disagrees with the installed SDK — refresh %s\n' \
+            "substrate-profiles/kit-ts/types/pi-surface.d.ts"
         exit 1
     fi
     exit 0
