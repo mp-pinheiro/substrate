@@ -2,7 +2,8 @@
 # Firing battery for changed-files-scan.sh: bash-side writes (the hole the
 # write/edit-only ratchet left open) must be caught from the tree diff alone,
 # in both VCS modes; protected paths written around the write hook must be
-# named; a clean tree must stay silent; violations must never be memoized.
+# named; a clean tree must stay silent; violations must never be memoized;
+# and an edit that restores mtime at the same size must still be rescanned.
 set -uo pipefail
 
 KIT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -57,6 +58,65 @@ battery() {
     rm -f "$err"
 }
 
+# one memo line per distinct key: a rescan appends, a memo hit does not
+memo_keys() {
+    local f n total=0
+    for f in "${TMPDIR:-/tmp}"/substrate-scan-*; do
+        [ -f "$f" ] || continue
+        n=$(grep -cF "$1|" "$f") || n=0
+        total=$((total + n))
+    done
+    printf '%s' "$total"
+}
+
+write_memo() {
+    printf '#!/usr/bin/env bash\nset -euo pipefail\nls "$@"\n# %s\n' "$1" > components/memo.sh
+}
+
+# rewrite at an identical byte count and restore the mtime from $2, so the file
+# carries the exact mtime:size signature ($3) it had before the edit
+respin() {
+    write_memo "$1"
+    touch -r "$2" components/memo.sh
+    [ "$(stat -c '%.9Y:%s' components/memo.sh)" = "$3" ] \
+        || fail "memo: payload width or mtime not restored — the stale-key case would go untested"
+}
+
+# The memo may not key on mtime:size: an editor that rewrites a file at the same
+# length and restores its mtime leaves that signature untouched.
+memo_battery() {
+    local err stamp base rc
+    err=$(mktemp)
+    stamp=$(mktemp)
+
+    write_memo 'rhubarb rhubarb rhub'
+    run_scan "$err"
+    rc=$?
+    [ "$rc" -eq 0 ] || fail "memo: clean new file exited $rc: $(cat "$err")"
+    [ "$(memo_keys components/memo.sh)" = 1 ] || fail "memo: passing scan was not memoized"
+    base=$(stat -c '%.9Y:%s' components/memo.sh)
+    touch -r components/memo.sh "$stamp"
+
+    respin 'now we check the box' "$stamp" "$base"
+    run_scan "$err"
+    rc=$?
+    [ "$rc" -eq 2 ] || fail "memo: same-signature slop edit exited $rc, want 2 — stale memo hit"
+    grep -q 'components/memo.sh' "$err" || fail "memo: rescan did not name the file: $(cat "$err")"
+    [ "$(memo_keys components/memo.sh)" = 1 ] || fail "memo: a failing scan was memoized"
+
+    respin 'custard custard cust' "$stamp" "$base"
+    run_scan "$err"
+    rc=$?
+    [ "$rc" -eq 0 ] || fail "memo: repaired file exited $rc: $(cat "$err")"
+    [ "$(memo_keys components/memo.sh)" = 2 ] || fail "memo: re-ratcheted pass added no key"
+
+    run_scan "$err"
+    rc=$?
+    [ "$rc" -eq 0 ] || fail "memo: untouched file exited $rc: $(cat "$err")"
+    [ "$(memo_keys components/memo.sh)" = 2 ] || fail "memo: unchanged content missed the memo"
+    rm -f "$err" "$stamp" components/memo.sh
+}
+
 T=$(mktemp -d)
 trap 'rm -rf "$T"' EXIT
 
@@ -72,6 +132,12 @@ mkdir -p "$T/git-repo"
     out=$(env -u CI .substrate/gate.sh --update-baseline 2>&1) || fail "git: baseline not green: $out"
     git add -A
     git commit -qm 'chore: baseline'
+    # private TMPDIR: memo_keys reads the cache dir, and /tmp keeps every earlier run's cache
+    (
+        mkdir -p "$T/memo-tmp" || fail "memo: private TMPDIR not created"
+        export TMPDIR="$T/memo-tmp"
+        memo_battery
+    ) || exit 1
     battery git
 ) || exit 1
 
@@ -116,4 +182,4 @@ SH
     rm -f "$err"
 ) || exit 1
 
-printf 'changed-scan-test: git + jj batteries green (clean, slop, memo, untracked, protected, rename)\n'
+printf 'changed-scan-test: git + jj batteries green (clean, slop, memo, content-key, untracked, protected, rename)\n'

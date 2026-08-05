@@ -1,0 +1,6 @@
+{"name":"comments:docs/notes.yaml","value":2}
+{"name":"comments:tools/deploy","value":1}
+{"name":"comments:tools/setup.zsh","value":1}
+{"name":"max_file_lines","value":9}
+{"name":"golden:probe_lo","value":7}
+{"name":"golden:probe_hi","value":3,"dir":"hi"}

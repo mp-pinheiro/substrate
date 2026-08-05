@@ -14,7 +14,7 @@ source "$MAINTENANCE_LIB_DIR/maintenance-transaction.sh"
 
 maintenance_resume_incomplete() {
     local stable="$1" receipt candidate manifest expected current from status path preimage desired
-    local total index units commit to id transaction_dir
+    local stream units commit to id transaction_dir
     receipt=$(cat "$stable") || return 1
     status=$(jq -r '.repository.status' <<< "$receipt")
     case "$status" in
@@ -28,15 +28,18 @@ maintenance_resume_incomplete() {
     [ -d "$candidate/.git" ] || { warn "incomplete transaction candidate is missing"; return 1; }
     from=$(jq -r '.repository.fromRevision // ""' <<< "$receipt")
     [ "$(maintenance_revision)" = "$from" ] || { warn "repository revision changed during incomplete maintenance"; return 1; }
-    total=$(jq '.repository.units | length' <<< "$receipt") || return 1
-    for ((index=0; index<total; index++)); do
-        path=$(jq -r --argjson index "$index" '.repository.units[$index].path' <<< "$receipt") || return 1
-        preimage=$(jq -r --argjson index "$index" '.repository.units[$index].preimage' <<< "$receipt") || return 1
-        desired=$(jq -r --argjson index "$index" '.repository.units[$index].desired' <<< "$receipt") || return 1
-        current=$(maintenance_path_state "$path") || return 1
+    stream=$(mktemp) || return 1
+    # PERF: one jq streams every unit field NUL-framed; NUL is the only byte a path cannot hold.
+    jq -j '(.repository.units // [])[] | (.path, .preimage, .desired) | (., "\u0000")' <<< "$receipt" \
+        > "$stream" || { rm -f "$stream"; return 1; }
+    while IFS= read -r -d '' path <&3; do
+        IFS= read -r -d '' preimage <&3 || { rm -f "$stream"; return 1; }
+        IFS= read -r -d '' desired <&3 || { rm -f "$stream"; return 1; }
+        current=$(maintenance_path_state "$path") || { rm -f "$stream"; return 1; }
         [ "$current" = "$preimage" ] || [ "$current" = "$desired" ] \
-            || { warn "maintenance recovery blocked by drift at $path"; return 1; }
-    done
+            || { warn "maintenance recovery blocked by drift at $path"; rm -f "$stream"; return 1; }
+    done 3< "$stream"
+    rm -f "$stream"
     manifest=$(mktemp) || return 1
     units=$(mktemp) || { rm -f "$manifest"; return 1; }
     jq -r '.repository.manifest[]' <<< "$receipt" > "$manifest"

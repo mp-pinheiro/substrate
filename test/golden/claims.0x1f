@@ -1,0 +1,6 @@
+ci/pipeline.ymlbaseline{"mode":"line","markers":["#"],"profile":"base"}
+config/settings.jsonbaseexempt{"mode":"exempt","profile":"base"}
+docs/notes.yamlbaseline{"mode":"line","markers":["#"],"profile":"base"}
+lib/legacy.shshellbashast{"mode":"ast","ast_lang":"bash","markers":["#"],"profile":"shell"}
+tools/deployshellline{"mode":"line","markers":["#"],"heredoc":true,"profile":"shell"}
+tools/setup.zshshellline{"mode":"line","markers":["#"],"heredoc":true,"profile":"shell"}

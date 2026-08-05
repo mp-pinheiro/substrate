@@ -1,0 +1,13 @@
+{
+  "metrics": {
+    "comments:docs/notes.yaml": 2,
+    "comments:tools/deploy": 1,
+    "comments:tools/setup.zsh": 1,
+    "golden:probe_hi": 3,
+    "golden:probe_lo": 7,
+    "max_file_lines": 9
+  },
+  "direction": {
+    "golden:probe_hi": "hi"
+  }
+}

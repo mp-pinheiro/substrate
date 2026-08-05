@@ -148,6 +148,14 @@ cmd_doctor() {
             warn "core: $bin missing (ast-grep falls back to bunx; bunx needs bun)"
         fi
     done
+    local jq_path jq_id
+    if jq_path=$(command -v jq); then
+        jq_id=$("$jq_path" --version 2>/dev/null) || jq_id=""
+        case "$jq_id" in
+            jq-1.7*) success "core: jq identity $jq_id ($jq_path)" ;;
+            *) warn "core: jq at $jq_path reports '${jq_id:-no version}' — every gate artifact is jq-1.7 serialization; a jaq/gojq/1.8 shim changes those bytes: install jq 1.7" ;;
+        esac
+    fi
     local pkg
     for bin in ast-grep jscpd; do
         case "$bin" in

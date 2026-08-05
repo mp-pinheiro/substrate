@@ -6,3 +6,4 @@
 *.pem
 *.pfx
 substrate-report.md
+test/.toolchain/
