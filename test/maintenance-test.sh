@@ -182,7 +182,7 @@ head_before=$(git rev-parse HEAD)
 if "$KIT_ROOT/bin/substrate" bootstrap --checkpoint --accept-baseline --repo-only > "$T/regression.out" 2>&1; then
     fail "existing baseline regression was accepted implicitly"
 fi
-grep -q 'above their grandfathered baseline' "$T/regression.out" \
+grep -q 'beyond their grandfathered baseline' "$T/regression.out" \
     || fail "baseline regression refusal was not actionable"
 [ "$baseline_hash" = "$(sha256sum substrate-baseline.json)" ] || fail "failed regression changed the baseline"
 [ "$head_before" = "$(git rev-parse HEAD)" ] || fail "failed regression advanced the repository"

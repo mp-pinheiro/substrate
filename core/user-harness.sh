@@ -35,12 +35,15 @@ install_user_harness() {
     local omp_root="$HOME/.omp/agent/extensions" omp_dest="$HOME/.omp/agent/extensions/substrate-quality.ts"
     local omp_module_root="$omp_root/substrate-quality"
     local omp_runtime_dest="$omp_module_root/runtime.ts" omp_identity_dest="$omp_module_root/identity.ts"
-    local omp_lifecycle_dest="$omp_module_root/lifecycle.ts"
+    local omp_lifecycle_dest="$omp_module_root/lifecycle.ts" omp_policy_dest="$omp_module_root/policy.ts"
+    local omp_transactions_dest="$omp_module_root/transactions.ts"
+    local omp_restructure_dest="$omp_module_root/restructure.ts"
     local claude_root="$HOME/.claude/hooks" claude_dest="$HOME/.claude/hooks/substrate-launch.sh"
     local template="$KIT_ROOT/core/claude-hooks-user.json" settings="$HOME/.claude/settings.json" merged
     for path in \
         "$omp_root" "$omp_dest" \
         "$omp_module_root" "$omp_runtime_dest" "$omp_lifecycle_dest" "$omp_identity_dest" \
+        "$omp_policy_dest" "$omp_transactions_dest" "$omp_restructure_dest" \
         "$claude_root" "$claude_dest" "$settings" \
         "$HOME/.claude/skills" "$HOME/.claude/agents" \
         "$HOME/.omp/agent/skills" "$HOME/.omp/agent/agents"; do
@@ -49,17 +52,24 @@ install_user_harness() {
     # agent-level only — ~/.omp/profiles/* must never be touched by this installer
     if [ -L "$omp_root" ] || [ -L "$omp_dest" ] || [ -L "$omp_module_root" ] \
         || [ -L "$omp_runtime_dest" ] || [ -L "$omp_lifecycle_dest" ] || [ -L "$omp_identity_dest" ] \
+        || [ -L "$omp_policy_dest" ] || [ -L "$omp_transactions_dest" ] || [ -L "$omp_restructure_dest" ] \
         || { [ -e "$omp_dest" ] && [ ! -f "$omp_dest" ]; } \
         || { [ -e "$omp_module_root" ] && [ ! -d "$omp_module_root" ]; } \
         || { [ -e "$omp_runtime_dest" ] && [ ! -f "$omp_runtime_dest" ]; } \
         || { [ -e "$omp_lifecycle_dest" ] && [ ! -f "$omp_lifecycle_dest" ]; } \
-        || { [ -e "$omp_identity_dest" ] && [ ! -f "$omp_identity_dest" ]; }; then
+        || { [ -e "$omp_identity_dest" ] && [ ! -f "$omp_identity_dest" ]; } \
+        || { [ -e "$omp_policy_dest" ] && [ ! -f "$omp_policy_dest" ]; } \
+        || { [ -e "$omp_transactions_dest" ] && [ ! -f "$omp_transactions_dest" ]; } \
+        || { [ -e "$omp_restructure_dest" ] && [ ! -f "$omp_restructure_dest" ]; }; then
         warn "user-level omp extension path is a symlink or incompatible type — left untouched"
         rc=1
     elif mkdir -p "$omp_root" "$omp_module_root" 2>/dev/null \
         && copy_atomic_preserving_mode "$omp_runtime_dest" "$KIT_ROOT/core/omp/substrate-quality/runtime.ts" \
         && copy_atomic_preserving_mode "$omp_lifecycle_dest" "$KIT_ROOT/core/omp/substrate-quality/lifecycle.ts" \
         && copy_atomic_preserving_mode "$omp_identity_dest" "$KIT_ROOT/core/omp/substrate-quality/identity.ts" \
+        && copy_atomic_preserving_mode "$omp_policy_dest" "$KIT_ROOT/core/omp/substrate-quality/policy.ts" \
+        && copy_atomic_preserving_mode "$omp_transactions_dest" "$KIT_ROOT/core/omp/substrate-quality/transactions.ts" \
+        && copy_atomic_preserving_mode "$omp_restructure_dest" "$KIT_ROOT/core/omp/substrate-quality/restructure.ts" \
         && copy_atomic_preserving_mode "$omp_dest" "$KIT_ROOT/core/omp/substrate-quality.ts"; then
         success "user-level omp extension: ~/.omp/agent/extensions/substrate-quality.ts + modules"
     else

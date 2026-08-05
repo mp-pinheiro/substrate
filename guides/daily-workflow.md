@@ -41,7 +41,7 @@ Fix by deleting the comment or encoding the fact in names/structure. For the rar
 
 ## 3. Verify and checkpoint
 
-Run the changed behavior directly. OMP then calls its `substrate_checkpoint` tool; Claude's lifecycle supplies the equivalent session-bound command. The transaction accepts only agent-owned paths, runs the gate, lowers improved baseline ceilings atomically, commits locally with jj/Git, reruns the gate, and records an exact-state receipt. It never pushes.
+Run the changed behavior directly. OMP then calls its `substrate_checkpoint` tool; Claude's lifecycle supplies the equivalent session-bound command. The transaction commits only agent-owned paths: it runs the gate, lowers improved baseline ceilings atomically, commits locally with jj/Git, and records a receipt. When unowned pending work exists it gates the exact commit tree in an isolated candidate, leaves the unowned paths in place, and surfaces them; a checkpoint that ends clean reruns the gate in place and records a reusable exact-state receipt. At session stop, green owned work is checkpointed automatically. It never pushes.
 
 For a human-driven change:
 

@@ -20,6 +20,7 @@ usage: substrate <command> [args]
   gate [--update-baseline|--tighten|--accept-regression] | gate --deep [--no-cache|--print-key]
   baseline [--update|--accept-regression]
   checkpoint --message <message> --path <path>...  gate, tighten, commit locally
+  restructure --op split|describe|squash --revision <rev> --message <m> ...  reshape agent commits
   doctor                                    config, langmap freshness, toolchain
   verify                                    active OMP runtime + bounded local gate
   update [--apply] [--force]                inspect or re-vendor the engine only
@@ -84,7 +85,7 @@ vendor_core() {
        "$KIT_ROOT"/core/maintenance.sh "$KIT_ROOT"/core/maintenance-cli.sh \
        "$KIT_ROOT"/core/maintenance-lib.sh "$KIT_ROOT"/core/maintenance-receipt.sh \
        "$KIT_ROOT"/core/maintenance-sync.sh "$KIT_ROOT"/core/maintenance-transaction.sh \
-       "$KIT_ROOT"/core/receipt-lib.sh \
+       "$KIT_ROOT"/core/receipt-lib.sh "$KIT_ROOT"/core/restructure.sh \
        "$KIT_ROOT"/core/gitleaks-lib.sh "$KIT_ROOT"/core/gitleaks-deep.sh \
        "$KIT_ROOT"/core/install-gitleaks.sh "$KIT_ROOT"/core/install-jj.sh "$staging/" \
        || die "vendor copy failed: core scripts"
@@ -345,6 +346,7 @@ case "${1:-}" in
     init)     shift; cmd_init "$@" ;;
     gate)     shift; cmd_gate "$@" ;;
     checkpoint) shift; [ -x .substrate/checkpoint.sh ] || die "no checkpoint runtime here — run: substrate update --apply"; exec .substrate/checkpoint.sh "$@" ;;
+    restructure) shift; [ -x .substrate/restructure.sh ] || die "no restructure runtime here — run: substrate update --apply"; exec .substrate/restructure.sh "$@" ;;
     baseline)
         shift
         flag="${1:---update}"

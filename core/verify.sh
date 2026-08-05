@@ -8,14 +8,19 @@ verify_omp_runtime() {
     runtime="$HOME/.omp/run/substrate-quality.json"
 
     if [ ! -f "$dest" ] || [ ! -f "$module_root/runtime.ts" ] \
-        || [ ! -f "$module_root/lifecycle.ts" ] || [ ! -f "$module_root/identity.ts" ]; then
+        || [ ! -f "$module_root/lifecycle.ts" ] || [ ! -f "$module_root/identity.ts" ] \
+        || [ ! -f "$module_root/policy.ts" ] || [ ! -f "$module_root/transactions.ts" ] \
+        || [ ! -f "$module_root/restructure.ts" ]; then
         warn "OMP runtime is not installed — run: substrate bootstrap"
         return 1
     fi
     if ! cmp -s "$dest" "$KIT_ROOT/core/omp/substrate-quality.ts" \
         || ! cmp -s "$module_root/runtime.ts" "$KIT_ROOT/core/omp/substrate-quality/runtime.ts" \
         || ! cmp -s "$module_root/lifecycle.ts" "$KIT_ROOT/core/omp/substrate-quality/lifecycle.ts" \
-        || ! cmp -s "$module_root/identity.ts" "$KIT_ROOT/core/omp/substrate-quality/identity.ts"; then
+        || ! cmp -s "$module_root/identity.ts" "$KIT_ROOT/core/omp/substrate-quality/identity.ts" \
+        || ! cmp -s "$module_root/policy.ts" "$KIT_ROOT/core/omp/substrate-quality/policy.ts" \
+        || ! cmp -s "$module_root/transactions.ts" "$KIT_ROOT/core/omp/substrate-quality/transactions.ts" \
+        || ! cmp -s "$module_root/restructure.ts" "$KIT_ROOT/core/omp/substrate-quality/restructure.ts"; then
         warn "OMP runtime is stale — run: substrate bootstrap"
         return 1
     fi
@@ -23,7 +28,10 @@ verify_omp_runtime() {
         cat "$KIT_ROOT/core/omp/substrate-quality.ts" \
             "$KIT_ROOT/core/omp/substrate-quality/runtime.ts" \
             "$KIT_ROOT/core/omp/substrate-quality/lifecycle.ts" \
-            "$KIT_ROOT/core/omp/substrate-quality/identity.ts" |
+            "$KIT_ROOT/core/omp/substrate-quality/identity.ts" \
+            "$KIT_ROOT/core/omp/substrate-quality/policy.ts" \
+            "$KIT_ROOT/core/omp/substrate-quality/transactions.ts" \
+            "$KIT_ROOT/core/omp/substrate-quality/restructure.ts" |
             sha256sum
     )
     if [ ! -f "$runtime" ] || ! jq -e . "$runtime" >/dev/null 2>&1; then

@@ -59,66 +59,19 @@ mkdir -p "$T/nowhere" "$T/repo/components"
 printf '#!/usr/bin/env bash\nls\n' > "$T/repo/components/gapfill.sh"
 cat > "$T/omp-probe.ts" <<'TS'
 import { appendFileSync } from "node:fs";
-const handlers: Record<string, Array<(event: any, context: any) => Promise<any>>> = {};
-const commands: Record<string, any> = {};
-const notifications: Array<{ message: string; type: string }> = [];
-let label = "";
-const pi: any = {
-	setLabel(value: string) {
-		label = value;
-	},
-	on(name: string, handler: (event: any, context: any) => Promise<any>) {
-		(handlers[name] ??= []).push(handler);
-	},
-	registerCommand(name: string, command: any) {
-		commands[name] = command;
-	},
-	registerTool() {},
-	typebox: {
-		Type: {
-			Object() {
-				return {};
-			},
-			String() {
-				return {};
-			},
-		},
-	},
-};
-const extension = await import(process.argv[2]);
-extension.default(pi);
+const { bootProbe } = await import(process.argv[3]);
+const probe = await bootProbe(process.argv[2]);
+const handlers = probe.handlers;
 const protect = handlers.tool_call[0];
 const policy = handlers.before_agent_start[0];
-async function recordToolCall(event: any, context: any) {
-	for (const handler of handlers.tool_call) await handler(event, context);
-}
-async function collectToolResult(event: any, context: any) {
-	let current = event;
-	let result = null;
-	for (const handler of handlers.tool_result) {
-		const next = await handler(current, context);
-		if (next) {
-			result = next;
-			current = { ...current, ...next };
-		}
-	}
-	return result;
-}
-const outsideCwd = process.argv[3];
-const repoCwd = process.argv[4];
-const scanFile = process.argv[5];
-const context = {
-	cwd: repoCwd,
-	ui: {
-		notify(message: string, type: string) {
-			notifications.push({ message, type });
-		},
-	},
-};
+const outsideCwd = process.argv[4];
+const repoCwd = process.argv[5];
+const scanFile = process.argv[6];
+const context = probe.context(repoCwd);
 await handlers.session_start[0]({}, context);
-await commands.substrate.handler("", context);
+await probe.commands.substrate.handler("", context);
 const writes = [];
-for (const path of process.argv.slice(6)) {
+for (const path of process.argv.slice(7)) {
 	writes.push(await protect({ toolName: "write", input: { path } }, { cwd: outsideCwd }));
 }
 const policyRepo = await policy({ systemPrompt: ["base"] }, { cwd: repoCwd });
@@ -130,10 +83,10 @@ const lspCall = {
 	content: [{ type: "text", text: "rename applied" }],
 	isError: false,
 };
-await recordToolCall(lspCall, { cwd: outsideCwd });
+await probe.callAll("tool_call", lspCall, { cwd: outsideCwd });
 appendFileSync(scanFile, "# now we check the thing\n");
-const lsp = await collectToolResult(lspCall, { cwd: outsideCwd });
-const lspRead = await collectToolResult(
+const lsp = await probe.resultAll(lspCall, { cwd: outsideCwd });
+const lspRead = await probe.resultAll(
 	{
 		toolName: "lsp",
 		toolCallId: "read-lsp",
@@ -149,12 +102,13 @@ console.log(
 		policy: { repo: policyRepo, outside: policyOutside ?? null },
 		lsp,
 		lspRead: lspRead ?? null,
-		identity: { label, notifications },
+		identity: { label: probe.label(), notifications: probe.notifications },
 	}),
 );
 TS
 ln -s "$T/nowhere" "$T/repo/escaped-parent"
 omp_results=$(bun "$T/omp-probe.ts" "$HOME/.omp/agent/extensions/substrate-quality.ts" \
+	"$KIT_ROOT/test/lib/pi-probe.ts" \
 	"$T/nowhere" "$T/repo" "$T/repo/components/gapfill.sh" \
 	"$T/repo/missing/deep/substrate-baseline.json" \
 	"$T/repo/escaped-parent/missing/file.sh")
@@ -174,7 +128,10 @@ read -r extension_hash _ < <(
 	cat "$HOME/.omp/agent/extensions/substrate-quality.ts" \
 		"$HOME/.omp/agent/extensions/substrate-quality/runtime.ts" \
 		"$HOME/.omp/agent/extensions/substrate-quality/lifecycle.ts" \
-		"$HOME/.omp/agent/extensions/substrate-quality/identity.ts" |
+		"$HOME/.omp/agent/extensions/substrate-quality/identity.ts" \
+		"$HOME/.omp/agent/extensions/substrate-quality/policy.ts" \
+		"$HOME/.omp/agent/extensions/substrate-quality/transactions.ts" \
+		"$HOME/.omp/agent/extensions/substrate-quality/restructure.ts" |
 		sha256sum
 )
 extension_path=$(realpath "$HOME/.omp/agent/extensions/substrate-quality.ts")

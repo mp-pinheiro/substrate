@@ -6,25 +6,37 @@ import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { initializeRuntime, writeRuntimeState } from "./substrate-quality/identity";
 import { registerSessionLifecycle } from "./substrate-quality/lifecycle";
 import {
-	callKey,
-	changedBetween,
-	checkpointReceipt,
-	ensureTaskState,
 	findGateRoot,
 	findJjRoot,
 	HARD,
-	isReadOnlyTool,
 	loadConfig,
-	maintenanceCheckpointReceipt,
-	pendingSnapshots,
 	resolveThroughExistingParent,
 	SUBSTRATE_POLICY,
+	toolPath,
+} from "./substrate-quality/policy";
+import { registerRestructureTool } from "./substrate-quality/restructure";
+import {
+	callKey,
+	changedBetween,
+	checkpointedState,
+	ensureTaskState,
+	isReadOnlyTool,
+	pendingSnapshots,
+	rebaseline,
+	reconcileInitial,
+	taskPreconditions,
 	taskRuntimePatch,
 	taskStates,
-	toolPath,
 	workingSnapshot,
-	type AgentTaskState,
 } from "./substrate-quality/runtime";
+import {
+	blockedToolResult,
+	maintenanceCheckpointReceipt,
+	registerGateTool,
+	runCheckpointTransaction,
+} from "./substrate-quality/transactions";
+
+const GATE_TOOLS: Record<string, true> = { substrate_checkpoint: true, substrate_restructure: true };
 
 export default function substrateQuality(pi: ExtensionAPI): void {
 	if (!initializeRuntime(pi)) return;
@@ -38,85 +50,64 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 		{ additionalProperties: false },
 	);
 	// mirrors: enforce-conventional-commits.sh
-	pi.registerTool({
-		name: "substrate_checkpoint",
-		label: "Substrate checkpoint",
-		description:
-			"After direct verification, gate the exact agent-owned working paths, tighten improved metrics, and create a local commit. Never pushes.",
-		parameters: checkpointParameters,
-		loadMode: "essential",
-		approval: "exec",
-		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-			const root = findGateRoot(ctx.cwd);
-			const fail = (message: string) => ({
-				content: [{ type: "text" as const, text: message }],
-				details: { status: "blocked" },
-				isError: true,
-			});
-			if (!root) return fail("checkpoint blocked: Substrate is inactive in this working directory");
+	registerGateTool(
+		pi,
+		{
+			name: "substrate_checkpoint",
+			label: "Substrate checkpoint",
+			description:
+				"After direct verification, gate the exact agent-owned working paths, tighten improved metrics, and create a local commit. Never pushes.",
+			parameters: checkpointParameters,
+			blockedPrefix: "checkpoint",
+		},
+		async (root, params) => {
 			if (
 				!params ||
 				typeof params !== "object" ||
 				!("message" in params) ||
 				typeof params.message !== "string"
 			) {
-				return fail("checkpoint blocked: message must be a string");
+				return blockedToolResult("checkpoint blocked: message must be a string");
 			}
 			const message = params.message;
-			const state = ensureTaskState(root);
-			const initialDirty = Object.keys(state.initial.entries);
-			if (initialDirty.length > 0) {
-				return fail(
-					`checkpoint blocked: task began with pre-existing work (${initialDirty.join(", ")}); no paths will be committed automatically`,
+			const check = taskPreconditions(root);
+			if (check.failure) return blockedToolResult(`checkpoint blocked: ${check.failure}`);
+			const state = check.state;
+			const currentPaths = Object.keys(check.current.entries).sort();
+			const ownedPending = currentPaths.filter((path) => state.owned.has(path));
+			const leftover = currentPaths.filter((path) => !state.owned.has(path));
+			if (ownedPending.length === 0) {
+				return blockedToolResult(
+					leftover.length > 0
+						? `checkpoint blocked: no pending agent-owned changes; unowned pending paths stay in place: ${leftover.join(", ")}`
+						: "checkpoint blocked: no pending agent-owned changes",
 				);
 			}
-			if (state.trackingError) {
-				return fail(`checkpoint blocked: ownership tracking failed: ${state.trackingError}`);
-			}
-			const current = workingSnapshot(root);
-			if (current.error) return fail(`checkpoint blocked: cannot inspect working copy: ${current.error}`);
-			if (current.fingerprint !== state.observed.fingerprint) {
-				return fail("checkpoint blocked: working copy changed outside an observed agent tool call");
-			}
-			const currentPaths = Object.keys(current.entries).sort();
-			if (currentPaths.length === 0) return fail("checkpoint blocked: no pending agent-owned changes");
-			const unowned = currentPaths.filter((path) => !state.owned.has(path));
-			if (unowned.length > 0) {
-				return fail(`checkpoint blocked: unowned changed paths: ${unowned.join(", ")}`);
-			}
-			const command = [
-				join(root, ".substrate", "checkpoint.sh"),
-				"--message",
-				message,
-				...currentPaths.flatMap((path) => ["--path", path]),
-				"--json",
-			];
-			const proc = Bun.spawnSync(command, { cwd: root, stdout: "pipe", stderr: "pipe" });
-			const stdout = new TextDecoder().decode(proc.stdout).trim();
-			const stderr = new TextDecoder().decode(proc.stderr).trim();
-			const output = [stdout, stderr].filter(Boolean).join("\n");
-			const summary = output.split("\n").slice(-40).join("\n");
-			if (proc.exitCode !== 0) {
-				const at = new Date().toISOString();
+			const result = runCheckpointTransaction(root, ownedPending, message);
+			const summary = result.summary;
+			if (!result.receipt) {
 				writeRuntimeState(root, {
-					lastCheckpoint: { status: "fail", at },
+					lastCheckpoint: { status: "fail", at: new Date().toISOString() },
 					...taskRuntimePatch(state),
 				});
-				return fail(`${summary}\ncheckpoint failed with exit ${proc.exitCode}`);
+				return blockedToolResult(
+					result.ok ? `${summary}\ncheckpoint failed: transaction returned no valid receipt` : summary,
+				);
 			}
-			const receipt = checkpointReceipt(stdout);
-			if (!receipt) return fail("checkpoint failed: transaction returned no valid receipt");
+			const receipt = result.receipt;
 			const after = workingSnapshot(root);
-			if (after.error || Object.keys(after.entries).length > 0) {
-				return fail("checkpoint incomplete: transaction returned success but the working copy is not clean");
+			if (after.error) {
+				return blockedToolResult(
+					`checkpoint incomplete: cannot inspect the working copy after commit: ${after.error}`,
+				);
 			}
-			const next: AgentTaskState = {
-				root,
-				initial: after,
-				observed: after,
-				owned: new Set<string>(),
-				checkpointed: true,
-			};
+			const stillOwned = Object.keys(after.entries).filter((path) => state.owned.has(path));
+			if (stillOwned.length > 0) {
+				return blockedToolResult(
+					`checkpoint incomplete: transaction returned success but owned paths are still pending: ${stillOwned.join(", ")}`,
+				);
+			}
+			const next = checkpointedState(root, after, state, receipt.commit);
 			taskStates.set(root, next);
 			writeRuntimeState(root, {
 				lastCheckpoint: receipt,
@@ -126,23 +117,34 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 				content: [
 					{
 						type: "text" as const,
-						text: `Checkpoint ${receipt.commit.slice(0, 12)} passed and committed locally. No push performed.\n${summary}`,
+						text: `Checkpoint ${receipt.commit.slice(0, 12)} passed and committed locally. No push performed.${leftover.length > 0 ? `\nUnowned pending paths left in place: ${leftover.join(", ")}` : ""}\n${summary}`,
 					},
 				],
 				details: receipt,
 			};
 		},
-	});
+	);
+
+	registerRestructureTool(pi);
 
 	pi.on("before_agent_start", async (event, ctx) => {
 		const root = findGateRoot(ctx.cwd);
 		if (!root || event.systemPrompt.some((part) => part.includes(SUBSTRATE_POLICY))) return;
 		const state = ensureTaskState(root);
-		const initialDirty = Object.keys(state.initial.entries);
+		const current = workingSnapshot(root);
+		if (current.error) {
+			state.trackingError = current.error;
+		} else if (state.trackingError || current.fingerprint !== state.observed.fingerprint) {
+			rebaseline(state, current);
+		}
+		writeRuntimeState(root, taskRuntimePatch(state));
+		const unowned = Object.keys(state.observed.entries)
+			.filter((path) => !state.owned.has(path))
+			.sort();
 		const ownership = state.trackingError
-			? `Automatic checkpoint disabled: ownership tracking failed (${state.trackingError}).`
-			: initialDirty.length > 0
-				? `Automatic checkpoint disabled: the task began dirty (${initialDirty.join(", ")}). Preserve that work and ask the user to checkpoint or clean it explicitly.`
+			? `Automatic checkpoint disabled: ownership tracking failed (${state.trackingError}). Tracking re-baselines at the next clean tool boundary.`
+			: unowned.length > 0
+				? `The working copy carries changes the agent does not own (${unowned.join(", ")}). substrate_checkpoint commits only agent-owned paths and leaves those in place.`
 				: "Automatic local checkpoint is available after direct verification. No automatic push.";
 		return { systemPrompt: [...event.systemPrompt, `${SUBSTRATE_POLICY}\n${ownership}`] };
 	});
@@ -255,7 +257,7 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 	pi.on("tool_call", async (event, ctx) => {
 		if (event.toolName !== "bash" || !findGateRoot(ctx.cwd)) return;
 		const cmd = String(event.input.command ?? "");
-		if (!/(jj\s+(commit|describe|squash)|git\s+commit)(\s|$)/.test(cmd)) return;
+		if (!/(^|[;&|(`]\s*)(jj\s+(commit|describe|squash)|git\s+commit)(\s|$)/m.test(cmd)) return;
 		return {
 			block: true,
 			reason:
@@ -293,7 +295,7 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 	});
 
 	pi.on("tool_call", async (event, ctx) => {
-		if (event.toolName === "substrate_checkpoint" || isReadOnlyTool(event.toolName, event.input)) return;
+		if (GATE_TOOLS[event.toolName] || isReadOnlyTool(event.toolName, event.input)) return;
 		const path = toolPath(event.input);
 		const root = findGateRoot(path ? dirname(resolve(ctx.cwd, path)) : ctx.cwd);
 		if (!root) return;
@@ -304,23 +306,22 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 			writeRuntimeState(root, taskRuntimePatch(state));
 			return;
 		}
-		if (before.fingerprint !== state.observed.fingerprint) {
-			state.trackingError = "working copy drifted before an agent tool call";
+		if (state.trackingError || before.fingerprint !== state.observed.fingerprint) {
+			rebaseline(state, before);
 			writeRuntimeState(root, taskRuntimePatch(state));
-			return;
 		}
 		pendingSnapshots.set(callKey(event), { root, before });
 	});
 
 	pi.on("tool_result", async (event, ctx) => {
-		if (event.toolName === "substrate_checkpoint" || isReadOnlyTool(event.toolName, event.input)) return;
+		if (GATE_TOOLS[event.toolName] || isReadOnlyTool(event.toolName, event.input)) return;
 		const pending = pendingSnapshots.get(callKey(event));
 		const path = toolPath(event.input);
 		const root = pending?.root ?? findGateRoot(path ? dirname(resolve(ctx.cwd, path)) : ctx.cwd);
 		if (!root) return;
 		const state = ensureTaskState(root);
 		if (!pending) {
-			state.trackingError = `missing pre-tool ownership snapshot for ${event.toolName}`;
+			state.trackingError ??= `missing pre-tool ownership snapshot for ${event.toolName}`;
 			writeRuntimeState(root, taskRuntimePatch(state));
 			return;
 		}
@@ -334,10 +335,11 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 					? maintenanceCheckpointReceipt(root, pending.before, after)
 					: null;
 			if (maintenance) {
-				state.initial = { ...state.initial, revision: after.revision };
+				reconcileInitial(state, after);
 				state.observed = after;
 				state.checkpointed = true;
 				state.trackingError = undefined;
+				state.driftNotice = undefined;
 				writeRuntimeState(root, {
 					lastCheckpoint: maintenance,
 					...taskRuntimePatch(state),
@@ -345,7 +347,13 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 				return;
 			}
 			const changedPaths = changedBetween(pending.before, after);
-			for (const changed of changedPaths) state.owned.add(changed);
+			reconcileInitial(state, after);
+			for (const changed of changedPaths) {
+				if (!(changed in state.initial.entries)) state.owned.add(changed);
+			}
+			for (const ownedPath of state.owned) {
+				if (!(ownedPath in after.entries)) state.owned.delete(ownedPath);
+			}
 			if (pending.before.revision !== after.revision) {
 				state.trackingError = "repository revision changed outside the checkpoint transaction";
 			}
@@ -357,7 +365,7 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 
 	// mirrors: changed-files-scan.sh — only proven read-only tools/actions skip scanning, so unknown tools stay covered
 	pi.on("tool_result", async (event, ctx) => {
-		if (event.toolName === "substrate_checkpoint" || isReadOnlyTool(event.toolName, event.input)) return;
+		if (GATE_TOOLS[event.toolName] || isReadOnlyTool(event.toolName, event.input)) return;
 		const path = toolPath(event.input);
 		const root = findGateRoot(path ? dirname(resolve(ctx.cwd, path)) : ctx.cwd);
 		if (!root) return;

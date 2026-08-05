@@ -15,6 +15,13 @@ substrate_metadata_dir() {
     fi
 }
 
+substrate_safe_path() {
+    case "$1" in
+        ''|/*|..|../*|*/../*|*/..|-*) return 1 ;;
+    esac
+    return 0
+}
+
 current_gate_vcs() {
     if [ -e .jj ] && command -v jj >/dev/null 2>&1; then printf 'jj\n'; else printf 'git\n'; fi
 }

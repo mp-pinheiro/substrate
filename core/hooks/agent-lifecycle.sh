@@ -132,6 +132,12 @@ case "$action" in
         before_revision=$(jq -r '.observed.revision' <<< "$state")
         current_revision=$(jq -r '.revision' <<< "$current")
         maintenance_receipt="$METADATA/substrate/maintenance-receipt.json"
+        reconcile='.observed = $current
+            | .initial.entries = (.initial.entries | with_entries(select(.key as $k | ($current.entries | has($k)))))
+            | .initial.revision = $current.revision
+            | .initial.entries as $init
+            | .ownedPaths = (((.ownedPaths + $changed) | unique)
+                | map(select(. as $p | ($current.entries | has($p)) and (($init | has($p)) | not))))'
         if [ "$before_revision" != "$current_revision" ] \
             && maintenance_repository_receipt_matches "$maintenance_receipt" \
             && jq -e --arg from "$before_revision" --arg to "$current_revision" '
@@ -141,28 +147,20 @@ case "$action" in
                 and .repository.fromRevision == $from
                 and .repository.toRevision == $to
                 and .repository.commit == $to' "$maintenance_receipt" >/dev/null 2>&1; then
-            next=$(jq -c --argjson current "$current" --argjson changed "$changed" '
-                .initial.revision = $current.revision
-                | .observed = $current
-                | .ownedPaths = ((.ownedPaths + $changed) | unique)
+            next=$(jq -c --argjson current "$current" --argjson changed "$changed" "$reconcile"'
                 | .trackingError = null
+                | .driftNotice = null
                 | .stopBlocked = false
                 | .completedCommit = $current.revision' <<< "$state")
             write_state "$STATE" "$next" || exit 2
             exit 0
         fi
-        next=$(jq -c --argjson current "$current" --argjson changed "$changed" '
-            .observed = $current
-            | .ownedPaths = ((.ownedPaths + $changed) | unique)
+        next=$(jq -c --argjson current "$current" --argjson changed "$changed" "$reconcile"'
             | .stopBlocked = (if ($changed | length) > 0 then false else .stopBlocked end)
             | .completedCommit = (if ($changed | length) > 0 then null else .completedCommit end)
-            | .trackingError = (
-                if $current.error != null then $current.error
-                elif .observed.revision != $current.revision then "repository revision changed outside the checkpoint transaction"
-                else .trackingError end
-              )' <<< "$state")
-        if [ "$(jq -r '.observed.revision' <<< "$state")" != "$(jq -r '.revision' <<< "$current")" ]; then
-            next=$(jq -c '.trackingError = "repository revision changed outside the checkpoint transaction"' <<< "$next")
+            | .trackingError = (if $current.error != null then $current.error else null end)' <<< "$state")
+        if [ "$before_revision" != "$current_revision" ]; then
+            next=$(jq -c '.driftNotice = "repository revision changed outside the checkpoint transaction; ownership re-baselined"' <<< "$next")
         fi
         write_state "$STATE" "$next" || exit 2
         ;;
@@ -171,8 +169,6 @@ case "$action" in
         state=$(cat "$STATE")
         [ "$(jq -r '.repoRoot' <<< "$state")" = "$REPO_ROOT" ] \
             || { printf 'checkpoint blocked: ownership state belongs to another repository\n' >&2; exit 2; }
-        [ "$(jq '.initial.entries | length' <<< "$state")" -eq 0 ] \
-            || { printf 'checkpoint blocked: session began with pre-existing work\n' >&2; exit 2; }
         [ "$(jq -r '.trackingError // empty' <<< "$state")" = "" ] \
             || { printf 'checkpoint blocked: %s\n' "$(jq -r '.trackingError' <<< "$state")" >&2; exit 2; }
         current=$(snapshot)
@@ -180,13 +176,10 @@ case "$action" in
             || { printf 'checkpoint blocked: working-copy inspection failed\n' >&2; exit 2; }
         [ "$(jq -r '.fingerprint' <<< "$current")" = "$(jq -r '.observed.fingerprint' <<< "$state")" ] \
             || { printf 'checkpoint blocked: working copy changed outside an observed Claude tool call\n' >&2; exit 2; }
-        paths=$(jq -c '.entries | keys' <<< "$current")
+        paths=$(jq -cn --argjson pending "$(jq '.entries | keys' <<< "$current")" \
+            --argjson owned "$(jq '.ownedPaths' <<< "$state")" '$pending - ($pending - $owned)')
         [ "$(jq 'length' <<< "$paths")" -gt 0 ] \
             || { printf 'checkpoint blocked: no pending Claude-owned changes\n' >&2; exit 2; }
-        unowned=$(jq -cn --argjson paths "$paths" --argjson owned "$(jq '.ownedPaths' <<< "$state")" \
-            '$paths - $owned')
-        [ "$(jq 'length' <<< "$unowned")" -eq 0 ] \
-            || { printf 'checkpoint blocked: unowned changed paths: %s\n' "$(jq -r 'join(", ")' <<< "$unowned")" >&2; exit 2; }
         jq -cn --argjson paths "$paths" --arg fingerprint "$(jq -r '.fingerprint' <<< "$current")" \
             '{paths:$paths,fingerprint:$fingerprint}'
         ;;
@@ -194,12 +187,20 @@ case "$action" in
         commit="${3:-}"
         [ -f "$STATE" ] || exit 0
         current=$(snapshot)
-        [ "$(jq '.entries | length' <<< "$current")" -eq 0 ] \
-            || { printf 'substrate lifecycle: checkpoint left pending paths\n' >&2; exit 2; }
+        owned_pending=$(jq -cn --argjson pending "$(jq '.entries | keys' <<< "$current")" \
+            --argjson owned "$(jq '.ownedPaths' "$STATE")" '$pending - ($pending - $owned)')
+        [ "$(jq 'length' <<< "$owned_pending")" -eq 0 ] \
+            || { printf 'substrate lifecycle: checkpoint left owned paths pending\n' >&2; exit 2; }
         [ "$(jq -r '.revision' <<< "$current")" = "$commit" ] \
             || { printf 'substrate lifecycle: checkpoint receipt does not match repository revision\n' >&2; exit 2; }
         next=$(jq -c --argjson current "$current" --arg commit "$commit" '
-            .observed=$current | .ownedPaths=[] | .trackingError=null | .stopBlocked=false | .completedCommit=$commit' "$STATE")
+            .observed=$current | .initial=$current | .ownedPaths=[] | .trackingError=null
+            | .driftNotice=null | .stopBlocked=false | .completedCommit=$commit' "$STATE")
+        if [ -e .jj ] && command -v jj >/dev/null 2>&1; then
+            change=$(jj log -r "$commit" --no-graph -T 'change_id' 2>/dev/null)
+            [ -z "$change" ] || next=$(jq -c --arg change "$change" \
+                '.sessionChanges = (((.sessionChanges // []) + [$change]) | unique)' <<< "$next")
+        fi
         write_state "$STATE" "$next" || exit 2
         ;;
     stop)
@@ -220,6 +221,22 @@ case "$action" in
             && [ "$(jq -r '.fingerprint' <<< "$current")" != "$(jq -r '.observed.fingerprint' <<< "$state")" ]; then
             tracking="working copy changed outside an observed Claude tool call"
         fi
+        if [ -n "$tracking" ] && [ "$(jq '.entries | length' <<< "$current")" -eq 0 ]; then
+            tracking=""
+        fi
+        auto_note=""
+        stop_active=$(jq -r '.stop_hook_active // false' <<< "$payload")
+        if [ "$(jq 'length' <<< "$owned_pending")" -gt 0 ] && [ -z "$tracking" ] \
+            && [ -z "$current_error" ] && [ "$stop_active" != true ]; then
+            if auto_output=$("$SUBSTRATE_DIR/checkpoint.sh" --session "$session" \
+                --message 'chore(agent): checkpoint owned work at session stop' --json 2>&1); then
+                auto_commit=$(printf '%s\n' "$auto_output" | tail -n 1 | jq -r '.commit // empty' 2>/dev/null)
+                jq -cn --arg message "Substrate auto-checkpoint ${auto_commit:-unknown} committed agent-owned work. No push performed." \
+                    '{systemMessage:$message}'
+                exit 0
+            fi
+            auto_note=" Automatic checkpoint failed: $(printf '%s\n' "$auto_output" | tail -n 1)."
+        fi
         if [ "$(jq 'length' <<< "$owned_pending")" -eq 0 ] && [ "$revision_bypass" -eq 0 ] \
             && [ -z "$tracking" ] && [ -z "$current_error" ]; then
             exit 0
@@ -234,8 +251,8 @@ case "$action" in
         [ "$revision_bypass" -eq 0 ] || reason="$reason Repository revision changed without a checkpoint receipt."
         [ -z "$tracking" ] || reason="$reason Ownership error: $tracking."
         [ -z "$current_error" ] || reason="$reason Inspection error: $current_error."
+        reason="$reason$auto_note"
         reason="$reason Run direct verification, then: substrate checkpoint --session $session --message 'type(scope): subject'. Never push."
-        stop_active=$(jq -r '.stop_hook_active // false' <<< "$payload")
         already_blocked=$(jq -r '.stopBlocked // false' <<< "$state")
         if [ "$stop_active" = true ] || [ "$already_blocked" = true ]; then
             jq -cn --arg message "$reason" '{systemMessage:$message}'

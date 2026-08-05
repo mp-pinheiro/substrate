@@ -1,133 +1,7 @@
 import { createHash } from "node:crypto";
-import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
-import { basename, dirname, join, relative, resolve } from "node:path";
-
-const HARD: Array<[RegExp, string]> = [
-	[/(^|\/)substrate-baseline\.json$/, "baseline changes only via the gate (--update-baseline)"],
-	[/(^|\/)\.substrate(\/|$)/, "vendored substrate core — change the kit and run: substrate update"],
-	[/(^|\/)CLAUDE\.md$/, "governance doc — propose the edit to the user instead"],
-];
-
-const SUBSTRATE_POLICY = [
-	"This repository is governed by Substrate's deterministic quality gate.",
-	"Treat every `[substrate — fix before proceeding]` report as blocking: resolve it before unrelated work.",
-	"For workflow-health requests, run `substrate verify` directly and unmodified; do not assemble ad hoc test batteries or run `substrate audit` unless the user explicitly requests committed-plan regression.",
-	"Run only direct verification relevant to the requested change.",
-	"After direct verification, call `substrate_checkpoint`; it gates, tightens improved metrics, and commits only agent-owned paths.",
-	"Never run `jj commit` or `git commit` directly. Never push automatically; publication remains user-owned.",
-	"Do not bypass checks, edit generated or protected assets, or relax the baseline unless the user explicitly requests that policy change.",
-].join("\n");
-
-// walk up for the vendored gate so subdirectory sessions resolve the repo
-function findGateRoot(cwd: string): string | null {
-	let dir = resolve(cwd);
-	for (;;) {
-		if (existsSync(join(dir, ".substrate", "gate.sh"))) return dir;
-		const parent = dirname(dir);
-		if (parent === dir) return null;
-		dir = parent;
-	}
-}
-
-function engineVersion(root: string): string {
-	try {
-		return readFileSync(join(root, ".substrate", "VERSION"), "utf8").trim();
-	} catch {
-		return "unknown";
-	}
-}
-// jj hooks are runtime-gated: active only when the repo root carries .jj
-function findJjRoot(cwd: string): string | null {
-	let dir = resolve(cwd);
-	for (;;) {
-		if (existsSync(join(dir, ".jj"))) return dir;
-		const parent = dirname(dir);
-		if (parent === dir) return null;
-		dir = parent;
-	}
-}
-
-function globToRegExp(glob: string): RegExp {
-	let out = "";
-	for (let i = 0; i < glob.length; i++) {
-		const c = glob[i];
-		if (c === "*") {
-			if (glob[i + 1] === "*") {
-				out += ".*";
-				i++;
-			} else {
-				out += "[^/]*";
-			}
-		} else if (c === "?") {
-			out += "[^/]";
-		} else if ("\\^$.|+()[]{}".includes(c)) {
-			out += `\\${c}`;
-		} else {
-			out += c;
-		}
-	}
-	return new RegExp(`^${out}$`);
-}
-
-type Config = {
-	ok: boolean;
-	missing: boolean;
-	protectedGlobs: RegExp[];
-	contractPaths: string[];
-	contractsInvalid: boolean;
-};
-
-function loadConfig(cwd: string): Config {
-	let raw: string;
-	try {
-		raw = readFileSync(resolve(cwd, "substrate.json"), "utf8");
-	} catch {
-		return { ok: true, missing: true, protectedGlobs: [], contractPaths: [], contractsInvalid: false };
-	}
-	try {
-		const cfg = JSON.parse(raw);
-		const globs = Array.isArray(cfg.protected_paths) ? cfg.protected_paths : [];
-		const contracts = Array.isArray(cfg.contracts) ? cfg.contracts : [];
-		const contractsInvalid = contracts.some(
-			(c: { name?: unknown; regen?: unknown; paths?: unknown }) =>
-				!c || typeof c.name !== "string" || typeof c.regen !== "string" || !Array.isArray(c.paths),
-		);
-		const contractPaths: string[] = contracts.flatMap((c: { paths?: string[] }) =>
-			Array.isArray(c.paths) ? c.paths : [],
-		);
-		return {
-			ok: true,
-			missing: false,
-			protectedGlobs: globs.map(globToRegExp),
-			contractPaths,
-			contractsInvalid,
-		};
-	} catch {
-		return { ok: false, missing: false, protectedGlobs: [], contractPaths: [], contractsInvalid: false };
-	}
-}
-
-function toolPath(input: object): string {
-	if ("path" in input && typeof input.path === "string") return input.path;
-	if ("file_path" in input && typeof input.file_path === "string") return input.file_path;
-	if ("file" in input && typeof input.file === "string") return input.file;
-	return "";
-}
-function resolveThroughExistingParent(path: string): string {
-	let current = path;
-	const missing: string[] = [];
-	while (!existsSync(current)) {
-		const parent = dirname(current);
-		if (parent === current) return path;
-		missing.unshift(basename(current));
-		current = parent;
-	}
-	try {
-		return join(realpathSync(current), ...missing);
-	} catch {
-		return path;
-	}
-}
+import { existsSync, lstatSync, readFileSync } from "node:fs";
+import { join, relative, resolve } from "node:path";
+import { toolPath } from "./policy";
 
 const TRACKING_READ_ONLY_TOOLS: Record<string, true> = {
 	read: true,
@@ -163,7 +37,9 @@ type AgentTaskState = {
 	observed: WorkingSnapshot;
 	owned: Set<string>;
 	checkpointed: boolean;
+	sessionChanges: Set<string>;
 	trackingError?: string;
+	driftNotice?: string;
 };
 
 const taskStates = new Map<string, AgentTaskState>();
@@ -171,6 +47,7 @@ const pendingSnapshots = new Map<string, { root: string; before: WorkingSnapshot
 
 function isReadOnlyTool(toolName: string, input: object): boolean {
 	if (TRACKING_READ_ONLY_TOOLS[toolName]) return true;
+	if (/^[a-z][a-z0-9+.-]*:\/\//i.test(toolPath(input))) return true;
 	if (toolName !== "lsp" || !("action" in input)) return false;
 	return Boolean(TRACKING_LSP_READ_ONLY_ACTIONS[String(input.action ?? "")]);
 }
@@ -182,78 +59,29 @@ function callKey(event: { toolName: string; input: object }): string {
 	return `${event.toolName}\0${JSON.stringify(event.input)}`;
 }
 
+function runtimeStatePath(root: string): string | null {
+	if (!process.env.HOME) return null;
+	const digest = createHash("sha256").update(resolve(root)).digest("hex").slice(0, 16);
+	return join(process.env.HOME, ".omp", "run", "substrate-quality", `${digest}.json`);
+}
+
+function readRuntimeState(root: string): Record<string, unknown> {
+	const path = runtimeStatePath(root);
+	if (!path) return {};
+	try {
+		const value: unknown = JSON.parse(readFileSync(path, "utf8"));
+		return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+	} catch {
+		return {};
+	}
+}
+
 function commandOutput(root: string, command: string[]): { stdout: Uint8Array; error?: string } {
 	const proc = Bun.spawnSync(command, { cwd: root, stdout: "pipe", stderr: "pipe" });
 	if (proc.exitCode === 0) return { stdout: proc.stdout };
 	const stderr = new TextDecoder().decode(proc.stderr).trim();
 	return { stdout: proc.stdout, error: stderr || `${command[0]} exited ${proc.exitCode}` };
 }
-function maintenanceReceiptPath(root: string): string | null {
-	const result = commandOutput(root, ["git", "rev-parse", "--git-common-dir"]);
-	if (result.error) return null;
-	const metadata = new TextDecoder().decode(result.stdout).trim();
-	return metadata ? join(resolve(root, metadata), "substrate", "maintenance-receipt.json") : null;
-}
-
-function maintenanceCheckpointReceipt(
-	root: string,
-	before: WorkingSnapshot,
-	after: WorkingSnapshot,
-): CheckpointReceipt | null {
-	if (!before.revision || !after.revision || before.revision === after.revision) return null;
-	const validator = commandOutput(root, [
-		join(root, ".substrate", "maintenance-lib.sh"),
-		"repository-receipt-matches",
-	]);
-	if (validator.error) return null;
-	const path = maintenanceReceiptPath(root);
-	if (!path) return null;
-	try {
-		const value: unknown = JSON.parse(readFileSync(path, "utf8"));
-		if (!value || typeof value !== "object") return null;
-		const receipt = value as {
-			at?: unknown;
-			noPush?: unknown;
-			operation?: unknown;
-			repository?: {
-				commit?: unknown;
-				fromRevision?: unknown;
-				status?: unknown;
-				toRevision?: unknown;
-				vcs?: unknown;
-			};
-		};
-		if (
-			!["init", "bootstrap", "update"].includes(String(receipt.operation)) ||
-			receipt.noPush !== true ||
-			receipt.repository?.status !== "committed" ||
-			receipt.repository.fromRevision !== before.revision ||
-			receipt.repository.toRevision !== after.revision ||
-			receipt.repository.commit !== after.revision ||
-			typeof receipt.repository.vcs !== "string" ||
-			typeof receipt.at !== "string"
-		) {
-			return null;
-		}
-		return {
-			commit: after.revision,
-			vcs: receipt.repository.vcs,
-			at: receipt.at,
-			status: "committed",
-		};
-	} catch {
-		return null;
-	}
-}
-function refreshReport(root: string): string | null {
-	const report = join(root, ".substrate", "report.sh");
-	if (!existsSync(report)) return null;
-	const proc = Bun.spawnSync([report, "--refresh"], { cwd: root, stdout: "pipe", stderr: "pipe" });
-	const stderr = new TextDecoder().decode(proc.stderr).trim();
-	if (proc.exitCode !== 0) return stderr || `report refresh exited ${proc.exitCode}`;
-	return stderr || null;
-}
-
 
 function workingPaths(root: string): { paths: string[]; error?: string } {
 	const paths: string[] = [];
@@ -326,82 +154,151 @@ function changedBetween(before: WorkingSnapshot, after: WorkingSnapshot): string
 	return [...paths].filter((path) => before.entries[path] !== after.entries[path]).sort();
 }
 
+// "Pre-existing" = currently pending and not owned; resolved entries stop counting.
+function reconcileInitial(state: AgentTaskState, current: WorkingSnapshot): void {
+	for (const path of Object.keys(state.initial.entries)) {
+		if (!(path in current.entries)) delete state.initial.entries[path];
+	}
+	if (state.initial.revision !== current.revision) {
+		state.initial = { ...state.initial, revision: current.revision };
+	}
+}
+
+// Drift re-baselines instead of bricking: externally-changed paths lose ownership
+// (the agent must not commit unauthored work); trackingError heals on a clean snapshot.
+function rebaseline(state: AgentTaskState, current: WorkingSnapshot): void {
+	const drifted = changedBetween(state.observed, current);
+	for (const path of drifted) state.owned.delete(path);
+	for (const path of [...state.owned]) {
+		if (!(path in current.entries)) state.owned.delete(path);
+	}
+	reconcileInitial(state, current);
+	state.observed = current;
+	if (state.trackingError) {
+		state.driftNotice = `ownership tracking recovered (${state.trackingError}); unobserved changes are not owned`;
+	} else if (drifted.length > 0) {
+		state.driftNotice = `working copy changed outside observed tool calls; not owned: ${drifted.join(", ")}`;
+	}
+	state.trackingError = undefined;
+}
+
+// Hydration re-owns only fingerprint-verified paths: matching content proves prior
+// agent authorship across restarts; user-touched paths fail the match, stay unowned.
 function ensureTaskState(root: string): AgentTaskState {
 	const existing = taskStates.get(root);
 	if (existing) return existing;
 	const snapshot = workingSnapshot(root);
 	const state: AgentTaskState = {
 		root,
-		initial: snapshot,
+		initial: { ...snapshot, entries: { ...snapshot.entries } },
 		observed: snapshot,
 		owned: new Set<string>(),
 		checkpointed: false,
+		sessionChanges: new Set<string>(),
 		trackingError: snapshot.error,
 	};
+	if (!snapshot.error) {
+		const task = readRuntimeState(root).task;
+		const record = task && typeof task === "object" ? (task as Record<string, unknown>) : {};
+		const persisted =
+			record.ownedEntries && typeof record.ownedEntries === "object"
+				? (record.ownedEntries as Record<string, unknown>)
+				: {};
+		for (const [path, entry] of Object.entries(persisted)) {
+			if (typeof entry === "string" && snapshot.entries[path] === entry) {
+				state.owned.add(path);
+				delete state.initial.entries[path];
+			}
+		}
+		const changes = Array.isArray(record.sessionChanges) ? record.sessionChanges : [];
+		for (const change of changes) {
+			if (typeof change === "string" && /^[a-z0-9]+$/.test(change)) state.sessionChanges.add(change);
+		}
+	}
 	taskStates.set(root, state);
 	return state;
 }
 
+// Shared gate-tool preconditions: tracked state must be inspectable and current.
+function taskPreconditions(root: string): {
+	state: AgentTaskState;
+	current: WorkingSnapshot;
+	failure?: string;
+} {
+	const state = ensureTaskState(root);
+	if (state.trackingError) {
+		return { state, current: state.observed, failure: `ownership tracking failed: ${state.trackingError}` };
+	}
+	const current = workingSnapshot(root);
+	if (current.error) return { state, current, failure: `cannot inspect working copy: ${current.error}` };
+	if (current.fingerprint !== state.observed.fingerprint) {
+		return { state, current, failure: "working copy changed outside an observed agent tool call" };
+	}
+	return { state, current };
+}
+
+function checkpointedState(
+	root: string,
+	after: WorkingSnapshot,
+	previous: AgentTaskState,
+	commit: string,
+): AgentTaskState {
+	const sessionChanges = new Set(previous.sessionChanges);
+	const changeId = changeIdOf(root, commit);
+	if (changeId) sessionChanges.add(changeId);
+	return {
+		root,
+		initial: { ...after, entries: { ...after.entries } },
+		observed: after,
+		owned: new Set<string>(),
+		checkpointed: true,
+		sessionChanges,
+	};
+}
+
 function taskRuntimePatch(state: AgentTaskState): Record<string, unknown> {
+	const ownedEntries: Record<string, string> = {};
+	for (const path of [...state.owned].sort()) {
+		const entry = state.observed.entries[path];
+		if (entry !== undefined) ownedEntries[path] = entry;
+	}
 	return {
 		task: {
 			initialDirty: Object.keys(state.initial.entries),
 			ownedPaths: [...state.owned].sort(),
+			ownedEntries,
 			checkpointed: state.checkpointed,
 			trackingError: state.trackingError ?? null,
+			driftNotice: state.driftNotice ?? null,
+			sessionChanges: [...state.sessionChanges].sort(),
 		},
 	};
 }
 
-type CheckpointReceipt = {
-	commit: string;
-	vcs: string;
-	at: string;
-	status: string;
-};
-
-function checkpointReceipt(output: string): CheckpointReceipt | null {
-	for (const line of output.trim().split("\n").reverse()) {
-		try {
-			const value: unknown = JSON.parse(line);
-			if (!value || typeof value !== "object") continue;
-			if (
-				!("commit" in value) ||
-				typeof value.commit !== "string" ||
-				!("vcs" in value) ||
-				typeof value.vcs !== "string" ||
-				!("at" in value) ||
-				typeof value.at !== "string" ||
-				!("status" in value) ||
-				typeof value.status !== "string"
-			) {
-				continue;
-			}
-			return { commit: value.commit, vcs: value.vcs, at: value.at, status: value.status };
-		} catch {}
-	}
-	return null;
+function changeIdOf(root: string, commit: string): string | null {
+	if (!existsSync(join(root, ".jj"))) return null;
+	const result = commandOutput(root, ["jj", "log", "-r", commit, "--no-graph", "-T", "change_id"]);
+	if (result.error) return null;
+	const change = new TextDecoder().decode(result.stdout).trim();
+	return /^[a-z0-9]+$/.test(change) ? change : null;
 }
 
 export {
 	callKey,
 	changedBetween,
-	checkpointReceipt,
-	engineVersion,
+	changeIdOf,
+	checkpointedState,
+	commandOutput,
 	ensureTaskState,
-	findGateRoot,
-	findJjRoot,
-	HARD,
 	isReadOnlyTool,
-	loadConfig,
-	maintenanceCheckpointReceipt,
 	pendingSnapshots,
-	refreshReport,
-	resolveThroughExistingParent,
-	SUBSTRATE_POLICY,
+	readRuntimeState,
+	rebaseline,
+	reconcileInitial,
+	runtimeStatePath,
+	taskPreconditions,
 	taskRuntimePatch,
 	taskStates,
-	toolPath,
 	workingSnapshot,
 };
-export type { AgentTaskState };
+export type { AgentTaskState, WorkingSnapshot };
