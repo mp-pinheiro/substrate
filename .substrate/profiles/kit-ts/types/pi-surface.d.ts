@@ -38,6 +38,8 @@ declare module "@oh-my-pi/pi-coding-agent" {
 					shape: Record<string, unknown>,
 					options?: Record<string, unknown>,
 				): unknown;
+				Optional(schema: unknown): unknown;
+				Array(items: unknown, options?: Record<string, unknown>): unknown;
 			};
 		};
 		on(
