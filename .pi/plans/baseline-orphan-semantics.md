@@ -44,4 +44,4 @@ Rejected: per-metric provenance in the baseline (retain only keys whose owning c
 - [x] the negative-test battery still holds, including corrupt-baseline hard-exit :: bash .substrate/selftest.sh
 - [x] frozen gate artifacts are unchanged by the new merge :: bash test/golden-vectors-test.sh
 - [x] checkpoint and maintenance tightening still pass :: bash -c 'bash test/checkpoint-test.sh && bash test/maintenance-test.sh'
-- [x] gate green :: substrate gate
+- [x] gate green :: bin/substrate gate
