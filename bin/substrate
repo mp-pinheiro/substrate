@@ -77,7 +77,8 @@ vendor_core() {
     [ ! -e .substrate ] || [ -d .substrate ] || die ".substrate exists but is not a directory"
     staging=$(mktemp -d .substrate.new.XXXXXX) || die "vendor staging failed"
     mkdir -p "$staging/checks.d" "$staging/hooks" "$staging/profiles"
-    cp "$KIT_ROOT"/core/gate.sh "$KIT_ROOT"/core/gate-lib.sh \
+    cp "$KIT_ROOT"/core/engine-shim.sh \
+       "$KIT_ROOT"/core/gate.sh "$KIT_ROOT"/core/gate-lib.sh \
        "$KIT_ROOT"/core/check-comments.sh "$KIT_ROOT"/core/comment-ratchet.sh \
        "$KIT_ROOT"/core/selftest.sh "$KIT_ROOT"/core/audit.sh \
        "$KIT_ROOT"/core/report.sh "$KIT_ROOT"/core/gated-push.sh \

@@ -1,0 +1,1 @@
+{"session":"<SESSION>","repoRoot":"<REPO>","initial":{"revision":"<REV40>","entries":{},"fingerprint":"<SHA256>","error":null},"observed":{"revision":"<REV40>","entries":{"\"bad-\\377-name.txt\"":"deleted"},"fingerprint":"<SHA256>","error":null},"ownedPaths":["\"bad-\\377-name.txt\""],"trackingError":null,"stopBlocked":false,"completedCommit":null}

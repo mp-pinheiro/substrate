@@ -40,6 +40,7 @@ seed_repo() {
     local repo="$1"
     mkdir -p "$repo/.substrate/hooks" || return 1
     cp "$KIT_ROOT/core/hooks/agent-lifecycle.sh" "$repo/.substrate/hooks/" || return 1
+    cp "$KIT_ROOT/core/engine-shim.sh" "$repo/.substrate/" || return 1
     cp "$KIT_ROOT/core/maintenance-lib.sh" "$KIT_ROOT/core/maintenance-receipt.sh" \
         "$repo/.substrate/" || return 1
     cat > "$repo/.substrate/checkpoint.sh" <<'SH'

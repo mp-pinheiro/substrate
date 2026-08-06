@@ -6,6 +6,10 @@ set -uo pipefail
 
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$HOOK_DIR/../.." && pwd)"
+SUBSTRATE_DIR="$(cd "$HOOK_DIR/.." && pwd)"
+# shellcheck source=../engine-shim.sh
+source "$SUBSTRATE_DIR/engine-shim.sh"
+substrate_engine_exec enforce-conventional-commits "$@"
 [ -d "$REPO_ROOT/.jj" ] || exit 0
 
 command -v jq >/dev/null 2>&1 || exit 0

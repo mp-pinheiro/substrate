@@ -54,11 +54,42 @@ jobs:
         run: test/ci-toolchain.sh ${{ matrix.profile }}
       - name: Hostile-HOME oracle
         run: test/hostile-home.sh ${{ matrix.profile }}
+  engine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - *checkout_shallow
+      - name: Install Go toolchain
+        run: test/ci-toolchain.sh go
+      - name: Provision pinned jq
+        run: test/ci-toolchain.sh --ensure-jq
+      - name: Build, vet, and internal tests
+        run: |
+          go build ./...
+          go vet ./...
+          go test ./internal/...
+  hook-parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - *checkout_shallow
+      - *setup_bun
+      - *install_core
+      - name: Install Jujutsu
+        run: .substrate/install-jj.sh
+      - name: Install Go toolchain
+        run: test/ci-toolchain.sh go
+      - name: Dual-leg hook parity (amendment A27)
+        run: bash test/ab-hooks-test.sh
+      - name: Session-ledger golden vectors, both legs (amendment A8)
+        run: bash test/golden-ledger-test.sh
+      - name: Engine rollback switch
+        run: bash test/engine-rollback-test.sh
   audit:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    needs: [gate, profile-matrix]
+    needs: [gate, profile-matrix, engine, hook-parity]
     steps:
       - *checkout_shallow
       - *setup_bun

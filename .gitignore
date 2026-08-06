@@ -7,3 +7,4 @@
 *.pfx
 substrate-report.md
 test/.toolchain/
+build/
