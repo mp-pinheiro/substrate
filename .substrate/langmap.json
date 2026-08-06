@@ -61,6 +61,31 @@
       }
     }
   ],
+  ".go": {
+    "mode": "ast",
+    "ast_lang": "go",
+    "markers": [
+      "//"
+    ],
+    "block": [
+      [
+        "/*",
+        "*/"
+      ]
+    ],
+    "profile": "go"
+  },
+  ".mod": {
+    "mode": "line",
+    "markers": [
+      "//"
+    ],
+    "profile": "go"
+  },
+  ".sum": {
+    "mode": "exempt",
+    "profile": "go"
+  },
   ".ts": {
     "mode": "ast",
     "ast_lang": "typescript",
