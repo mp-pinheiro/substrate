@@ -8,8 +8,7 @@ import (
 	"strings"
 )
 
-// Marshal renders v exactly as `jq -c` would: insertion-ordered object
-// keys, no trailing newline.
+// Marshal renders v exactly as `jq -c` would produce it.
 func Marshal(v Value) ([]byte, error) {
 	var buf []byte
 	buf, err := appendValue(buf, v, false)
@@ -19,8 +18,7 @@ func Marshal(v Value) ([]byte, error) {
 	return buf, nil
 }
 
-// MarshalSorted renders v exactly as `jq -cS` would: object keys sorted
-// recursively by raw byte order.
+// MarshalSorted renders v exactly as `jq -cS` would produce it.
 func MarshalSorted(v Value) ([]byte, error) {
 	var buf []byte
 	buf, err := appendValue(buf, v, true)
@@ -45,6 +43,8 @@ func appendValue(buf []byte, v Value, sorted bool) ([]byte, error) {
 		return strconv.AppendInt(buf, val, 10), nil
 	case float64:
 		return appendFloat(buf, val), nil
+	case Number:
+		return appendNumber(buf, val), nil
 	case *Object:
 		return appendObject(buf, val, sorted)
 	case []Value:
@@ -142,8 +142,7 @@ func appendU4(buf []byte, v uint32) []byte {
 	return buf
 }
 
-// WHY: exponential form triggers when decpt<=-4 or decpt exceeds the digit
-// count by >15, mirroring jq's jvp_dtoa_fmt (src/jv_dtoa.c) exactly.
+// Mirrors jq's jvp_dtoa_fmt (src/jv_dtoa.c) exponential-form thresholds exactly.
 func appendFloat(buf []byte, f float64) []byte {
 	if math.IsNaN(f) {
 		return append(buf, "null"...)
@@ -203,4 +202,45 @@ func appendFloat(buf []byte, f float64) []byte {
 		buf = append(buf, digits[decpt:]...)
 	}
 	return buf
+}
+
+// Mirrors jq 1.7.1's decNumber toString (General Decimal Arithmetic Spec) formatting.
+func appendNumber(buf []byte, n Number) []byte {
+	digits := n.digits
+	length := len(digits)
+	adjusted := n.exponent + length - 1
+
+	if n.neg {
+		buf = append(buf, '-')
+	}
+	if n.exponent <= 0 && adjusted >= -6 {
+		position := length + n.exponent
+		switch {
+		case position <= 0:
+			buf = append(buf, '0', '.')
+			buf = append(buf, strings.Repeat("0", -position)...)
+			buf = append(buf, digits...)
+		case position >= length:
+			buf = append(buf, digits...)
+		default:
+			buf = append(buf, digits[:position]...)
+			buf = append(buf, '.')
+			buf = append(buf, digits[position:]...)
+		}
+		return buf
+	}
+
+	buf = append(buf, digits[0])
+	if length > 1 {
+		buf = append(buf, '.')
+		buf = append(buf, digits[1:]...)
+	}
+	buf = append(buf, 'E')
+	if adjusted >= 0 {
+		buf = append(buf, '+')
+	} else {
+		buf = append(buf, '-')
+		adjusted = -adjusted
+	}
+	return strconv.AppendInt(buf, int64(adjusted), 10)
 }

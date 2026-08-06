@@ -101,6 +101,17 @@ func TestMatch(t *testing.T) {
 		{"[[:digit:]abc]", "5", true},
 		{"[[:digit:]abc]", "z", false},
 
+		{"[[:word:]]", "a", true},
+		{"[[:word:]]", "_", true},
+		{"[[:word:]]", "9", true},
+		{"[[:word:]]", "!", false},
+		{"[[.a.]]", "a", true},
+		{"[[.a.]]", "b", false},
+		{"[[=a=]]", "a", true},
+		{"[[=a=]]", "b", false},
+		{"[[.ab.]]", "ab", false},
+		{"[a[.b.]c]", "b", true},
+
 		{"a\\*b", "a*b", true},
 		{"a\\*b", "aXb", false},
 		{"a\\?b", "a?b", true},
@@ -119,6 +130,14 @@ func TestMatch(t *testing.T) {
 		// outside brackets...
 		{"a\\", "a\\", true},
 		{"a\\", "a", false},
+
+		// a trailing dangling backslash is poisoned (matches nothing, ever)
+		// when it directly follows a run of only '*'/'?' containing a '*'.
+		{"*\\", "\\", false},
+		{"a*\\", "a\\", false},
+		{"**\\", "\\", false},
+		{"?\\", "a\\", true},
+		{"*a\\", "a\\", true},
 
 		// ...but poisons the whole pattern (matches nothing, ever) when it
 		// dangles while scanning an unterminated bracket expression.
@@ -155,6 +174,33 @@ func TestMatch(t *testing.T) {
 	for _, c := range cases {
 		if got := Match(c.pattern, c.name); got != c.want {
 			t.Errorf("Match(%q, %q) = %v, want %v", c.pattern, c.name, got, c.want)
+		}
+	}
+}
+
+// [[:alpha:]]/[[:alnum:]]/[[:word:]] are locale-aware: ASCII-only under C,
+// but match Unicode letters under UTF-8, mirroring glibc's LC_ALL>LC_CTYPE>LANG resolution.
+func TestMatchLocaleAwareClasses(t *testing.T) {
+	cases := []struct {
+		locale  string
+		pattern string
+		name    string
+		want    bool
+	}{
+		{"C", "[[:alpha:]]", "é", false},
+		{"C", "[[:alnum:]]", "ÿ", false},
+		{"C", "[[:word:]]", "é", false},
+		{"en_US.UTF-8", "[[:alpha:]]", "é", true},
+		{"en_US.UTF-8", "[[:alnum:]]", "ÿ", true},
+		{"en_US.UTF-8", "[[:word:]]", "é", true},
+		{"en_US.UTF-8", "[[:alpha:]]*", "é", true},
+		{"en_US.UTF-8", "[[:digit:]]", "é", false},
+	}
+
+	for _, c := range cases {
+		t.Setenv("LC_ALL", c.locale)
+		if got := Match(c.pattern, c.name); got != c.want {
+			t.Errorf("locale=%s Match(%q, %q) = %v, want %v", c.locale, c.pattern, c.name, got, c.want)
 		}
 	}
 }

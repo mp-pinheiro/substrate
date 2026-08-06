@@ -5,8 +5,7 @@ import (
 	"strconv"
 )
 
-// Unmarshal parses a single JSON document into an insertion-ordered
-// *Object tree, sanitizing invalid UTF-8 the same way jq's parser does.
+// Unmarshal sanitizes invalid UTF-8 the same way jq's parser does.
 func Unmarshal(data []byte) (Value, error) {
 	p := &parser{data: data}
 	p.skipWhitespace()
@@ -74,7 +73,7 @@ func (p *parser) parseLiteral(lit string, v Value) (Value, error) {
 }
 
 func (p *parser) parseObject() (Value, error) {
-	p.pos++ // '{'
+	p.pos++
 	obj := NewObject()
 	p.skipWhitespace()
 	if p.pos < len(p.data) && p.data[p.pos] == '}' {
@@ -119,7 +118,7 @@ func (p *parser) parseObject() (Value, error) {
 }
 
 func (p *parser) parseArray() (Value, error) {
-	p.pos++ // '['
+	p.pos++
 	arr := []Value{}
 	p.skipWhitespace()
 	if p.pos < len(p.data) && p.data[p.pos] == ']' {
@@ -150,7 +149,7 @@ func (p *parser) parseArray() (Value, error) {
 }
 
 func (p *parser) parseString() (Value, error) {
-	p.pos++ // opening quote
+	p.pos++
 	start := p.pos
 	var buf []byte
 	for {
@@ -185,7 +184,7 @@ func (p *parser) parseString() (Value, error) {
 }
 
 func (p *parser) parseEscape() ([]byte, error) {
-	p.pos++ // backslash
+	p.pos++
 	if p.pos >= len(p.data) {
 		return nil, p.errorf("unterminated escape sequence")
 	}
@@ -250,7 +249,7 @@ func (p *parser) parseUnicodeEscape() ([]byte, error) {
 }
 
 func (p *parser) readHex4() (rune, error) {
-	p.pos++ // 'u'
+	p.pos++
 	if p.pos+4 > len(p.data) {
 		return 0, p.errorf("truncated \\u escape")
 	}
@@ -281,14 +280,15 @@ func encodeRuneUTF8(r rune) []byte {
 }
 
 func (p *parser) parseNumber() (Value, error) {
-	start := p.pos
-	isFloat := false
+	neg := false
 	if p.pos < len(p.data) && p.data[p.pos] == '-' {
+		neg = true
 		p.pos++
 	}
 	if p.pos >= len(p.data) || p.data[p.pos] < '0' || p.data[p.pos] > '9' {
 		return nil, p.errorf("invalid number")
 	}
+	intStart := p.pos
 	if p.data[p.pos] == '0' {
 		p.pos++
 	} else {
@@ -296,38 +296,58 @@ func (p *parser) parseNumber() (Value, error) {
 			p.pos++
 		}
 	}
+	intDigits := string(p.data[intStart:p.pos])
+
+	fracDigits := ""
 	if p.pos < len(p.data) && p.data[p.pos] == '.' {
-		isFloat = true
 		p.pos++
+		fracStart := p.pos
 		if p.pos >= len(p.data) || p.data[p.pos] < '0' || p.data[p.pos] > '9' {
 			return nil, p.errorf("invalid number: missing digits after decimal point")
 		}
 		for p.pos < len(p.data) && p.data[p.pos] >= '0' && p.data[p.pos] <= '9' {
 			p.pos++
 		}
+		fracDigits = string(p.data[fracStart:p.pos])
 	}
+
+	explicitExp := 0
 	if p.pos < len(p.data) && (p.data[p.pos] == 'e' || p.data[p.pos] == 'E') {
-		isFloat = true
 		p.pos++
+		expNeg := false
 		if p.pos < len(p.data) && (p.data[p.pos] == '+' || p.data[p.pos] == '-') {
+			expNeg = p.data[p.pos] == '-'
 			p.pos++
 		}
+		expStart := p.pos
 		if p.pos >= len(p.data) || p.data[p.pos] < '0' || p.data[p.pos] > '9' {
 			return nil, p.errorf("invalid number: missing digits in exponent")
 		}
 		for p.pos < len(p.data) && p.data[p.pos] >= '0' && p.data[p.pos] <= '9' {
 			p.pos++
 		}
-	}
-	text := string(p.data[start:p.pos])
-	if !isFloat {
-		if n, err := strconv.ParseInt(text, 10, 64); err == nil {
-			return n, nil
+		expVal, err := strconv.Atoi(string(p.data[expStart:p.pos]))
+		if err != nil {
+			// jq accepts exponents wider than a machine int; clamp instead of erroring.
+			expVal = 1 << 30
 		}
+		if expNeg {
+			expVal = -expVal
+		}
+		explicitExp = expVal
 	}
-	f, err := strconv.ParseFloat(text, 64)
-	if err != nil {
-		return nil, p.errorf("invalid number %q: %w", text, err)
+
+	return Number{
+		neg:      neg,
+		digits:   stripLeadingZeros(intDigits + fracDigits),
+		exponent: explicitExp - len(fracDigits),
+	}, nil
+}
+
+func stripLeadingZeros(digits string) string {
+	i := 0
+	for i < len(digits)-1 && digits[i] == '0' {
+		i++
 	}
-	return f, nil
+	return digits[i:]
 }

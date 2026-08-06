@@ -1,11 +1,9 @@
 package policy
 
-import "regexp"
-
 var (
-	reJJCommitForms = regexp.MustCompile("(^|[;&|(`][[:space:]]*)jj[[:space:]]+(commit|describe|squash)([[:space:]]|$)")
-	reMessageFlag   = regexp.MustCompile(`(-m|--message)([[:space:]=])`)
-	reConventional  = regexp.MustCompile(`(-m|--message)[[:space:]=]+["']?(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([^)]+\))?!?:[[:space:]]`)
+	reJJCommitForms = compileLocaleRegexp("(^|[;&|(`][[:space:]]*)jj[[:space:]]+(commit|describe|squash)([[:space:]]|$)")
+	reMessageFlag   = compileLocaleRegexp(`(-m|--message)([[:space:]=])`)
+	reConventional  = compileLocaleRegexp(`(-m|--message)[[:space:]=]+["']?(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([^)]+\))?!?:[[:space:]]`)
 )
 
 func EnforceConventionalCommits(in Input, repoRoot string) Decision {
@@ -16,13 +14,13 @@ func EnforceConventionalCommits(in Input, repoRoot string) Decision {
 	if cmd == "" {
 		return Decision{}
 	}
-	if !matchAnyLine(reJJCommitForms, cmd) {
+	if !reJJCommitForms.match(cmd) {
 		return Decision{}
 	}
-	if !matchAnyLine(reMessageFlag, cmd) {
+	if !reMessageFlag.match(cmd) {
 		return Decision{}
 	}
-	if !matchAnyLine(reConventional, cmd) {
+	if !reConventional.match(cmd) {
 		return block("BLOCKED: commit message must follow Conventional Commits — 'type(scope): subject'. Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert (append ! for breaking). Example: jj commit -m 'feat(auth): add login'.\n")
 	}
 	return Decision{}

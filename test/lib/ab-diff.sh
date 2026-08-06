@@ -25,6 +25,7 @@ ab_init() {
     mkdir -p "$AB_WORK" || return 2
     AB_WORK=$(cd "$AB_WORK" && pwd -P) || return 2
     AB_PASS=0
+    AB_DIVERGED=0
     AB_FAIL=0
     AB_SCENARIO=""
     AB_SCENARIO_FAIL=0
@@ -213,7 +214,9 @@ ab_fail() {
 }
 
 ab_end() {
-    local expected="$AB_EXPECTED_ROOT/$AB_SCENARIO"
+    local expected="$AB_EXPECTED_ROOT/$AB_SCENARIO" reason="" ab_diverged_ok=0
+    declare -F ab_known_divergence_reason >/dev/null 2>&1 \
+        && reason=$(ab_known_divergence_reason "$AB_SCENARIO")
     if [ "$AB_MODE" = capture ]; then
         rm -rf "$expected"
         if mkdir -p "$expected" && cp "$AB_LIVE"/*.txt "$expected/"; then
@@ -224,20 +227,35 @@ ab_end() {
     elif [ ! -d "$expected" ]; then
         ab_fail "no recording at $expected — capture it: AB_MODE=capture bash test/$AB_SUITE-test.sh"
     elif diff -ru "$expected" "$AB_LIVE"; then
-        printf '  [ok] %s: stdout, stderr, exit and state byte-identical\n' "$AB_SCENARIO"
+        if [ -n "$reason" ]; then
+            ab_fail "registered as a known divergence but the legs now AGREE — remove it from the registry"
+        else
+            printf '  [ok] %s: stdout, stderr, exit and state byte-identical\n' "$AB_SCENARIO"
+        fi
+    elif [ -n "$reason" ]; then
+        printf '  [~~] %s: expected divergence — %s\n' "$AB_SCENARIO" "$reason"
+        ab_diverged_ok=1
     else
         ab_fail "live run diverged from $expected"
     fi
-    if [ "$AB_SCENARIO_FAIL" -eq 0 ]; then
-        AB_PASS=$((AB_PASS + 1))
-    else
+    if [ "$AB_SCENARIO_FAIL" -ne 0 ]; then
         AB_FAIL=$((AB_FAIL + 1))
+    elif [ "$ab_diverged_ok" -eq 1 ]; then
+        AB_DIVERGED=$((AB_DIVERGED + 1))
+    else
+        AB_PASS=$((AB_PASS + 1))
     fi
     [ "$AB_SCENARIO_FAIL" -eq 0 ]
 }
 
 ab_report() {
-    printf '%s: %d scenarios green, %d failed (mode %s)\n' \
-        "$AB_SUITE" "$AB_PASS" "$AB_FAIL" "$AB_MODE"
+    if [ "$AB_DIVERGED" -eq 0 ]; then
+        printf '%s: %d scenarios green, %d failed (mode %s)\n' \
+            "$AB_SUITE" "$AB_PASS" "$AB_FAIL" "$AB_MODE"
+    else
+        printf '%s: %d scenarios green, %d expected divergence, %d failed (mode %s)\n' \
+            "$AB_SUITE" "$AB_PASS" "$AB_DIVERGED" "$AB_FAIL" "$AB_MODE"
+    fi
     [ "$AB_FAIL" -eq 0 ]
 }
+

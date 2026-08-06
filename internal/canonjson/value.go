@@ -1,8 +1,36 @@
-// WHY: jq -c never HTML-escapes or sorts keys; encoding/json always does
+// jq -c never HTML-escapes or sorts keys; encoding/json always does
 // both, so it cannot produce jq-identical bytes.
 package canonjson
 
+import (
+	"errors"
+	"fmt"
+	"strconv"
+)
+
 type Value any
+
+// Number stores a parsed literal as jq 1.7.1's decNumber would, preserving
+// precision a float64 round-trip would lose; Go-constructed numbers use dtoa instead.
+type Number struct {
+	neg      bool
+	digits   string
+	exponent int
+}
+
+// Float64 ignores strconv.ErrRange to mirror jq's own float coercion.
+func (n Number) Float64() (float64, error) {
+	f, err := strconv.ParseFloat(n.String(), 64)
+	if err != nil && !errors.Is(err, strconv.ErrRange) {
+		return 0, fmt.Errorf("canonjson: number %q: %w", n.String(), err)
+	}
+	return f, nil
+}
+
+// String renders the same bytes Marshal would emit for this number.
+func (n Number) String() string {
+	return string(appendNumber(nil, n))
+}
 
 type Object struct {
 	keys   []string

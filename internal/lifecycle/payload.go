@@ -5,10 +5,11 @@ import (
 	"strconv"
 
 	"github.com/mp-pinheiro/substrate/internal/canonjson"
+	"github.com/mp-pinheiro/substrate/internal/xshell"
 )
 
-// sessionFromPayload mirrors `jq -r '.session_id // empty'`: empty stdin and
-// JSON null both parse to "", and a non-object/non-null top level is malformed (jq's `.session_id` fails to index a scalar).
+// sessionFromPayload mirrors `jq -r '.session_id // empty'`; a non-object,
+// non-null top level is malformed because jq can't index a scalar.
 func sessionFromPayload(payload []byte) (session string, malformed bool) {
 	trimmed := bytes.TrimSpace(payload)
 	if len(trimmed) == 0 {
@@ -22,7 +23,7 @@ func sessionFromPayload(payload []byte) (session string, malformed bool) {
 	case nil:
 		return "", false
 	case *canonjson.Object:
-		return jqRawSessionID(v), false
+		return xshell.CleanCommandSubst(jqRawSessionID(v)), false
 	default:
 		return "", true
 	}

@@ -1,6 +1,6 @@
 package bashglob
 
-// WHY: bash treats a backslash with nothing left to escape inside an
+// bash treats a backslash with nothing left to escape inside an
 // unterminated bracket as fatal — the pattern then matches nothing at all.
 func parseBracket(runes []rune, start int) (tok token, consumed int, poisoned bool, ok bool) {
 	j := start + 1
@@ -37,6 +37,18 @@ func parseBracket(runes []rune, start int) (tok token, consumed int, poisoned bo
 			continue
 		}
 
+		if c == '[' && j+1 < len(runes) && (runes[j+1] == '.' || runes[j+1] == '=') {
+			end := markerEnd(runes, j+2, runes[j+1])
+			if end < 0 {
+				return token{}, 0, false, false
+			}
+			if sym := runes[j+2 : end]; len(sym) == 1 {
+				members = append(members, member{lo: sym[0], hi: sym[0]})
+			}
+			j = end + 2
+			continue
+		}
+
 		lo, next, bad := resolveRune(runes, j)
 		if bad {
 			return token{}, 0, true, false
@@ -66,8 +78,12 @@ func resolveRune(runes []rune, j int) (r rune, next int, bad bool) {
 }
 
 func classNameEnd(runes []rune, from int) int {
+	return markerEnd(runes, from, ':')
+}
+
+func markerEnd(runes []rune, from int, marker rune) int {
 	for k := from; k+1 < len(runes); k++ {
-		if runes[k] == ':' && runes[k+1] == ']' {
+		if runes[k] == marker && runes[k+1] == ']' {
 			return k
 		}
 	}

@@ -4,12 +4,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/mp-pinheiro/substrate/internal/bashglob"
@@ -43,8 +43,7 @@ func sigFile(path string) string {
 	return sum
 }
 
-// scanCachePath mirrors changed-files-scan.sh's memo location, distinctly
-// keyed with the engine version (A7) — the Go memo never collides with bash.
+// EngineVersion is baked into the hash so a cache never survives an incompatible engine change.
 func scanCachePath(repoRoot, baselinePath, configPath string) string {
 	ns := sha256.Sum256([]byte(fmt.Sprintf("%s|%s|%s|%s", repoRoot, sigFile(baselinePath), sigFile(configPath), EngineVersion)))
 	tmp := os.Getenv("TMPDIR")
@@ -95,13 +94,49 @@ func renderRatchetFindings(rel string, r comments.RatchetResult) string {
 	return b.String()
 }
 
-func renderInfraFailure(err error) string {
+func infraFailureText(err error) (stdout, stderr string) {
 	code := 3
 	var infra *comments.InfrastructureError
 	if errors.As(err, &infra) {
 		code = infra.Code
 	}
-	return err.Error() + "\n" + fmt.Sprintf("comment ratchet: detector infrastructure failed (rc=%s) — fix it before editing\n", strconv.Itoa(code))
+	stdout = fmt.Sprintf("\ncomment ratchet: detector infrastructure failed (rc=%d) — fix it before editing\n", code)
+	stderr = err.Error() + "\n"
+	return stdout, stderr
+}
+
+// renderInfraFailureEntry: order matters — stderr must precede stdout to match bash's `2>&1` capture.
+func renderInfraFailureEntry(err error) string {
+	stdout, stderr := infraFailureText(err)
+	return stderr + stdout
+}
+
+// corruptJSON mirrors `jq -e . PATH`: a missing file, invalid JSON, or a
+// document whose decoded value is JSON null/false all count as corrupt.
+func corruptJSON(path string) bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return true
+	}
+	var v any
+	if err := json.Unmarshal(data, &v); err != nil {
+		return true
+	}
+	if v == nil {
+		return true
+	}
+	b, isBool := v.(bool)
+	return isBool && !b
+}
+
+func precheckInfra(paths config.Paths) error {
+	if corruptJSON(paths.LangMapPath) {
+		return &comments.InfrastructureError{Code: 3, Err: fmt.Errorf("comment gate: langmap missing or corrupt: %s", paths.LangMapPath)}
+	}
+	if corruptJSON(paths.ConfigPath) {
+		return &comments.InfrastructureError{Code: 3, Err: fmt.Errorf("comment gate: config missing or corrupt: %s", paths.ConfigPath)}
+	}
+	return nil
 }
 
 func dispatchChangedFilesScan(ctx context.Context, e env, stdin io.Reader) int {
@@ -134,11 +169,20 @@ func dispatchChangedFilesScan(ctx context.Context, e env, stdin io.Reader) int {
 		return 0
 	}
 
-	lm, err := config.LoadLangMap(paths.LangMapPath)
-	if err != nil {
-		return 0
+	infraErr := precheckInfra(paths)
+	var lm *config.LangMap
+	if infraErr == nil {
+		lm, err = config.LoadLangMap(paths.LangMapPath)
+		if err != nil {
+			infraErr = &comments.InfrastructureError{Code: 3, Err: err}
+		}
 	}
-	baseline, _ := config.LoadBaseline(paths.BaselinePath)
+	baseline, err := config.LoadBaseline(paths.BaselinePath)
+	if err != nil {
+		// bash's comment-ratchet.sh treats an unreadable baseline as allowed=0 and proceeds;
+		// nil is safe here since Baseline's Allowance has a nil-receiver guard (baseline.go).
+		baseline = nil
+	}
 	scanner := comments.NewScanner(cfg)
 
 	cachePath := scanCachePath(paths.RepoRoot, paths.BaselinePath, paths.ConfigPath)
@@ -167,9 +211,13 @@ func dispatchChangedFilesScan(ctx context.Context, e env, stdin io.Reader) int {
 		if cacheLines[key] {
 			continue
 		}
+		if infraErr != nil {
+			report.WriteString(renderInfraFailureEntry(infraErr))
+			continue
+		}
 		result, ratchetErr := comments.Ratchet(ctx, scanner, lm, baseline, paths.RepoRoot, path)
 		if ratchetErr != nil {
-			report.WriteString(renderInfraFailure(ratchetErr))
+			report.WriteString(renderInfraFailureEntry(ratchetErr))
 			continue
 		}
 		if result.Blocked {
@@ -202,20 +250,32 @@ func dispatchCommentRatchet(ctx context.Context, e env, args []string) int {
 	}
 
 	paths := e.paths()
+	if infraErr := precheckInfra(paths); infraErr != nil {
+		stdout, stderr := infraFailureText(infraErr)
+		writeResult([]byte(stdout), []byte(stderr))
+		return 1
+	}
+
 	cfg, cfgErr := config.LoadConfig(paths.ConfigPath)
 	if cfgErr != nil || cfg == nil {
 		cfg = &config.Config{}
 	}
 	lm, lmErr := config.LoadLangMap(paths.LangMapPath)
 	if lmErr != nil {
-		return 0
+		stdout, stderr := infraFailureText(&comments.InfrastructureError{Code: 3, Err: lmErr})
+		writeResult([]byte(stdout), []byte(stderr))
+		return 1
 	}
-	baseline, _ := config.LoadBaseline(paths.BaselinePath)
+	baseline, baselineErr := config.LoadBaseline(paths.BaselinePath)
+	if baselineErr != nil {
+		baseline = nil
+	}
 	scanner := comments.NewScanner(cfg)
 
 	result, ratchetErr := comments.Ratchet(ctx, scanner, lm, baseline, e.repoRoot, file)
 	if ratchetErr != nil {
-		writeResult([]byte(renderInfraFailure(ratchetErr)), nil)
+		stdout, stderr := infraFailureText(ratchetErr)
+		writeResult([]byte(stdout), []byte(stderr))
 		return 1
 	}
 	if result.Blocked {

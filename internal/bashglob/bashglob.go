@@ -73,6 +73,9 @@ func tokenize(pattern string) ([]token, bool) {
 				toks = append(toks, token{kind: tokLiteral, r: runes[i+1]})
 				i += 2
 			} else {
+				if endsInStarRun(toks) {
+					return nil, true
+				}
 				toks = append(toks, token{kind: tokLiteral, r: '\\'})
 				i++
 			}
@@ -100,6 +103,20 @@ func tokenize(pattern string) ([]token, bool) {
 		}
 	}
 	return toks, false
+}
+
+func endsInStarRun(toks []token) bool {
+	for k := len(toks) - 1; k >= 0; k-- {
+		switch toks[k].kind {
+		case tokStar:
+			return true
+		case tokAny:
+			continue
+		default:
+			return false
+		}
+	}
+	return false
 }
 
 func matchTokens(toks []token, name []rune) bool {
