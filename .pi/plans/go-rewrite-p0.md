@@ -52,4 +52,4 @@ Cut the measured bash hot spots with no observable behavior change, and freeze t
 - [x] checkpoint, ownership, and stop lifecycle are unchanged :: bash test/checkpoint-test.sh
 - [x] receipt and restructure paths are unchanged :: bash -c 'bash test/receipt-test.sh && bash test/restructure-test.sh'
 - [x] the vendored engine matches core :: bash test/vendor-drift-test.sh
-- [x] gate green :: substrate gate
+- [x] gate green :: bin/substrate gate

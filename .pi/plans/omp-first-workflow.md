@@ -50,4 +50,4 @@ Make a mutating OMP task mechanically converge through edit feedback, verificati
 - [x] Claude and OMP lifecycle semantics remain mechanically equivalent :: test/parity-test.sh
 - [x] negative battery green :: bin/substrate selftest
 - [x] repository maintenance isolates candidate gating, preserves unrelated work, checkpoints exact Git/jj paths, recovers interrupted apply/commit states, separates external sync, and never pushes :: test/maintenance-test.sh
-- [x] gate green :: substrate gate
+- [x] gate green :: bin/substrate gate
