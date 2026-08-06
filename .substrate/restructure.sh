@@ -147,7 +147,7 @@ case "$op" in
             fail_op "jj split rejected the transaction"
         fi
         children_after=$(jj log -r "children($target_change)" --no-graph -T 'change_id ++ "\n"' 2>/dev/null | LC_ALL=C sort)
-        remainder=$(comm -13 <(printf '%s\n' "$children_before") <(printf '%s\n' "$children_after") | grep . || true)
+        remainder=$(LC_ALL=C comm -13 <(printf '%s\n' "$children_before") <(printf '%s\n' "$children_after") | grep . || true)
         [ "$(printf '%s\n' "$remainder" | grep -c .)" -eq 1 ] \
             || fail_op "could not identify the remainder commit"
         if [ -n "$message2" ] && ! jj describe -r "$remainder" -m "$message2" >/dev/null 2>&1; then
