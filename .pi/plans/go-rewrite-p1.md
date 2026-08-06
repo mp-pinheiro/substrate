@@ -1,5 +1,5 @@
 # Plan: Go engine rewrite — P1 (engine skeleton + all seven hooks behind shims)
-state: active
+state: committed
 issue: https://github.com/mp-pinheiro/substrate/issues/12
 parent: .pi/plans/go-rewrite.md
 
@@ -54,14 +54,21 @@ Everything here was learned the hard way in the P0 session and is recorded becau
 - No `.substrate/` deletion and no removal of `80-vendor-drift`/`81-harness-parity` — P5.
 
 ## Acceptance
-- [ ] the go foundation is tracked, claimed, and the kit gate stays green with it :: bash -c 'test -f go.mod && test -f .golangci.yml && jq -e ".profiles | index(\"go\")" substrate.json >/dev/null && bin/substrate gate'
-- [ ] stop-branch output stays byte-identical on the bash leg :: bash test/ab-stop-test.sh
-- [ ] every ported hook answers on the Go leg with identical stdout, stderr, exit and state :: bash test/ab-hooks-test.sh
-- [ ] the session ledger is byte-identical to its committed vectors under the pinned toolchain :: bash test/golden-ledger-test.sh
-- [ ] setting SUBSTRATE_ENGINE=bash restores the bash leg for every hook :: bash test/engine-rollback-test.sh
-- [ ] frozen gate artifacts are unchanged by P1 :: bash test/golden-vectors-test.sh
-- [ ] the existing hook and lifecycle suites pass unmodified :: bash -c 'bash test/changed-scan-test.sh && bash test/vcs-hooks-test.sh && bash test/checkpoint-test.sh'
-- [ ] harness parity and vendor integrity hold :: bash -c 'bash test/parity-test.sh && bash test/vendor-drift-test.sh'
+- [x] the go foundation is tracked, claimed, and the kit gate stays green with it :: bash -c 'test -f go.mod && test -f .golangci.yml && jq -e ".profiles | index(\"go\")" substrate.json >/dev/null && bin/substrate gate'
+- [x] stop-branch output stays byte-identical on the bash leg :: bash test/ab-stop-test.sh
+- [x] every ported hook answers on the Go leg with identical stdout, stderr, exit and state :: bash test/ab-hooks-test.sh
+- [x] the session ledger is byte-identical to its committed vectors under the pinned toolchain :: bash test/golden-ledger-test.sh
+- [x] setting SUBSTRATE_ENGINE=bash restores the bash leg for every hook :: bash test/engine-rollback-test.sh
+- [x] frozen gate artifacts are unchanged by P1 :: bash test/golden-vectors-test.sh
+- [x] the existing hook and lifecycle suites pass unmodified :: bash -c 'bash test/changed-scan-test.sh && bash test/vcs-hooks-test.sh && bash test/checkpoint-test.sh'
+- [x] harness parity and vendor integrity hold :: bash -c 'bash test/parity-test.sh && bash test/vendor-drift-test.sh'
 
 ## Exit criteria
 Every oracle above checked, `substrate verify` green after an omp restart, and the vendored mirror committed through its own maintenance transaction. Then flip this plan to `committed` and graduate P2 (`.pi/plans/go-rewrite-p2.md`) per amendment A2, which supersedes this one on landing.
+
+## Landed 2026-08-06 — decisions made during implementation
+- **Work item 8 scope resolved: bash everywhere, no TS deltas ported.** The "five TS-correct parity deltas" the contracts were meant to mark were not accessible in this session (the contract-extraction artifacts were session-local to the planning run). Since the merge gate is a byte-identical bash-vs-Go A/B harness, porting any TS-side behavior would have reddened it; every guard, the lifecycle ledger, and the classifier port bash bug-for-bug, including its quirks (see below). Revisit at P4 when the TS extension itself is retired.
+- **`comm` locale bug found and fixed in `core/checkpoint.sh` and `core/restructure.sh`.** Both scripts sort operands with `LC_ALL=C sort` but invoked `comm` under the ambient locale; under a non-C `LC_ALL` (the default on most dev machines) `comm` reports "not in sorted order" and its diff becomes wrong, spuriously blocking checkpoints with many changed paths. Fixed by pinning `LC_ALL=C` on every `comm` call. Unrelated to the P1 scope but blocking to land it.
+- **Bash bug reproduced deliberately, not fixed:** git renders non-ASCII paths as a quoted, C-escaped string (`"caf\303\251.txt"`) that `core/hooks/agent-lifecycle.sh` never unquotes, so the ledger's entry key is the literal quoted text and its value is `deleted` (no file exists under that name). `internal/vcs` never calls its own `UnquotePath` from the snapshot path for this reason. Frozen in `test/golden/ledger/git-invalid-utf8.json`.
+- **Comment classifier exemption is real, not a bug:** a full-line comment immediately after a shebang inherits `prev_fullline=1` from the shebang's exempt branch, so `narration`/`restates-code`/`step-numbering` never fire on the FIRST comment line of a script. Test fixtures across this plan's own suites had to place slop comments after a real code line for exactly this reason.
+- **Ownership-tracking gap for background subagents, confirmed live** (operational note 5 was right to flag it "UNPROVEN"): files written exclusively by background `task` subagents were absent from `~/.omp/run/substrate-quality/<hash>.json`'s `ownedPaths` even though genuinely dirty, causing `substrate_checkpoint` to build an incomplete candidate (missing whole packages, `go build` failed inside the gate). Recovered by re-writing each affected file's real content once through a direct (non-subagent) tool call, which re-registered ownership without changing final bytes. P2+ sessions that fan out heavy background work should budget for this.
