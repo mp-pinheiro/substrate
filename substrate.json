@@ -2,6 +2,7 @@
   "version": 1,
   "profiles": [
     "base",
+    "go",
     "kit-ts",
     "python",
     "shell"
