@@ -6,6 +6,9 @@ HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SUBSTRATE_DIR="$(cd "$HOOK_DIR/.." && pwd)"
 REPO_ROOT="$(cd "$SUBSTRATE_DIR/.." && pwd)"
 CONFIG="$REPO_ROOT/substrate.json"
+# shellcheck source=../engine-shim.sh
+source "$SUBSTRATE_DIR/engine-shim.sh"
+substrate_engine_exec protect-command "$@"
 
 command -v jq >/dev/null 2>&1 || {
     printf 'blocked: jq is required to inspect Bash commands safely\n' >&2

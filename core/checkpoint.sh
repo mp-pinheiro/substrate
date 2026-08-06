@@ -124,12 +124,12 @@ for path in "${paths[@]}"; do
 done
 printf '%s\n' "${normalized[@]}" | LC_ALL=C sort -u > "$requested_file"
 changed_paths > "$current_file"
-missing=$(comm -23 "$requested_file" "$current_file")
+missing=$(LC_ALL=C comm -23 "$requested_file" "$current_file")
 if [ -n "$missing" ]; then
     printf 'checkpoint blocked: supplied paths are not pending working-copy changes:\n%s\n' "$missing" >&2
     exit 2
 fi
-comm -13 "$requested_file" "$current_file" > "$leftover_file"
+LC_ALL=C comm -13 "$requested_file" "$current_file" > "$leftover_file"
 
 if [ ! -s "$leftover_file" ]; then
     if ! gate_output=$(.substrate/gate.sh --tighten 2>&1); then

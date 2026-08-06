@@ -5,6 +5,9 @@ set -uo pipefail
 
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SUBSTRATE_DIR="$(cd "$HOOK_DIR/.." && pwd)"
+# shellcheck source=../engine-shim.sh
+source "$SUBSTRATE_DIR/engine-shim.sh"
+substrate_engine_exec gate-before-push "$@"
 
 input=$(cat)
 cmd=$(jq -r '.tool_input.command // empty' <<< "$input")

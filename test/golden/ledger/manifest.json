@@ -1,0 +1,1 @@
+{"bash":"5.2.21(1)-release","jq":"jq-1.7.1","vectors":[{"file":"jj-nonascii.json","sha256":"9088496e4a48a3a08cfedfd9bf9480dfc6da60677e53028d6576149dfe5fb59a"},{"file":"git-invalid-utf8.json","sha256":"fcf55b9638b84967f4fb6ec5e4667862e6002e8a3db3140045800f67be9e388a"}]}

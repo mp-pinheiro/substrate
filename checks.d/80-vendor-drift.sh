@@ -22,6 +22,7 @@ pair() {
 }
 
 CORE_SCRIPTS=(
+    engine-shim.sh
     gate.sh gate-lib.sh check-comments.sh comment-ratchet.sh selftest.sh audit.sh report.sh
     gated-push.sh push-gate.sh checkpoint.sh receipt-lib.sh gitleaks-lib.sh gitleaks-deep.sh
     maintenance.sh maintenance-cli.sh maintenance-lib.sh maintenance-receipt.sh restructure.sh

@@ -115,6 +115,34 @@ cmd_doctor() {
         fi
     done
 
+    local engine_mode="${SUBSTRATE_ENGINE:-auto}" engine_bin="${SUBSTRATE_ENGINE_BIN:-}" engine_version=""
+    if [ -z "$engine_bin" ]; then
+        engine_bin=$(command -v substrate-engine 2>/dev/null) || engine_bin=""
+    fi
+    if [ -n "$engine_bin" ] && [ -x "$engine_bin" ]; then
+        engine_version=$("$engine_bin" version 2>/dev/null) || engine_version=""
+    fi
+    case "$engine_mode" in
+        bash)
+            info "engine: SUBSTRATE_ENGINE=bash — hooks run the vendored bash leg" ;;
+        go)
+            if [ -n "$engine_version" ]; then
+                success "engine: go leg forced — $engine_bin ($engine_version)"
+            else
+                warn "engine: SUBSTRATE_ENGINE=go but no usable binary (${SUBSTRATE_ENGINE_BIN:-substrate-engine not on PATH}) — every ported hook exits 2"
+            fi ;;
+        auto)
+            if [ -n "$engine_version" ]; then
+                success "engine: auto resolves to go — $engine_bin ($engine_version)"
+            else
+                info "engine: auto falls back to bash — no substrate-engine binary (build it with: just engine)"
+            fi ;;
+        *)
+            warn "engine: SUBSTRATE_ENGINE=$engine_mode is not auto|go|bash — hooks run the bash leg" ;;
+    esac
+    [ -z "${SUBSTRATE_ENGINE_SKIP:-}" ] \
+        || info "engine: SUBSTRATE_ENGINE_SKIP keeps these hooks on bash: $SUBSTRATE_ENGINE_SKIP"
+
     if [ -d .jj ]; then
         if jj config get experimental-advance-branches.enabled-branches >/dev/null 2>&1; then
             success "jj trunk auto-advance configured"
