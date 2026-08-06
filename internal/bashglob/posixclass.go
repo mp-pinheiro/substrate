@@ -1,13 +1,32 @@
 package bashglob
 
+import (
+	"unicode"
+
+	"github.com/mp-pinheiro/substrate/internal/xshell"
+)
+
+func isAlpha(r rune) bool {
+	if r < 0x80 {
+		return isAsciiAlpha(r)
+	}
+	return xshell.IsUTF8Locale() && unicode.IsLetter(r)
+}
+
+func isAsciiAlpha(r rune) bool {
+	return r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z'
+}
+
 func matchPosixClass(name string, r rune) bool {
 	switch name {
 	case "alpha":
-		return r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z'
+		return isAlpha(r)
 	case "digit":
 		return r >= '0' && r <= '9'
 	case "alnum":
-		return r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || r >= '0' && r <= '9'
+		return isAlpha(r) || r >= '0' && r <= '9'
+	case "word":
+		return isAlpha(r) || r >= '0' && r <= '9' || r == '_'
 	case "upper":
 		return r >= 'A' && r <= 'Z'
 	case "lower":

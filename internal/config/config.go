@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -42,19 +43,36 @@ func LoadConfig(path string) (*Config, error) {
 	}
 
 	var top map[string]json.RawMessage
-	if err := json.Unmarshal(data, &top); err != nil {
-		return nil, fmt.Errorf("config: parse %s: %w", path, err)
+	switch err := json.Unmarshal(data, &top); {
+	case err == nil && top != nil:
+		cfg := &Config{Present: true}
+		decodeStringSlice(top["profiles"], &cfg.Profiles)
+		decodeStringSlice(top["unscanned"], &cfg.Unscanned)
+		decodeStringSlice(top["protected_paths"], &cfg.ProtectedPaths)
+		cfg.Scopes = decodeScopes(top["scopes"])
+		cfg.Contracts, cfg.contractsValid = decodeContracts(top["contracts"])
+		cfg.CommentTags = decodeCommentTags(top["comment"])
+		return cfg, nil
+	case err == nil && top == nil:
+		return nil, fmt.Errorf("config: parse %s: top-level value is null", path)
+	default:
+		var ute *json.UnmarshalTypeError
+		if !errors.As(err, &ute) {
+			return nil, fmt.Errorf("config: parse %s: %w", path, err)
+		}
+		var scalar interface{}
+		if jerr := json.Unmarshal(data, &scalar); jerr != nil {
+			return nil, fmt.Errorf("config: parse %s: %w", path, jerr)
+		}
+		if b, ok := scalar.(bool); ok && !b {
+			return nil, fmt.Errorf("config: parse %s: top-level value is false", path)
+		}
+		return &Config{
+			Present:        true,
+			CommentTags:    append([]string(nil), defaultCommentTags...),
+			contractsValid: false,
+		}, nil
 	}
-
-	cfg := &Config{Present: true}
-	decodeStringSlice(top["profiles"], &cfg.Profiles)
-	decodeStringSlice(top["unscanned"], &cfg.Unscanned)
-	decodeStringSlice(top["protected_paths"], &cfg.ProtectedPaths)
-	cfg.Scopes = decodeScopes(top["scopes"])
-	cfg.Contracts, cfg.contractsValid = decodeContracts(top["contracts"])
-	cfg.CommentTags = decodeCommentTags(top["comment"])
-
-	return cfg, nil
 }
 
 func (c *Config) ContractsValid() bool {
@@ -84,11 +102,89 @@ func decodeStringSlice(raw json.RawMessage, dest *[]string) {
 	if len(raw) == 0 {
 		return
 	}
-	var v []string
-	if err := json.Unmarshal(raw, &v); err != nil {
-		return
+	var out []string
+	for _, el := range jqArrayLike(raw) {
+		for _, line := range jqStringifyLines(el) {
+			if line != "" {
+				out = append(out, line)
+			}
+		}
 	}
-	*dest = v
+	*dest = out
+}
+
+// jqArrayLike reproduces `(raw // [])[]`: arrays yield elements, objects
+// yield their VALUES in source key order; null, false, and scalars yield none.
+func jqArrayLike(raw json.RawMessage) []json.RawMessage {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 {
+		return nil
+	}
+	switch trimmed[0] {
+	case '[':
+		var arr []json.RawMessage
+		if err := json.Unmarshal(trimmed, &arr); err != nil {
+			return nil
+		}
+		return arr
+	case '{':
+		return jqObjectValues(trimmed)
+	default:
+		return nil
+	}
+}
+
+func jqObjectValues(raw json.RawMessage) []json.RawMessage {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	tok, err := dec.Token()
+	if err != nil {
+		return nil
+	}
+	if d, ok := tok.(json.Delim); !ok || d != '{' {
+		return nil
+	}
+	var values []json.RawMessage
+	for dec.More() {
+		if _, err := dec.Token(); err != nil {
+			return values
+		}
+		var v json.RawMessage
+		if err := dec.Decode(&v); err != nil {
+			return values
+		}
+		values = append(values, v)
+	}
+	return values
+}
+
+// jqStringifyLines mirrors one `jq -r` element print split on "\n": the
+// caller consumes it via `while IFS= read -r`/`mapfile -t`.
+func jqStringifyLines(raw json.RawMessage) []string {
+	trimmed := bytes.TrimSpace(raw)
+	switch {
+	case len(trimmed) == 0:
+		return nil
+	case string(trimmed) == "null":
+		return []string{"null"}
+	case string(trimmed) == "true":
+		return []string{"true"}
+	case string(trimmed) == "false":
+		return []string{"false"}
+	case trimmed[0] == '"':
+		var s string
+		if err := json.Unmarshal(trimmed, &s); err != nil {
+			return nil
+		}
+		return strings.Split(s, "\n")
+	case trimmed[0] == '{' || trimmed[0] == '[':
+		var buf bytes.Buffer
+		if err := json.Indent(&buf, trimmed, "", "  "); err != nil {
+			return nil
+		}
+		return strings.Split(buf.String(), "\n")
+	default:
+		return []string{string(trimmed)}
+	}
 }
 
 type rawScope struct {

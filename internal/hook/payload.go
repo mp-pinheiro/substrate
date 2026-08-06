@@ -5,10 +5,10 @@ import (
 	"strings"
 
 	"github.com/mp-pinheiro/substrate/internal/canonjson"
+	"github.com/mp-pinheiro/substrate/internal/xshell"
 )
 
-// jqAlt reproduces `.a.b // .c // empty`: first non-null/non-false path wins.
-// Indexing a non-null non-object errors — jq's `//` does not catch it (verified against the pinned jq) — reported as failed.
+// A non-null non-object index errors and jq's `//` does not catch it — verified against the pinned jq.
 func jqAlt(v canonjson.Value, paths ...string) (result string, failed bool) {
 	for _, path := range paths {
 		cur := v
@@ -39,15 +39,13 @@ func jqAlt(v canonjson.Value, paths ...string) (result string, failed bool) {
 			continue
 		}
 		if s, ok := cur.(string); ok {
-			return s, false
+			return xshell.CleanCommandSubst(s), false
 		}
-		return fmt.Sprint(cur), false
+		return xshell.CleanCommandSubst(fmt.Sprint(cur)), false
 	}
 	return "", false
 }
 
-// decodePayload mirrors a failed `$(jq ... <<< "$input")` substitution:
-// unparseable JSON behaves exactly like an indexing error downstream.
 func decodePayload(payload []byte) (canonjson.Value, bool) {
 	v, err := canonjson.Unmarshal(payload)
 	if err != nil {
