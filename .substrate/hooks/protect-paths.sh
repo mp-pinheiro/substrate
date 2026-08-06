@@ -8,6 +8,9 @@ HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SUBSTRATE_DIR="$(cd "$HOOK_DIR/.." && pwd)"
 REPO_ROOT="$(cd "$SUBSTRATE_DIR/.." && pwd)"
 CONFIG="$REPO_ROOT/substrate.json"
+# shellcheck source=../engine-shim.sh
+source "$SUBSTRATE_DIR/engine-shim.sh"
+substrate_engine_exec protect-paths "$@"
 
 input=$(cat)
 path=$(jq -r '.tool_input.file_path // empty' <<< "$input")
