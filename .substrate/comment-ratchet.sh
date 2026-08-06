@@ -7,6 +7,9 @@ set -uo pipefail
 
 SUBSTRATE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SUBSTRATE_DIR/.." && pwd)"
+# shellcheck source=engine-shim.sh
+source "$SUBSTRATE_DIR/engine-shim.sh"
+substrate_engine_exec comment-ratchet "$@"
 cd "$REPO_ROOT" || exit 1
 export CONFIG="$REPO_ROOT/substrate.json"
 export LANGMAP="$SUBSTRATE_DIR/langmap.json"

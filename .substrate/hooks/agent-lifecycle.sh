@@ -6,6 +6,9 @@ HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SUBSTRATE_DIR="$(cd "$HOOK_DIR/.." && pwd)"
 REPO_ROOT="$(cd "$SUBSTRATE_DIR/.." && pwd)"
 cd "$REPO_ROOT" || exit 2
+# shellcheck source=../engine-shim.sh
+source "$SUBSTRATE_DIR/engine-shim.sh"
+substrate_engine_exec agent-lifecycle "$@"
 # shellcheck source=../maintenance-lib.sh
 source "$SUBSTRATE_DIR/maintenance-lib.sh"
 

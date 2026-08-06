@@ -9,6 +9,9 @@ HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SUBSTRATE_DIR="$(cd "$HOOK_DIR/.." && pwd)"
 REPO_ROOT="$(cd "$SUBSTRATE_DIR/.." && pwd)"
 CONFIG="$REPO_ROOT/substrate.json"
+# shellcheck source=../engine-shim.sh
+source "$SUBSTRATE_DIR/engine-shim.sh"
+substrate_engine_exec changed-files-scan "$@"
 
 cd "$REPO_ROOT" || exit 0
 [ -t 0 ] || cat >/dev/null 2>&1 || true
