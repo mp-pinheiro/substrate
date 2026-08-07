@@ -2,6 +2,7 @@ package comments
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,6 +16,19 @@ type RatchetResult struct {
 	Allowance int
 	Blocked   bool
 }
+
+// BaselineMetricError signals a baseline metric that fails the "non-negative
+// whole number" contract — an infrastructure failure, not a clean pass.
+type BaselineMetricError struct {
+	Key string
+	Err error
+}
+
+func (e *BaselineMetricError) Error() string {
+	return fmt.Sprintf("comment ratchet: baseline metric %s is not a whole number — fix substrate-baseline.json", e.Key)
+}
+
+func (e *BaselineMetricError) Unwrap() error { return e.Err }
 
 func Ratchet(ctx context.Context, s *Scanner, lm *config.LangMap, b *config.Baseline, repoRoot, file string) (RatchetResult, error) {
 	rel := file
@@ -36,7 +50,11 @@ func Ratchet(ctx context.Context, s *Scanner, lm *config.LangMap, b *config.Base
 	}
 
 	count := len(findings)
-	allowance := b.Allowance("comments:" + rel)
+	key := "comments:" + rel
+	allowance, err := b.Allowance(key)
+	if err != nil {
+		return RatchetResult{}, &BaselineMetricError{Key: key, Err: err}
+	}
 	return RatchetResult{
 		Findings:  findings,
 		Count:     count,
