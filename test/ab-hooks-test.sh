@@ -33,7 +33,7 @@ mkdir -p "$BUILD" || exit 9
     || { printf 'ab-hooks-test: engine build failed\n' >&2; exit 9; }
 export SUBSTRATE_ENGINE_BIN="$BUILD/substrate-engine"
 
-# One vendored template, copied per scenario: init is slow, cp is not.
+# .substrate is vendored once here; two full per-flavour templates follow below.
 TEMPLATE="$T/template"
 mkdir -p "$TEMPLATE" || exit 9
 (
@@ -66,16 +66,16 @@ write_fixture_config() {
 JSON
 }
 
-seed_repo() {
-    local repo="$1" vcs="${2:-jj}"
-    mkdir -p "$repo" || return 1
-    cp -R "$TEMPLATE/.substrate" "$repo/.substrate" || return 1
-    write_fixture_config "$repo/substrate.json" || return 1
-    printf 'seed\n' > "$repo/README.md" || return 1
-    printf 'printf "owned\\n"\n' > "$repo/owned.sh" || return 1
-    printf '{\n  "metrics": {},\n  "direction": {}\n}\n' > "$repo/substrate-baseline.json" || return 1
+seed_flavour_template() {
+    local dir="$1" vcs="$2"
+    mkdir -p "$dir" || return 1
+    cp -R "$TEMPLATE/.substrate" "$dir/.substrate" || return 1
+    write_fixture_config "$dir/substrate.json" || return 1
+    printf 'seed\n' > "$dir/README.md" || return 1
+    printf 'printf "owned\\n"\n' > "$dir/owned.sh" || return 1
+    printf '{\n  "metrics": {},\n  "direction": {}\n}\n' > "$dir/substrate-baseline.json" || return 1
     (
-        cd "$repo" || exit 9
+        cd "$dir" || exit 9
         git init -q --initial-branch=main || exit 9
         git config user.email substrate@localhost || exit 9
         git config user.name substrate || exit 9
@@ -87,6 +87,20 @@ seed_repo() {
             git commit -qm 'chore: seed hook fixture' || exit 9
         fi
     ) >/dev/null 2>&1
+}
+
+# Seeded and committed once per flavour; seed_repo below is only a cp -R.
+TEMPLATE_JJ="$T/template-jj"
+TEMPLATE_GIT="$T/template-git"
+seed_flavour_template "$TEMPLATE_JJ" jj \
+    || { printf 'ab-hooks-test: jj template seed failed\n' >&2; exit 9; }
+seed_flavour_template "$TEMPLATE_GIT" git \
+    || { printf 'ab-hooks-test: git template seed failed\n' >&2; exit 9; }
+
+seed_repo() {
+    local repo="$1" vcs="${2:-jj}" template="$TEMPLATE_JJ"
+    [ "$vcs" = jj ] || template="$TEMPLATE_GIT"
+    cp -R "$template" "$repo"
 }
 
 stub_push_gate() {
