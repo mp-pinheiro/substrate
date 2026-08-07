@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Shared Gitleaks scope construction for the cheap pending scan and cached deep scan.
+# shellcheck source=./engine-shim.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/engine-shim.sh" 2>/dev/null || true
 
 synthetic_git_tip() {
     local index tree tip rc parent=()
@@ -54,7 +56,7 @@ gitleaks_config_hash() {
     fi
 }
 
-gitleaks_deep_key() {
+gitleaks_deep_key_v1() {
     local refs_hash version config_hash
     refs_hash=$({
         git for-each-ref --format='%(refname) %(objectname)' refs/heads refs/tags refs/remotes
@@ -63,4 +65,9 @@ gitleaks_deep_key() {
     version=$(gitleaks version 2>/dev/null | tr -d '\r\n') || return 1
     config_hash=$(gitleaks_config_hash) || return 1
     printf '%s\n' "$refs_hash:$version:$config_hash" | sha256sum | cut -d ' ' -f 1
+}
+
+gitleaks_deep_key() {
+    declare -F _substrate_engine_delegate >/dev/null 2>&1 || { gitleaks_deep_key_v1; return; }
+    _substrate_engine_delegate gitleaks-deep-key gitleaks_deep_key_v1 gitleaks-deep-key --
 }
