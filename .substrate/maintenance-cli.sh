@@ -7,6 +7,7 @@ maintenance_parse_args() {
     MAINTENANCE_FORCE=0
     MAINTENANCE_CHECKPOINT=0
     MAINTENANCE_ACCEPT_BASELINE=0
+    MAINTENANCE_ACCEPT_REGRESSION=""
     MAINTENANCE_JSON=0
     MAINTENANCE_REPO_ONLY=0
     MAINTENANCE_REQUESTED_VCS=auto
@@ -19,6 +20,13 @@ maintenance_parse_args() {
             --apply) shift ;;
             --checkpoint) MAINTENANCE_CHECKPOINT=1; shift ;;
             --accept-baseline) MAINTENANCE_ACCEPT_BASELINE=1; shift ;;
+            --accept-regression)
+                warn "--accept-regression requires the keyed form: --accept-regression=<metric>[,<metric>]"
+                return 2 ;;
+            --accept-regression=*)
+                MAINTENANCE_ACCEPT_REGRESSION="${1#--accept-regression=}"
+                [ -n "$MAINTENANCE_ACCEPT_REGRESSION" ] || { warn "--accept-regression= needs at least one metric"; return 2; }
+                shift ;;
             --message) [ "$#" -ge 2 ] || return 2; MAINTENANCE_MESSAGE="$2"; shift 2 ;;
             --json) MAINTENANCE_JSON=1; shift ;;
             --repo-only) MAINTENANCE_REPO_ONLY=1; shift ;;
