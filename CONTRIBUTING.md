@@ -33,9 +33,13 @@ just gate
 Run the relevant end-to-end path as well:
 
 ```sh
+just battery                  # every suite, concurrent (~85s)
+just battery --only <suite>   # just the suites covering your change
 bin/substrate selftest        # gate and escape-hatch changes
 test/matrix.sh <profile>      # one profile
 test/matrix.sh                # changes shared by every profile
 ```
+
+Match the proof to the change: docs-only needs `just gate`; a single file needs the suites that cover it; the full battery belongs on the landing commit. `bin/substrate audit` takes ~32 minutes and is for landing a plan, not routine verification.
 
 Include the commands and results in the pull request. CI repeats the gate, every profile matrix, the hostile-home oracle, and the tracked plan audit.
