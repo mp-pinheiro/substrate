@@ -1,16 +1,18 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 )
 
 type Baseline struct {
-	Metrics   map[string]float64
+	Metrics   map[string]json.RawMessage
 	Direction map[string]string
 }
 
@@ -18,7 +20,7 @@ func LoadBaseline(path string) (*Baseline, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return &Baseline{Metrics: map[string]float64{}, Direction: map[string]string{}}, nil
+			return &Baseline{Metrics: map[string]json.RawMessage{}, Direction: map[string]string{}}, nil
 		}
 		return nil, fmt.Errorf("config: read baseline %s: %w", path, err)
 	}
@@ -30,19 +32,15 @@ func LoadBaseline(path string) (*Baseline, error) {
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, fmt.Errorf("config: parse baseline %s: %w", path, err)
 	}
-	metrics := make(map[string]float64, len(raw.Metrics))
-	for key, val := range raw.Metrics {
-		if n, ok := parseMetricValue(val); ok {
-			metrics[key] = n
-		}
+	if raw.Metrics == nil {
+		raw.Metrics = map[string]json.RawMessage{}
 	}
 	if raw.Direction == nil {
 		raw.Direction = map[string]string{}
 	}
-	return &Baseline{Metrics: metrics, Direction: raw.Direction}, nil
+	return &Baseline{Metrics: raw.Metrics, Direction: raw.Direction}, nil
 }
 
-// parseMetricValue mirrors `jq -r '.metrics[$k] // 0'` feeding bash's `-gt` integer test.
 func parseMetricValue(raw json.RawMessage) (float64, bool) {
 	var n float64
 	if err := json.Unmarshal(raw, &n); err == nil {
@@ -61,19 +59,59 @@ func (b *Baseline) Metric(key string) (float64, bool) {
 	if b == nil {
 		return 0, false
 	}
-	v, ok := b.Metrics[key]
-	return v, ok
+	raw, ok := b.Metrics[key]
+	if !ok {
+		return 0, false
+	}
+	return parseMetricValue(raw)
 }
 
-// bash's `[ -gt ]` on a fractional metric is a runtime type error, not a
-// truncation; this contract truncates toward zero instead of reproducing that crash.
-func (b *Baseline) Allowance(key string) int {
+var wholeNumberPattern = regexp.MustCompile(`^[0-9]+$`)
+
+type MetricNotWholeNumberError struct {
+	Key string
+}
+
+func (e *MetricNotWholeNumberError) Error() string {
+	return fmt.Sprintf("config: baseline metric %s is not a whole number", e.Key)
+}
+
+// jqRawText mirrors `jq -r '... // 0'`: null/false are the falsy default (0),
+// strings are unquoted, everything else renders as compact JSON text.
+func jqRawText(raw json.RawMessage) (text string, truthy bool) {
+	trimmed := strings.TrimSpace(string(raw))
+	if trimmed == "null" || trimmed == "false" {
+		return "", false
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		return s, true
+	}
+	var compact bytes.Buffer
+	if err := json.Compact(&compact, raw); err == nil {
+		return compact.String(), true
+	}
+	return trimmed, true
+}
+
+func (b *Baseline) Allowance(key string) (int, error) {
 	if b == nil {
-		return 0
+		return 0, nil
 	}
-	v, ok := b.Metrics[key]
+	raw, ok := b.Metrics[key]
 	if !ok {
-		return 0
+		return 0, nil
 	}
-	return int(v)
+	text, truthy := jqRawText(raw)
+	if !truthy {
+		return 0, nil
+	}
+	if !wholeNumberPattern.MatchString(text) {
+		return 0, &MetricNotWholeNumberError{Key: key}
+	}
+	n, err := strconv.Atoi(text)
+	if err != nil {
+		return 0, &MetricNotWholeNumberError{Key: key}
+	}
+	return n, nil
 }

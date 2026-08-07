@@ -40,6 +40,13 @@ func readLedger(path string) (*canonjson.Object, error) {
 	if !ok {
 		return nil, errors.New("lifecycle: ledger root is not an object")
 	}
+	// SAFETY: jq null-propagates through a missing/null .initial but errors
+	// indexing a scalar; only a present non-null non-object .initial mirrors that error.
+	if iv, present := obj.Get("initial"); present && iv != nil {
+		if _, ok := iv.(*canonjson.Object); !ok {
+			return nil, errors.New("lifecycle: ledger initial is not an object")
+		}
+	}
 	return obj, nil
 }
 

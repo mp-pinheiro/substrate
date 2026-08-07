@@ -217,6 +217,11 @@ func dispatchChangedFilesScan(ctx context.Context, e env, stdin io.Reader) int {
 		}
 		result, ratchetErr := comments.Ratchet(ctx, scanner, lm, baseline, paths.RepoRoot, path)
 		if ratchetErr != nil {
+			var baselineErr *comments.BaselineMetricError
+			if errors.As(ratchetErr, &baselineErr) {
+				report.WriteString(baselineErr.Error() + "\n")
+				continue
+			}
 			report.WriteString(renderInfraFailureEntry(ratchetErr))
 			continue
 		}
@@ -274,6 +279,11 @@ func dispatchCommentRatchet(ctx context.Context, e env, args []string) int {
 
 	result, ratchetErr := comments.Ratchet(ctx, scanner, lm, baseline, e.repoRoot, file)
 	if ratchetErr != nil {
+		var baselineErr *comments.BaselineMetricError
+		if errors.As(ratchetErr, &baselineErr) {
+			writeResult([]byte(baselineErr.Error()+"\n"), nil)
+			return 1
+		}
 		stdout, stderr := infraFailureText(ratchetErr)
 		writeResult([]byte(stdout), []byte(stderr))
 		return 1

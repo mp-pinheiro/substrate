@@ -9,19 +9,12 @@ ab_known_divergence_reason() {
             printf ' bash script and line number. The Go engine has no such script to name, so matching'
             printf ' it would mean forging bash'"'"'s diagnostic. Deliberately not forged.'
             ;;
-        ratchet-baseline-nonnumber)
-            printf 'parked decision: a non-numeric baseline makes bash'"'"'s [ "$count" -gt "nope" ]'
-            printf ' fail with "integer expression expected", so the if is false and the ratchet never'
-            printf ' blocks — a corrupt baseline silently disables the comment gate. Go treats the'
-            printf ' value as allowance 0 and blocks; reproducing bash here would port that'
-            printf ' guard-disabling bug on purpose, so it is parked pending an explicit decision.'
-            ;;
         lc-stop-ledger-scalarinitial | lc-stop-ledger-truncated)
-            printf 'parked decision: a malformed session ledger makes bash exit 0 and truncate the'
-            printf ' ledger to a single byte, destroying session state, while Go exits 2 and leaves it'
-            printf ' intact. Bash is not the safe reference here, so the fix direction is an open'
-            printf ' decision deferred by the repo owner (the related observe-path panic on malformed'
-            printf ' .initial shapes is the same open item, tracked outside this suite).'
+            printf 'structural limit: write_state now refuses an empty/non-object document, so bash'
+            printf ' exits 2 and leaves the ledger byte-unchanged, matching Go on exit code and state.'
+            printf ' Only stderr differs: bash leaks jq'"'"'s own diagnostic (e.g. `jq: error (at'
+            printf ' <stdin>:1): Cannot index string with "revision"`), which Go has no jq subprocess'
+            printf ' to emit and must not forge.'
             ;;
         *)
             return 1

@@ -23,6 +23,10 @@ func (e *Engine) Observe(ctx context.Context, payload []byte) Result {
 	if err != nil {
 		return Result{Code: 2}
 	}
+	// SAFETY: reconcileLedger nil-derefs on initial.Set if .initial is absent/null.
+	if objObject(state, "initial") == nil {
+		return Result{Code: 2}
+	}
 
 	observed := objObject(state, "observed")
 	changed := computeChanged(objObject(observed, "entries"), current.Entries)

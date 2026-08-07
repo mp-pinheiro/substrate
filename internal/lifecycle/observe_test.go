@@ -139,3 +139,25 @@ func TestReconcileLedgerOwnedPathsSortedAndDeduped(t *testing.T) {
 		t.Errorf("ownedPaths = %v, want %v (sorted, deduped)", owned, want)
 	}
 }
+
+// TestObserveInitialGuardMatchesReconcileRequirement pins the precondition
+// Observe checks: reconcileLedger's initial.Set panics on a nil *canonjson.Object.
+func TestObserveInitialGuardMatchesReconcileRequirement(t *testing.T) {
+	cases := []struct {
+		name     string
+		state    *canonjson.Object
+		wantBail bool
+	}{
+		{"missing initial", canonjson.NewObject(), true},
+		{"null initial", canonjson.NewObject().Set("initial", nil), true},
+		{"object initial", canonjson.NewObject().Set("initial", canonjson.NewObject()), false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := objObject(tc.state, "initial") == nil; got != tc.wantBail {
+				t.Errorf("objObject(state, %q) nil-ness = %v, want bail = %v", "initial", got, tc.wantBail)
+			}
+		})
+	}
+}
