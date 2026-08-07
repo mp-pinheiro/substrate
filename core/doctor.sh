@@ -120,7 +120,7 @@ cmd_doctor() {
         engine_bin=$(command -v substrate-engine 2>/dev/null) || engine_bin=""
     fi
     if [ -n "$engine_bin" ] && [ -x "$engine_bin" ]; then
-        engine_version=$("$engine_bin" version 2>/dev/null) || engine_version=""
+        engine_version=$(timeout 5 "$engine_bin" version 2>/dev/null) || engine_version=""
     fi
     case "$engine_mode" in
         bash)
@@ -142,6 +142,36 @@ cmd_doctor() {
     esac
     [ -z "${SUBSTRATE_ENGINE_SKIP:-}" ] \
         || info "engine: SUBSTRATE_ENGINE_SKIP keeps these hooks on bash: $SUBSTRATE_ENGINE_SKIP"
+
+    local pin_version pin_sha bin_sha
+    if [ ! -f .substrate/engine.json ]; then
+        warn "engine pin: .substrate/engine.json missing — run: substrate update --apply"
+    elif ! jq -e '(keys == ["binary_sha256", "version"]) and (.version|type=="string") and (.binary_sha256|test("^[0-9a-f]{64}$"))' \
+            .substrate/engine.json >/dev/null 2>&1; then
+        warn "engine pin: .substrate/engine.json is malformed — run: substrate engine pin"
+    else
+        pin_version=$(jq -r '.version' .substrate/engine.json)
+        pin_sha=$(jq -r '.binary_sha256' .substrate/engine.json)
+        if [ -z "$engine_bin" ]; then
+            success "engine pin: $pin_version pinned (sha256 ${pin_sha:0:12}) — no local engine to attest"
+        else
+            case "$engine_version" in
+                0.0.0-*)
+                    warn "engine pin: dev build $engine_version not attested — build with: just engine (stamped)" ;;
+                *)
+                    if [ -n "${SUBSTRATE_ENGINE_BIN:-}" ]; then
+                        warn "engine pin: SUBSTRATE_ENGINE_BIN override not attested — pin covers the vendored install only"
+                    else
+                        bin_sha=$(sha256sum "$engine_bin" 2>/dev/null | cut -d' ' -f1)
+                        if [ "$pin_sha" = "$bin_sha" ]; then
+                            success "engine pin: $engine_version attested (sha256 ${bin_sha:0:12})"
+                        else
+                            die "engine pin: $engine_bin sha256 ${bin_sha:0:12} does not match .substrate/engine.json (${pin_sha:0:12})"
+                        fi
+                    fi ;;
+            esac
+        fi
+    fi
 
     if [ -d .jj ]; then
         if jj config get experimental-advance-branches.enabled-branches >/dev/null 2>&1; then

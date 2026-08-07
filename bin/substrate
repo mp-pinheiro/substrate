@@ -24,6 +24,7 @@ usage: substrate <command> [args]
   doctor                                    config, langmap freshness, toolchain
   verify                                    active OMP runtime + bounded local gate
   update [--apply] [--force]                inspect or re-vendor the engine only
+  engine pin [--bin PATH]                    RELEASE ACTION: pin .substrate/engine.json to a built binary (not for dev rebuilds)
   maintenance flags: --checkpoint [--message <message>] [--accept-baseline] [--repo-only] [--json]
   selftest                                  sandboxed negative-test battery
   audit [plan.md ...]                       execute plan acceptance oracles
@@ -93,6 +94,7 @@ vendor_core() {
     cp "$KIT_ROOT"/core/hooks/*.sh "$staging/hooks/" || die "vendor copy failed: hooks"
     cp "$KIT_ROOT"/core/checks.d/*.sh "$staging/checks.d/" || die "vendor copy failed: core checks"
     cp "$KIT_ROOT"/VERSION "$staging/VERSION" || die "vendor copy failed: VERSION"
+    [ ! -f "$KIT_ROOT/engine.json" ] || cp "$KIT_ROOT"/engine.json "$staging/engine.json" || die "vendor copy failed: engine.json"
     for p in "${profiles[@]}"; do
         d=$(profile_dir "$p") || die "unknown profile: $p"
         cp -R "$d" "$staging/profiles/$p" || die "vendor copy failed: profile $p"
@@ -329,6 +331,42 @@ cmd_gate() {
     exec .substrate/gate.sh "$@"
 }
 
+cmd_engine() {
+    case "${1:-}" in
+        pin) shift; cmd_engine_pin "$@" ;;
+        *) usage ;;
+    esac
+}
+
+cmd_engine_pin() {
+    local bin=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --bin)
+                [ $# -ge 2 ] || die "--bin needs a path"
+                bin="$2"
+                shift 2
+                ;;
+            *) die "unknown engine pin flag: $1" ;;
+        esac
+    done
+    [ -n "$bin" ] || bin="${SUBSTRATE_ENGINE_BIN:-}"
+    if [ -z "$bin" ]; then
+        bin=$(command -v substrate-engine 2>/dev/null) \
+            || die "no substrate-engine binary found (--bin, SUBSTRATE_ENGINE_BIN, or PATH)"
+    fi
+    [ -x "$bin" ] || die "engine binary not executable: $bin"
+    local pin_json staged
+    pin_json=$("$bin" pin emit) || die "engine pin emit failed: $bin pin emit"
+    staged=$(mktemp "$KIT_ROOT/engine.json.XXXXXX") || die "engine pin staging failed"
+    if printf '%s\n' "$pin_json" > "$staged" && mv -f "$staged" "$KIT_ROOT/engine.json"; then
+        success "engine pin written: $KIT_ROOT/engine.json ($pin_json)"
+    else
+        rm -f "$staged"
+        die "engine pin write failed"
+    fi
+}
+
 if [ "${1:-}" = __maintenance-render ]; then
     shift
     operation="${1:-}"
@@ -360,6 +398,7 @@ case "${1:-}" in
     doctor)   shift; cmd_doctor "$@" ;;
     verify)   shift; cmd_verify "$@" ;;
     update)   shift; cmd_update "$@" ;;
+    engine)   shift; cmd_engine "$@" ;;
     selftest) shift; [ -x .substrate/selftest.sh ] || die "no .substrate here — run: substrate init"; exec .substrate/selftest.sh "$@" ;;
     audit)    shift; [ -x .substrate/audit.sh ] || die "no .substrate here — run: substrate init"; exec .substrate/audit.sh "$@" ;;
     report)   shift; [ -x .substrate/report.sh ] || die "no .substrate here — run: substrate init"; exec .substrate/report.sh "$@" ;;
