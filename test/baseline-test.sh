@@ -61,6 +61,12 @@ fi
 [ "$before" = "$(sha256sum substrate-baseline.json)" ] \
     || fail "failed tightening partially changed the baseline"
 
+if ! out=$(.substrate/gate.sh --tighten --accept-regression=probe:beta 2>&1); then
+    fail "keyed accept-regression on a namespaced metric failed: $out"
+fi
+jq -e '.metrics["probe:beta"] == 30' substrate-baseline.json >/dev/null \
+    || fail "keyed accept-regression did not persist the new floor for a namespaced metric"
+
 if ! .substrate/gate.sh --update-baseline --accept-regression > "$T/accept.out" 2>&1; then
     fail "explicit regression acceptance failed: $(cat "$T/accept.out")"
 fi

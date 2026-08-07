@@ -15,18 +15,20 @@ usage() {
     cat <<'EOF'
 usage: substrate <command> [args]
 
-  bootstrap [--profile a,b] [--force]       kickstart or synchronize the current repo
-  init --profile a,b [--vcs auto|git|jj]   install the gate into a new repo
+  bootstrap [--profile a,b] [--force] [--from-worktree]  kickstart or synchronize the current repo
+  init --profile a,b [--vcs auto|git|jj] [--from-worktree]  install the gate into a new repo
   gate [--update-baseline|--tighten|--accept-regression] | gate --deep [--no-cache|--print-key]
   baseline [--update|--accept-regression]
   checkpoint --message <message> --path <path>... [--accept-regression=<metric>[,<metric>]]  gate, tighten, commit locally
   restructure --op split|describe|squash --revision <rev> --message <m> ...  reshape agent commits
   doctor                                    config, langmap freshness, toolchain
   verify                                    active OMP runtime + bounded local gate
-  update [--apply] [--force]                inspect or re-vendor the engine only
+  update [--apply] [--force] [--from-worktree]  inspect or re-vendor the engine only
   engine pin [--bin PATH]                    RELEASE ACTION: pin .substrate/engine.json to a built binary (not for dev rebuilds)
   maintenance flags: --checkpoint [--message <message>] [--accept-baseline] [--repo-only] [--json]
                      [--accept-regression=<metric>[,<metric>]]  move a ratcheted metric that a core change moved
+                     --from-worktree on bootstrap/init/update vendors from the kit worktree even when
+                     it is dirty or unpushed
   selftest                                  sandboxed negative-test battery
   audit [plan.md ...]                       execute plan acceptance oracles
   report [--write|--refresh]                advisory maintenance queue (always exits 0)
@@ -95,6 +97,7 @@ vendor_core() {
     cp "$KIT_ROOT"/core/hooks/*.sh "$staging/hooks/" || die "vendor copy failed: hooks"
     cp "$KIT_ROOT"/core/checks.d/*.sh "$staging/checks.d/" || die "vendor copy failed: core checks"
     cp "$KIT_ROOT"/VERSION "$staging/VERSION" || die "vendor copy failed: VERSION"
+    write_vendor_provenance "$staging" || die "vendor copy failed: vendor.json"
     [ ! -f "$KIT_ROOT/engine.json" ] || cp "$KIT_ROOT"/engine.json "$staging/engine.json" || die "vendor copy failed: engine.json"
     for p in "${profiles[@]}"; do
         d=$(profile_dir "$p") || die "unknown profile: $p"
@@ -156,7 +159,7 @@ sync_user_harness() {
 }
 
 cmd_init_apply() {
-    local profiles_csv="" force=0
+    local profiles_csv="" force=0 from_worktree=0
     while [ $# -gt 0 ]; do
         case "$1" in
             --profile)
@@ -172,6 +175,10 @@ cmd_init_apply() {
                 force=1
                 shift
                 ;;
+            --from-worktree)
+                from_worktree=1
+                shift
+                ;;
             *) die "unknown init/bootstrap flag: $1" ;;
         esac
     done
@@ -180,6 +187,7 @@ cmd_init_apply() {
     repo_path_safe .substrate ".substrate vendor directory" || die "unsafe .substrate destination"
     repo_path_safe substrate.json "substrate configuration" || die "unsafe substrate.json destination"
     guard_vendor_downgrade "$force"
+    guard_vendor_source "$from_worktree"
 
     local profiles=(base)
     local requested=() p
@@ -254,11 +262,12 @@ cmd_bootstrap_apply() {
 }
 
 cmd_update_direct() {
-    local apply=0 force=0 arg
+    local apply=0 force=0 from_worktree=0 arg
     for arg in "$@"; do
         case "$arg" in
             --apply) apply=1 ;;
             --force) force=1 ;;
+            --from-worktree) from_worktree=1 ;;
             *) die "unknown update flag: $arg" ;;
         esac
     done
@@ -270,6 +279,7 @@ cmd_update_direct() {
     local kit_v
     kit_v=$(cat "$KIT_ROOT/VERSION")
     guard_vendor_downgrade "$force"
+    guard_vendor_source "$from_worktree"
 
     local profiles=()
     mapfile -t profiles < <(jq -r '.profiles[]' substrate.json)
@@ -280,8 +290,9 @@ cmd_update_direct() {
         staging=$(mktemp -d)
         mkdir -p "$staging/repo"
         (cd "$staging/repo" && vendor_core "${profiles[@]}") || { rm -rf "$staging"; die "staging vendor failed"; }
+        report_vendor_staleness
         info "diff vendored .substrate vs kit $kit_v (apply with: substrate update --apply):"
-        diff -r .substrate "$staging/repo/.substrate" || true
+        diff -r -x vendor.json .substrate "$staging/repo/.substrate" || true
         rm -rf "$staging"
         return 0
     fi

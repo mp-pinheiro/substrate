@@ -11,6 +11,8 @@ permissions:
   contents: read
   actions: read
   issues: read
+env:
+  SUBSTRATE_VENDOR_FROM_WORKTREE: '1'
 jobs:
   gate:
     runs-on: ubuntu-latest
