@@ -68,6 +68,15 @@ substrate baseline --update              # establish debt or lock in a reviewed 
 substrate baseline --accept-regression   # deliberate loosening; prints the exact diff
 ```
 
+A change to `core/` can nudge a ratcheted metric on its own — deleting lines shrinks the denominator behind `dup_pct`. Re-vendoring then deadlocks: the gate refuses to write a baseline while `80-vendor-drift` is red, and the vendor transaction refuses to finish while the ratchet is red. Name the metric to break it:
+
+```sh
+substrate update --apply --force --checkpoint --message '<=50 chars' \
+    --accept-regression=dup_pct          # keyed form only; bare is refused
+```
+
+The same channel is not yet reachable from `substrate_checkpoint`, which only ever runs `--tighten` (issue #13).
+
 When `substrate-baseline.json` exists, an absent metric key means zero tolerance — new debt categories start at zero.
 
 ## When the gate itself breaks

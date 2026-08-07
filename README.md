@@ -67,10 +67,14 @@ Everything fails closed: a broken or missing detector is a red gate ("cannot pas
 
 ```sh
 just gate                  # the kit gates itself (including vendor drift)
+just battery               # every suite, concurrent, ~85s
+just battery --only receipt-test,maintenance-test
 bin/substrate selftest
-test/maintenance-test.sh   # isolated Git/jj maintenance transactions
 test/matrix.sh             # every profile, scratch-repo oracle
 ```
+
+`just battery` ([`test/run.sh`](test/run.sh)) shadows `gitleaks` for suites that are not about secret scanning:
+it costs ~4.7s of fixed rule compilation per invocation regardless of repo size, and every fixture gate pays it.
 
 ## Contributing and security
 

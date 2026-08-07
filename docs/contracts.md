@@ -67,7 +67,9 @@ Merged claims of active profiles: `{".go": {"mode": "ast", "ast_lang": "go", "ma
 
 ## Check contract (`checks.d/NN-name.sh`)
 
-Executable bash. Environment: `REPO_ROOT` (cwd), `SUBSTRATE_DIR`, `CONFIG`, `LANGMAP`, `INVENTORY` (file listing tracked paths), `METRICS` (append-only jsonl), `BASELINE` (read-only path; may not exist yet). Must `source "$SUBSTRATE_DIR/gate-lib.sh"`.
+Executable bash. Environment: `REPO_ROOT` (cwd), `SUBSTRATE_DIR`, `CONFIG`, `LANGMAP`, `INVENTORY` (file listing tracked paths), `CLAIMS` (0x1F-separated `path·profile·ast_lang·mode·entry` rows — resolved once by the runner; without it `gate-lib.sh` silently falls back to a per-file `jq` path with different scope semantics), `METRICS` (append-only jsonl, a per-check shard), `BASELINE` (read-only path; may not exist yet), `SUBSTRATE_CHECK_NAME` (basename including `.sh`). The runner passes its own environment through unmodified — `CI` in particular is ambient and decides whether `require_bin_ci` dies or skips. Must `source "$SUBSTRATE_DIR/gate-lib.sh"`.
+
+Runner inputs (set by the caller, not by a check): `SUBSTRATE_FILE_LIST` scopes the inventory to a file of paths, used verbatim; `SUBSTRATE_GATE_JOBS` caps concurrency (default `nproc`) and, because reporting lags submission, moves where disabled-check warnings appear in stdout; `SUBSTRATE_CLAIMS_OUT` publishes the resolved CLAIMS table for byte-comparison.
 
 - exit 0 — pass
 - exit 1 — findings; the report is stdout, every line actionable (`file:line — problem — fix`)
