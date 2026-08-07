@@ -26,7 +26,7 @@ Mechanism: `## Acceptance` items are `- [ ] claim :: verify-command`. A checked 
 - [x] agents and skills synchronize without replacing repo-owned assets :: test/bootstrap-test.sh
 - [x] harness parity check fires on a stripped mirror :: test/parity-test.sh
 - [x] vendor drift check fires on mutation :: test/vendor-drift-test.sh
-- [x] tracking check rejects committed-with-open-work plans :: CI=1 test/matrix.sh base 2>&1 | grep -q '15-tracking.sh rejected bad-plan.md'
+- [x] tracking check rejects committed-with-open-work plans :: test/matrix-oracle.sh base '15-tracking.sh rejected bad-plan.md'
 - [x] audit fails on regressed checked claims :: test/audit-test.sh
 - [x] audit wired into CI :: grep -q 'audit' .github/workflows/substrate-gate.yml
 
@@ -36,22 +36,22 @@ Mechanism: `## Acceptance` items are `- [ ] claim :: verify-command`. A checked 
 - [x] contracts schema documented :: grep -q '"contracts"' docs/contracts.md
 
 ### Boundaries (L0 as code)
-- [x] python boundaries via import-linter with oracle :: CI=1 test/matrix.sh python 2>&1 | grep -q '62-import-linter.sh rejected'
-- [x] typescript boundaries via dependency-cruiser with oracle :: CI=1 test/matrix.sh typescript 2>&1 | grep -q '72-depcruise.sh rejected'
-- [x] go boundary and banned-construct linters in template with oracle :: grep -q 'depguard' profiles/go/templates/golangci.yml && grep -q 'forbidigo' profiles/go/templates/golangci.yml && CI=1 test/matrix.sh go 2>&1 | grep -q '76-golangci.sh rejected'
-- [x] airflow layering contract with oracle :: CI=1 test/matrix.sh airflow 2>&1 | grep -q '62-import-linter.sh rejected'
+- [x] python boundaries via import-linter with oracle :: test/matrix-oracle.sh python '62-import-linter.sh rejected'
+- [x] typescript boundaries via dependency-cruiser with oracle :: test/matrix-oracle.sh typescript '72-depcruise.sh rejected'
+- [x] go boundary and banned-construct linters in template with oracle :: grep -q 'depguard' profiles/go/templates/golangci.yml && grep -q 'forbidigo' profiles/go/templates/golangci.yml && test/matrix-oracle.sh go '76-golangci.sh rejected'
+- [x] airflow layering contract with oracle :: test/matrix-oracle.sh airflow '62-import-linter.sh rejected'
 
 ### Banned constructs (complaint #4 — corrective pointers)
-- [x] python constructs pack with oracle :: CI=1 test/matrix.sh python 2>&1 | grep -q '64-constructs.sh rejected'
-- [x] typescript constructs pack with oracle :: CI=1 test/matrix.sh typescript 2>&1 | grep -q '74-no-as-any.sh rejected'
+- [x] python constructs pack with oracle :: test/matrix-oracle.sh python '64-constructs.sh rejected'
+- [x] typescript constructs pack with oracle :: test/matrix-oracle.sh typescript '74-no-as-any.sh rejected'
 
 ### Profile depth (to P4 spec or explicit deferral below)
-- [x] terraform validate check with oracle :: CI=1 test/matrix.sh terraform 2>&1 | grep -q '70-terraform-validate.sh rejected'
-- [x] lua stylua check with oracle :: CI=1 test/matrix.sh lua 2>&1 | grep -q '77-stylua.sh rejected'
-- [x] cpp clang-tidy check with oracle, compile-db-gated :: grep -q 'compile_commands.json' profiles/cpp/checks.d/72-clang-tidy.sh && CI=1 test/matrix.sh cpp 2>&1 | grep -q '72-clang-tidy.sh rejected'
-- [x] python vulture dead-code check with oracle :: CI=1 test/matrix.sh python 2>&1 | grep -q '63-vulture.sh rejected'
-- [x] dbt manifest discipline check with oracle :: CI=1 test/matrix.sh dbt 2>&1 | grep -q '66-dbt-manifest.sh rejected'
-- [x] svelte enforcing via svelte-check with oracle :: CI=1 test/matrix.sh svelte 2>&1 | grep -q '73-svelte-check.sh rejected'
+- [x] terraform validate check with oracle :: test/matrix-oracle.sh terraform '70-terraform-validate.sh rejected'
+- [x] lua stylua check with oracle :: test/matrix-oracle.sh lua '77-stylua.sh rejected'
+- [x] cpp clang-tidy check with oracle, compile-db-gated :: grep -q 'compile_commands.json' profiles/cpp/checks.d/72-clang-tidy.sh && test/matrix-oracle.sh cpp '72-clang-tidy.sh rejected'
+- [x] python vulture dead-code check with oracle :: test/matrix-oracle.sh python '63-vulture.sh rejected'
+- [x] dbt manifest discipline check with oracle :: test/matrix-oracle.sh dbt '66-dbt-manifest.sh rejected'
+- [x] svelte enforcing via svelte-check with oracle :: test/matrix-oracle.sh svelte '73-svelte-check.sh rejected'
 
 ### P5 process layer
 - [x] substrate report emits maintenance queue :: bin/substrate report 2>&1 | grep -qi 'maintenance'
