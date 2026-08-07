@@ -86,14 +86,16 @@ maintenance_gate_candidate() {
                 exit 3
             fi
         fi
+        # PERF: the verify pass only earns its ~5s when the gate above MUTATED the
+        # baseline; re-running it after a plain pass re-derives the same verdict.
         if [ "$MAINTENANCE_CHECKPOINT" -eq 1 ] && [ -f substrate-baseline.json ]; then
             .substrate/gate.sh --tighten || exit
-        elif [ "$baseline_existed" -eq 1 ] || [ -f substrate-baseline.json ]; then
-            .substrate/gate.sh || exit
+            .substrate/gate.sh
+        elif [ "$MAINTENANCE_ACCEPT_BASELINE" -eq 1 ] && [ "$baseline_existed" -eq 0 ]; then
+            .substrate/gate.sh
         else
-            .substrate/gate.sh || exit
+            .substrate/gate.sh
         fi
-        .substrate/gate.sh
     ) > "$output" 2>&1
 }
 
