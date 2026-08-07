@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Exact-state gate receipts shared by checkpoints and push guards.
+# shellcheck source=./engine-shim.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/engine-shim.sh" 2>/dev/null || true
 
 substrate_metadata_dir() {
     local git_dir
@@ -57,6 +59,7 @@ hash_file_state() {
 
 engine_state_hash() {
     local records path rel mode digest hash
+    [ -d .substrate ] || return 1
     records=$(mktemp) || return 1
     while IFS= read -r -d '' path; do
         rel=${path#./}
@@ -70,6 +73,7 @@ engine_state_hash() {
                 || { rm -f "$records"; return 1; }
         fi
     done < <(find .substrate \( -type f -o -type l \) -print0 | LC_ALL=C sort -z)
+    [ -s "$records" ] || { rm -f "$records"; return 1; }
     digest=$(sha256sum "$records" | cut -d ' ' -f 1) || { rm -f "$records"; return 1; }
     rm -f "$records"
     printf '%s\n' "$digest"
@@ -248,7 +252,7 @@ gate_receipt_path() {
     printf '%s/substrate/gate-receipt.json\n' "$metadata"
 }
 
-gate_receipt_matches() {
+gate_receipt_matches_v1() {
     local path fingerprint
     path=$(gate_receipt_path) || return 1
     [ -f "$path" ] && jq -e '.status == "passed" and .reusable == true and (.fingerprint | type == "string")' "$path" >/dev/null 2>&1 \
@@ -257,7 +261,7 @@ gate_receipt_matches() {
     [ "$(jq -r '.fingerprint' "$path")" = "$fingerprint" ]
 }
 
-write_gate_receipt() {
+write_gate_receipt_v1() {
     local source="$1" commit="$2" vcs="$3" session="${4:-}" path dir state fingerprint receipt staged candidate current reusable
     current=$(current_gate_revision) || return 1
     [ "$current" = "$commit" ] || return 1
@@ -285,4 +289,14 @@ write_gate_receipt() {
     fi
     rm -f "$staged"
     return 1
+}
+
+gate_receipt_matches() {
+    declare -F _substrate_engine_delegate >/dev/null 2>&1 || { gate_receipt_matches_v1; return; }
+    _substrate_engine_delegate receipt gate_receipt_matches_v1 receipt matches --
+}
+
+write_gate_receipt() {
+    declare -F _substrate_engine_delegate >/dev/null 2>&1 || { write_gate_receipt_v1 "$@"; return; }
+    _substrate_engine_delegate receipt write_gate_receipt_v1 receipt write -- "$@"
 }
