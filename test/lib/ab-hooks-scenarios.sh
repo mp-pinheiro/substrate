@@ -113,6 +113,9 @@ matrix() {
     hook_scenario pp-config-null      hooks/protect-paths.sh    "$(pp 'README.md')"      jj prepare_config_null
     hook_scenario pp-config-false     hooks/protect-paths.sh    "$(pp 'README.md')"      jj prepare_config_false
     hook_scenario pc-config-null      hooks/protect-command.sh  "$(pc '"echo hi"')"      jj prepare_config_null
+    # `generated/**` reaches blockIfNamed's needle regex, which RE2 rejects but GNU
+    # grep accepts and matches; pp-contract-globstar covers a different code path.
+    hook_scenario pc-contract-globstar hooks/protect-command.sh "$(pc '"echo hi"')" jj prepare_contract_globstar
     hook_scenario ratchet-config-null comment-ratchet.sh        ''                       jj prepare_ratchet_config_null clean.sh
     hook_scenario scan-config-null    hooks/changed-files-scan.sh '{}'                   jj prepare_scan_config_null
 

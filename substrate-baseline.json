@@ -2,7 +2,7 @@
   "metrics": {
     "comments:core/check-comments.sh": 3,
     "dead_code": 0,
-    "dup_pct": 1.3498792213328281,
+    "dup_pct": 1.3496874408031825,
     "max_file_lines": 413
   },
   "direction": {}
