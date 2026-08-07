@@ -14,8 +14,10 @@ message=""
 session=""
 json=0
 paths=()
+accept=()
+accept_csv=""
 usage() {
-    printf 'usage: %s --message "type(scope): subject" [--session <id> | --path <repo-relative-path> ...] [--json]\n' "$0" >&2
+    printf 'usage: %s --message "type(scope): subject" [--session <id> | --path <repo-relative-path> ...] [--accept-regression=<metric>[,<metric>]] [--json]\n' "$0" >&2
     exit 2
 }
 while [ "$#" -gt 0 ]; do
@@ -23,6 +25,15 @@ while [ "$#" -gt 0 ]; do
         --message) [ "$#" -ge 2 ] || usage; message="$2"; shift 2 ;;
         --path) [ "$#" -ge 2 ] || usage; paths+=("$2"); shift 2 ;;
         --session) [ "$#" -ge 2 ] || usage; session="$2"; shift 2 ;;
+        --accept-regression)
+            printf 'checkpoint blocked: --accept-regression requires the keyed form: --accept-regression=<metric>[,<metric>]\n' >&2
+            exit 2 ;;
+        --accept-regression=*)
+            accept_csv="${1#--accept-regression=}"
+            [ -n "$accept_csv" ] \
+                || { printf 'checkpoint blocked: --accept-regression= needs at least one metric\n' >&2; exit 2; }
+            accept=("--accept-regression=$accept_csv")
+            shift ;;
         --json) json=1; shift ;;
         *) usage ;;
     esac
@@ -132,7 +143,7 @@ fi
 LC_ALL=C comm -13 "$requested_file" "$current_file" > "$leftover_file"
 
 if [ ! -s "$leftover_file" ]; then
-    if ! gate_output=$(.substrate/gate.sh --tighten 2>&1); then
+    if ! gate_output=$(.substrate/gate.sh --tighten "${accept[@]}" 2>&1); then
         printf '%s\n' "$gate_output" >&2
         printf 'checkpoint blocked: gate or baseline tightening failed\n' >&2
         exit 1
@@ -175,7 +186,7 @@ else
         printf 'checkpoint blocked: candidate repository staging failed\n' >&2
         exit 2
     fi
-    if ! gate_output=$(cd "$candidate" && unset SUBSTRATE_FILE_LIST && .substrate/gate.sh --tighten 2>&1); then
+    if ! gate_output=$(cd "$candidate" && unset SUBSTRATE_FILE_LIST && .substrate/gate.sh --tighten "${accept[@]}" 2>&1); then
         printf '%s\n' "$gate_output" >&2
         printf 'checkpoint blocked: gate failed for the agent-owned paths (unowned pending work was excluded)\n' >&2
         exit 1
@@ -229,7 +240,7 @@ if [ ! -s "$leftover_file" ]; then
     printf '%s\n' "$verify_output"
 fi
 
-receipt=$(write_gate_receipt checkpoint "$commit" "$vcs" "$session") \
+receipt=$(write_gate_receipt checkpoint "$commit" "$vcs" "$session" "$accept_csv") \
     || { printf 'checkpoint incomplete: exact-state receipt write failed\n' >&2; exit 1; }
 if [ -n "$session" ] && ! .substrate/hooks/agent-lifecycle.sh complete "$session" "$commit"; then
     printf 'checkpoint incomplete: commit exists but Claude lifecycle receipt update failed\n' >&2

@@ -18,6 +18,16 @@ input=$(cat)
 cmd=$(jq -r '.tool_input.command // .command // empty' <<< "$input") \
     || { printf 'blocked: malformed Bash tool payload\n' >&2; exit 2; }
 [ -n "$cmd" ] || exit 0
+# `substrate checkpoint --accept-regression=<keys>` is the sanctioned reviewed-regression channel;
+# admit that exact shape only — one simple command, no operators, no bare baseline flags.
+checkpoint_accept_exempt() {
+    local c="$1"
+    case "$c" in *$'\n'*) return 1 ;; esac
+    printf '%s' "$c" | grep -Eq '^[[:space:]]*([^[:space:]]*/)?substrate[[:space:]]+checkpoint([[:space:]]|$)' || return 1
+    printf '%s' "$c" | grep -Eq '[;&|<>$`]' && return 1
+    printf '%s' "$c" | grep -Eq '(^|[[:space:]])(--update-baseline|--tighten|--accept-regression)([[:space:]]|$)' && return 1
+    return 0
+}
 if printf '%s' "$cmd" | grep -Eq '(^|[[:space:]/])substrate[[:space:]]+verify([[:space:];&|>]|$)' \
     && ! printf '%s' "$cmd" | grep -Eq '^[[:space:]]*([^[:space:]]*/)?substrate[[:space:]]+verify[[:space:]]*$'; then
     printf 'BLOCKED: run substrate verify directly and unmodified; pipes, redirects, and chained commands can hide a failing verdict\n' >&2
@@ -60,7 +70,8 @@ if printf '%s' "$cmd" | grep -Eq '(^|[;&|(`][[:space:]]*)[^[:space:]]*\.substrat
     printf 'BLOCKED: invoke restructures through the harness lifecycle, not the vendored script directly\n' >&2
     exit 2
 fi
-if printf '%s' "$cmd" | grep -Eq '(^|[[:space:]])(--update-baseline|--tighten|--accept-regression)([[:space:]=]|$)'; then
+if printf '%s' "$cmd" | grep -Eq '(^|[[:space:]])(--update-baseline|--tighten|--accept-regression)([[:space:]=]|$)' \
+    && ! checkpoint_accept_exempt "$cmd"; then
     printf 'BLOCKED: baseline mutations are checkpoint-owned; initial debt or regressions require the user to run the explicit baseline command\n' >&2
     exit 2
 fi
