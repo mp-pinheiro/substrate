@@ -41,7 +41,12 @@ state_path() {
     printf '%s/%s.json\n' "$STATE_DIR" "$1"
 }
 write_state() {
-    local path="$1" value="$2" staged
+    local path="$1" value="$2" staged trimmed
+    trimmed="${value#"${value%%[![:space:]]*}"}"
+    trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
+    # SAFETY: reject empty/malformed payloads before staging so a failed upstream jq
+    # pipeline (empty string) can never atomically clobber the ledger with 1 byte.
+    [ -n "$trimmed" ] && [ "${trimmed:0:1}" = "{" ] && [ "${trimmed: -1}" = "}" ] || return 1
     staged=$(mktemp "$path.XXXXXX") || return 1
     if printf '%s\n' "$value" > "$staged" && chmod 600 "$staged" && mv -f "$staged" "$path"; then
         return 0
