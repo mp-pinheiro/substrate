@@ -43,7 +43,7 @@ Mechanism: `## Acceptance` items are `- [ ] claim :: verify-command`. A checked 
 
 ### Banned constructs (complaint #4 — corrective pointers)
 - [x] python constructs pack with oracle :: CI=1 test/matrix.sh python 2>&1 | grep -q '64-constructs.sh rejected'
-- [x] typescript constructs pack with oracle :: CI=1 test/matrix.sh typescript 2>&1 | grep -q '74-constructs.sh rejected'
+- [x] typescript constructs pack with oracle :: CI=1 test/matrix.sh typescript 2>&1 | grep -q '74-no-as-any.sh rejected'
 
 ### Profile depth (to P4 spec or explicit deferral below)
 - [x] terraform validate check with oracle :: CI=1 test/matrix.sh terraform 2>&1 | grep -q '70-terraform-validate.sh rejected'
