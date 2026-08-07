@@ -1,16 +1,32 @@
 // runtime globals for the kit's TS check — Bun host + the node builtins the
 // extension imports; the omp SDK itself resolves from the installed package
 // (falling back to types/pi-surface.d.ts when absent — see 71-kit-tsc.sh)
+// stdout/stderr are required "pipe" literals: real Bun defaults stderr to
+// "inherit", which makes Subprocess.stderr undefined at runtime.
 declare const Bun: {
-	spawnSync(
+	spawn(
 		cmd: string[],
-		opts?: { cwd?: string; stdin?: unknown; stdout?: unknown; stderr?: unknown },
-	): { exitCode: number; stdout: Uint8Array; stderr: Uint8Array };
+		opts: {
+			cwd?: string;
+			stdin?: "ignore" | "inherit" | "pipe" | ArrayBufferView;
+			stdout: "pipe";
+			stderr: "pipe";
+			signal?: AbortSignal;
+			detached?: boolean;
+		},
+	): {
+		pid: number;
+		stdout: ReadableStream<Uint8Array>;
+		stderr: ReadableStream<Uint8Array>;
+		exited: Promise<number>;
+		kill(): void;
+	};
 };
 
 declare const process: {
 	env: Record<string, string | undefined>;
 	pid: number;
+	kill(pid: number, signal?: string): boolean;
 };
 
 declare module "node:fs" {
