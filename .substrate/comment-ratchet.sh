@@ -37,6 +37,11 @@ if [ -f "$BASELINE" ]; then
     allowed=$(jq -r --arg k "comments:$file" '.metrics[$k] // 0' "$BASELINE" 2>/dev/null) || allowed=0
 fi
 
+if ! [[ "$allowed" =~ ^[0-9]+$ ]]; then
+    printf 'comment ratchet: baseline metric comments:%s is not a whole number — fix substrate-baseline.json\n' "$file"
+    exit 1
+fi
+
 if [ "$count" -gt "$allowed" ]; then
     printf '%s\n' "$out"
     printf 'comment ratchet: %s has %d finding(s), grandfathered allowance is %d.\n' "$file" "$count" "$allowed"
