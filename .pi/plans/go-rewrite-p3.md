@@ -324,9 +324,11 @@ C13 is hygiene; if not, it is required. Either way the probes move now.
   where it is the subject (`gitleaks-deep-test`, `gitleaks-scope-test`) or where the suite byte-compares gate output
   (`golden-vectors-test`, `claims-table-test`, `baseline-test`). Shadow the BINARY, never its PATH entry: on this
   workstation `~/.local/bin` also holds `shellcheck` and `actionlint`, and dropping the directory broke 11 suites.
-  P3 inherits an obligation from this: `50-gitleaks.sh` has no pending-scan cache, unlike the deep scan's
-  `gitleaks_deep_key`. Giving it one keyed on the pending range + config hash would return the same ~5 s to every
-  real gate run, not just fixtures.
+  **A pending-scan cache for `50-gitleaks.sh` was proposed here and is now REJECTED on measurement.** Simulating a
+  100%-hit cache by shadowing the binary on the kit's own gate: `jobs=8` 10 693 ms → 11 079 ms, `jobs=24` 6 453 ms →
+  6 096 ms. Gitleaks runs CONCURRENTLY with `60-shellcheck` (6.2 s), so caching it only changes which linter is
+  critical — the payoff is noise. Do not add a cache to a secret scanner for ~0.3 s: a stale key is a false negative
+  on a security guard. The fixture win above comes from not running it at all, which is a different thing.
 - **A40 — the parent plan's "the gate's wall time is linter-dominated" NON-MOTIVATION is measurably wrong, and C11
   as written throws away a free 2x.** Measured on this repo (20 checks, 8 cores): check CPU sums to **20.5 s**; the
   linter critical path is **5.5 s** (`60-shellcheck` 5.5 s, `50-gitleaks` 5.3 s, `10-comments` 4.6 s — 75% of all

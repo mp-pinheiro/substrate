@@ -12,8 +12,10 @@ export SUBSTRATE_NO_USER_HARNESS=1
 
 PASS=0
 FAIL=0
+SKIP=0
 ok()  { printf '\033[0;32m[ok]\033[0m matrix %s\n' "$*"; PASS=$((PASS + 1)); }
 bad() { printf '\033[0;31m[XX]\033[0m matrix %s\n' "$*"; FAIL=$((FAIL + 1)); }
+unv() { printf '\033[0;33m[--]\033[0m matrix %s\n' "$*"; SKIP=$((SKIP + 1)); }
 
 profiles=("$@")
 if [ ${#profiles[@]} -eq 0 ]; then
@@ -58,7 +60,13 @@ for name in "${profiles[@]}"; do
         git add -A
         git commit -qm seed
 
-        "$KIT_ROOT/bin/substrate" init --profile "$name" >/dev/null 2>&1 || { echo "init failed"; exit 9; }
+        if ! init_out=$("$KIT_ROOT/bin/substrate" init --profile "$name" 2>&1); then
+            printf '%s\n' "$init_out"
+            case "$init_out" in
+                *"infrastructure failure"*) echo "init blocked by a broken profile toolchain"; exit 3 ;;
+                *) echo "init failed"; exit 9 ;;
+            esac
+        fi
         git add -A && git commit -qm init
 
         out=$(.substrate/gate.sh --update-baseline 2>&1)
@@ -139,10 +147,12 @@ for name in "${ORDER[@]}"; do
     cat "${LOGS[$name]}"
     case $rc in
         0) ok "$name: init + baseline + selftest green" ;;
+        3) unv "$name: profile toolchain is broken — see output above" ;;
         *) bad "$name: see output above" ;;
     esac
     rm -rf "${LOGS[$name]}" "${TMPS[$name]}"
 done
 
-printf '\nmatrix: %d passed, %d failed\n' "$PASS" "$FAIL"
-[ "$FAIL" -eq 0 ]
+printf '\nmatrix: %d passed, %d failed, %d unverifiable\n' "$PASS" "$FAIL" "$SKIP"
+[ "$FAIL" -eq 0 ] || exit 1
+[ "$SKIP" -eq 0 ] || exit 3

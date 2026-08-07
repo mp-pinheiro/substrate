@@ -60,7 +60,7 @@ if printf '%s' "$cmd" | grep -Eq '(^|[;&|(`][[:space:]]*)[^[:space:]]*\.substrat
     printf 'BLOCKED: invoke restructures through the harness lifecycle, not the vendored script directly\n' >&2
     exit 2
 fi
-if printf '%s' "$cmd" | grep -Eq '(^|[[:space:]])(--update-baseline|--tighten|--accept-regression)([[:space:]]|$)'; then
+if printf '%s' "$cmd" | grep -Eq '(^|[[:space:]])(--update-baseline|--tighten|--accept-regression)([[:space:]=]|$)'; then
     printf 'BLOCKED: baseline mutations are checkpoint-owned; initial debt or regressions require the user to run the explicit baseline command\n' >&2
     exit 2
 fi
