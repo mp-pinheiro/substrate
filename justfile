@@ -1,6 +1,9 @@
 gate *ARGS:
     .substrate/gate.sh {{ARGS}}
 
+battery *ARGS:
+    bash test/run.sh {{ARGS}}
+
 engine:
     go build -trimpath -buildvcs=false -ldflags "-X main.version=$(cat VERSION)" -o build/substrate-engine ./cmd/substrate-engine
 

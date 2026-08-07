@@ -301,20 +301,32 @@ C13 is hygiene; if not, it is required. Either way the probes move now.
   registry entry carries a reason string so the anti-rot assertion can fire: (i) jq's own parse diagnostics on a
   config that passes `jq -e .` but fails a later filter; (ii) the TAB-in-path `claims table build failed` path, which
   keeps jq's `Invalid literal at EOF` line the engine has no subprocess to emit; (iii) `nproc`-absent fallback noise.
-- **A39 — validation is BUDGETED; the cost of proving a change must match the size of the change.** Measured on the
-  primary workstation: `bash .substrate/gate.sh` **12 s**; one targeted suite **1–60 s**; the full serial battery of
-  20 suites **877 s (~15 min)**; `bin/substrate audit` **1940 s (~32 min)** and rising with every acceptance line any
-  plan adds. The rule:
+- **A39 — validation is BUDGETED, and the battery is now cheap enough that budgeting is not the only defence.**
+  Measured before/after the 2026-08-07 perf pass: `bash .substrate/gate.sh` **10.5 s → 6.2 s** with
+  `SUBSTRATE_GATE_JOBS` ≥ check count; `substrate init` **11.2 s → 6.6 s** (the candidate gate ran twice);
+  the whole battery **877 s serial → 86 s** via `just battery` (`test/run.sh`); `bin/substrate audit` **~1940 s**,
+  unchanged and still landing-only. The rule:
   | change | proof |
   |---|---|
   | plan/docs text only | `bash .substrate/gate.sh` — nothing else |
-  | one bash or Go file | the suites that cover it, named in the work item |
+  | one bash or Go file | `just battery --only <suites>` covering it |
   | a work item lands | that item's merge gate ONLY |
-  | the phase lands | full serial battery + `substrate verify`, ONCE |
-  | `bin/substrate audit` | at phase landing, or when a plan's acceptance set changed — never as routine validation |
-  A merge gate that names "the full battery" is a BUG in the plan unless the item genuinely changes global behaviour.
-  Each P3 work item below names the smallest sufficient proof. Corollary for the A/B sweeps: the `{1,2,4,8}` job sweep
-  runs on the scratch fixture (seconds), never on the kit repo (~150 s per invocation and vacuous there).
+  | the phase lands | `just battery` + `substrate verify`, ONCE |
+  | `bin/substrate audit` | at phase landing, or when a plan's acceptance set changed — never routine |
+  A merge gate that names "the full battery" is no longer expensive, but a gate that names `audit` still is.
+  Corollary for the A/B sweeps: the `{1,2,4,8}` job sweep runs on the scratch fixture (seconds), never on the kit
+  repo (~150 s per invocation and vacuous there).
+- **A39b — the dominant cost of the whole validation stack was ONE external tool's fixed startup.** `gitleaks` costs
+  **~4.7 s per invocation measured on an EMPTY DIRECTORY** — pure rule compilation, independent of repo size or
+  history depth — and every fixture gate pays it, including the one inside every `substrate init`. In a
+  candidate-shaped fixture it was **97% of the gate** (5.4 s of 5.55 s; all nine other checks totalled 150 ms).
+  `test/run.sh` runs suites with gitleaks shadowed — using the check's own `have gitleaks || skip` path — except
+  where it is the subject (`gitleaks-deep-test`, `gitleaks-scope-test`) or where the suite byte-compares gate output
+  (`golden-vectors-test`, `claims-table-test`, `baseline-test`). Shadow the BINARY, never its PATH entry: on this
+  workstation `~/.local/bin` also holds `shellcheck` and `actionlint`, and dropping the directory broke 11 suites.
+  P3 inherits an obligation from this: `50-gitleaks.sh` has no pending-scan cache, unlike the deep scan's
+  `gitleaks_deep_key`. Giving it one keyed on the pending range + config hash would return the same ~5 s to every
+  real gate run, not just fixtures.
 - **A40 — the parent plan's "the gate's wall time is linter-dominated" NON-MOTIVATION is measurably wrong, and C11
   as written throws away a free 2x.** Measured on this repo (20 checks, 8 cores): check CPU sums to **20.5 s**; the
   linter critical path is **5.5 s** (`60-shellcheck` 5.5 s, `50-gitleaks` 5.3 s, `10-comments` 4.6 s — 75% of all
