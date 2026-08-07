@@ -42,6 +42,12 @@ matrix() {
     hook_scenario pc-ckpt-ok       hooks/protect-command.sh "$(pc '"substrate checkpoint --session __SESSION__ --message x"')" jj prepare_none
     hook_scenario pc-baseline      hooks/protect-command.sh "$(pc '"echo x --update-baseline"')"      jj prepare_none
     hook_scenario pc-baseline-keyed hooks/protect-command.sh "$(pc '"substrate update --accept-regression=dup_pct"')" jj prepare_none
+    hook_scenario pc-ckpt-accept     hooks/protect-command.sh "$(pc '"substrate checkpoint --session __SESSION__ --accept-regression=probe:alpha"')" jj prepare_none
+    hook_scenario pc-ckpt-accept-chain hooks/protect-command.sh "$(pc '"substrate checkpoint --session __SESSION__ --accept-regression=a && .substrate/gate.sh --accept-regression=b"')" jj prepare_none
+    hook_scenario pc-ckpt-procsub    hooks/protect-command.sh "$(pc '"substrate checkpoint --session __SESSION__ --accept-regression=a < <(substrate baseline --accept-regression)"')" jj prepare_none
+    hook_scenario pc-ckpt-tighten    hooks/protect-command.sh "$(pc '"substrate checkpoint --session __SESSION__ --tighten"')" jj prepare_none
+    hook_scenario pc-ckpt-trailingnl hooks/protect-command.sh "$(pc '"substrate checkpoint --session __SESSION__ --accept-regression=a\n"')" jj prepare_none
+    hook_scenario pc-ckpt-u3000      hooks/protect-command.sh "$(pc '"substrate checkpoint --session __SESSION__ --accept-regression=a\u3000--tighten"')" jj prepare_none
     hook_scenario pc-verify-piped  hooks/protect-command.sh "$(pc '"substrate verify | tail -1"')"    jj prepare_none
     hook_scenario pc-verify-plain  hooks/protect-command.sh "$(pc '"substrate verify"')"              jj prepare_none
     hook_scenario pc-mutator       hooks/protect-command.sh "$(pc '"rm -rf .substrate"')"             jj prepare_none

@@ -96,12 +96,14 @@ function runCheckpointTransaction(
 	root: string,
 	paths: string[],
 	message: string,
+	acceptRegression: string[] = [],
 ): { receipt: CheckpointReceipt | null; ok: boolean; summary: string } {
 	const command = [
 		join(root, ".substrate", "checkpoint.sh"),
 		"--message",
 		message,
 		...paths.flatMap((path) => ["--path", path]),
+		...(acceptRegression.length > 0 ? [`--accept-regression=${acceptRegression.join(",")}`] : []),
 		"--json",
 	];
 	const result = spawnTransactionScript(root, command, 40);

@@ -46,6 +46,12 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 			message: pi.typebox.Type.String({
 				description: "Conventional Commit message: type(scope): subject",
 			}),
+			acceptRegression: pi.typebox.Type.Optional(
+				pi.typebox.Type.Array(pi.typebox.Type.String(), {
+					description:
+						"Ratcheted metric keys whose regression the user reviewed and accepted, e.g. [\"max_file_lines\"]. Omit unless the gate reported that exact key regressed.",
+				}),
+			),
 		},
 		{ additionalProperties: false },
 	);
@@ -56,7 +62,7 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 			name: "substrate_checkpoint",
 			label: "Substrate checkpoint",
 			description:
-				"After direct verification, gate the exact agent-owned working paths, tighten improved metrics, and create a local commit. Never pushes.",
+				"After direct verification, gate the exact agent-owned working paths, tighten improved metrics, and create a local commit. Pass acceptRegression only for a metric regression the user reviewed. Never pushes.",
 			parameters: checkpointParameters,
 			blockedPrefix: "checkpoint",
 		},
@@ -70,6 +76,16 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 				return blockedToolResult("checkpoint blocked: message must be a string");
 			}
 			const message = params.message;
+			let acceptRegression: string[] = [];
+			if ("acceptRegression" in params && params.acceptRegression !== undefined) {
+				const raw = params.acceptRegression;
+				if (!Array.isArray(raw) || raw.some((k) => typeof k !== "string" || !/^[A-Za-z0-9._:/-]+$/.test(k))) {
+					return blockedToolResult(
+						"checkpoint blocked: acceptRegression must be an array of metric keys matching [A-Za-z0-9._:/-]+",
+					);
+				}
+				acceptRegression = raw as string[];
+			}
 			const check = taskPreconditions(root);
 			if (check.failure) return blockedToolResult(`checkpoint blocked: ${check.failure}`);
 			const state = check.state;
@@ -83,7 +99,7 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 						: "checkpoint blocked: no pending agent-owned changes",
 				);
 			}
-			const result = runCheckpointTransaction(root, ownedPending, message);
+			const result = runCheckpointTransaction(root, ownedPending, message, acceptRegression);
 			const summary = result.summary;
 			if (!result.receipt) {
 				writeRuntimeState(root, {

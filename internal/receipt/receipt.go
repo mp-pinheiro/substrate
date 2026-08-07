@@ -72,7 +72,7 @@ func Matches(ctx context.Context, repoRoot string) (bool, error) {
 }
 
 // A BuildState refusal is deliberate: the receipt is written non-reusable, never failed (C17).
-func Write(ctx context.Context, repoRoot, source, commit, vcsName, session string) (string, error) {
+func Write(ctx context.Context, repoRoot, source, commit, vcsName, session, accepted string) (string, error) {
 	repo, err := detectBackend(repoRoot)
 	if err != nil {
 		return "", err
@@ -100,11 +100,23 @@ func Write(ctx context.Context, repoRoot, source, commit, vcsName, session strin
 		reusable = true
 	}
 
+	var acceptedDoc canonjson.Value
+	if accepted != "" {
+		items := []canonjson.Value{}
+		for _, k := range strings.Split(accepted, ",") {
+			if k != "" {
+				items = append(items, k)
+			}
+		}
+		acceptedDoc = items
+	}
+
 	doc := canonjson.NewObject().
 		Set("commit", commit).
 		Set("vcs", vcsName).
 		Set("source", source).
 		Set("session", jqx.Nullable(session)).
+		Set("acceptedRegressions", acceptedDoc).
 		Set("fingerprint", fp).
 		Set("reusable", reusable).
 		Set("engineVersion", readEngineVersion(repoRoot)).

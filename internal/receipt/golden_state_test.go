@@ -130,7 +130,7 @@ func TestWriteEmbedsSelfAuditableState(t *testing.T) {
 	runGit(t, root, "commit", "-qm", "chore: initialize")
 	head := runGitOutput(t, root, "rev-parse", "HEAD")
 
-	receiptJSON, err := Write(ctx, root, "test", head, "git", "")
+	receiptJSON, err := Write(ctx, root, "test", head, "git", "", "")
 	if err != nil {
 		t.Fatalf("Write: %v", err)
 	}

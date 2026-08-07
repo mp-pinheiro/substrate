@@ -103,6 +103,12 @@ func TestDifferentialProtectCommand(t *testing.T) {
 		{name: "embedded quotes and backslashes blocked", guard: "protect-command", payload: cmdPayload(`echo "a\b" && jj commit -m "x"`, "")},
 		{name: "perl in-place mutator on CLAUDE.md blocked", guard: "protect-command", payload: cmdPayload("perl -pi -e 's/a/b/' CLAUDE.md", "")},
 		{name: "top level command fallback blocked", guard: "protect-command", payload: topLevelCmdPayload("jj commit -m x")},
+		{name: "checkpoint accept-regression exempt", guard: "protect-command", payload: cmdPayload("substrate checkpoint --session s1 --accept-regression=probe:alpha", "s1")},
+		{name: "checkpoint accept-regression chained blocked", guard: "protect-command", payload: cmdPayload("substrate checkpoint --session s1 --accept-regression=a && .substrate/gate.sh --accept-regression=b", "s1")},
+		{name: "checkpoint accept-regression process substitution blocked", guard: "protect-command", payload: cmdPayload("substrate checkpoint --session s1 --accept-regression=a < <(substrate baseline --accept-regression)", "s1")},
+		{name: "checkpoint tighten flag blocked", guard: "protect-command", payload: cmdPayload("substrate checkpoint --session s1 --tighten", "s1")},
+		{name: "checkpoint accept-regression trailing newline exempt", guard: "protect-command", payload: cmdPayload("substrate checkpoint --session s1 --accept-regression=a\n", "s1")},
+		{name: "checkpoint accept-regression u3000 locale split", guard: "protect-command", payload: cmdPayload("substrate checkpoint --session s1 --accept-regression=a\u3000--tighten", "s1")},
 	}
 	for _, v := range vectors {
 		v := v

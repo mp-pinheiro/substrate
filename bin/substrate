@@ -19,7 +19,7 @@ usage: substrate <command> [args]
   init --profile a,b [--vcs auto|git|jj]   install the gate into a new repo
   gate [--update-baseline|--tighten|--accept-regression] | gate --deep [--no-cache|--print-key]
   baseline [--update|--accept-regression]
-  checkpoint --message <message> --path <path>...  gate, tighten, commit locally
+  checkpoint --message <message> --path <path>... [--accept-regression=<metric>[,<metric>]]  gate, tighten, commit locally
   restructure --op split|describe|squash --revision <rev> --message <m> ...  reshape agent commits
   doctor                                    config, langmap freshness, toolchain
   verify                                    active OMP runtime + bounded local gate
