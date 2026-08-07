@@ -315,6 +315,24 @@ C13 is hygiene; if not, it is required. Either way the probes move now.
   A merge gate that names "the full battery" is a BUG in the plan unless the item genuinely changes global behaviour.
   Each P3 work item below names the smallest sufficient proof. Corollary for the A/B sweeps: the `{1,2,4,8}` job sweep
   runs on the scratch fixture (seconds), never on the kit repo (~150 s per invocation and vacuous there).
+- **A40 — the parent plan's "the gate's wall time is linter-dominated" NON-MOTIVATION is measurably wrong, and C11
+  as written throws away a free 2x.** Measured on this repo (20 checks, 8 cores): check CPU sums to **20.5 s**; the
+  linter critical path is **5.5 s** (`60-shellcheck` 5.5 s, `50-gitleaks` 5.3 s, `10-comments` 4.6 s — 75% of all
+  check CPU); observed wall at the default `nproc`=8 is **10.5 s**. So **5.0 s — 48% of gate wall — is FIFO
+  head-of-line stall, not linting.** Confirmed by the one knob that removes it with ZERO code change:
+  `SUBSTRATE_GATE_JOBS=24` (≥ the check count, so `running` never reaches `max`) gives **6.2 s, a 41% reduction**.
+  The stall is repo-shaped, not universal: measured on `test/restructure-test.sh`, whose fixtures carry few checks,
+  jobs=24 changed nothing (54.8 s → 54.5 s), so the battery does NOT inherit the win.
+  **The tension this creates must be ruled BEFORE W5.** C11/A35 bind the FIFO window as frozen behaviour and forbid a
+  worker pool under A31 ("more correct than bash is a FAILURE"). Held literally, P3 ports a 5-second stall into Go
+  and delivers no gate speedup at all. Three options, pick one explicitly:
+  (a) reproduce the window exactly (current C11) and separately raise the DEFAULT `max` in both legs — the stall
+      disappears without any scheduler change, and the only observable is the position of disabled-check warnings;
+  (b) reproduce the window and leave the default alone, accepting a permanently slower gate (state it in the
+      landing note so nobody re-discovers this);
+  (c) fire an A31 exception for the scheduler itself — hard to justify, since a stall destroys no data and disables
+      no guard.
+  Option (a) is recommended: it is a one-line change on each leg, it is measurable, and it keeps A31 intact.
 
 ## Work items (ordered; the repo is green between every item)
 - **W0 — plan only.** Land this file plus A33–A38 in `.pi/plans/go-rewrite.md`.
