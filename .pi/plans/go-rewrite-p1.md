@@ -1,5 +1,6 @@
 # Plan: Go engine rewrite — P1 (engine skeleton + all seven hooks behind shims)
-state: committed
+state: superseded
+superseded-by: .pi/plans/go-rewrite-p2.md
 issue: https://github.com/mp-pinheiro/substrate/issues/12
 parent: .pi/plans/go-rewrite.md
 

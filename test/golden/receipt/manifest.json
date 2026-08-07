@@ -1,0 +1,14 @@
+{
+  "format": 1,
+  "recipeVersion": 2,
+  "go": "go1.24.5",
+  "note": "v2 hasher RECORD ENCODINGS only (B6/A5 narrow waiver) — never the final fingerprint, which is machine-bound by externalHash. Read/compared byte-for-byte by internal/receipt/*_test.go; no auto-refresh path.",
+  "vectors": {
+    "records/cafe.record": "1d4343a045ec0473a5f995ad203720548168268f186f48908e2d6c7b629d06bd",
+    "records/space-file.record": "e8c76ce1260d50cf6a93e425760543fb1c8c96ba9bdb684dbd64f8c6d04636ea",
+    "records/tab-file.record": "386fb37802fe8d0e6e4f003d9364716ff80ffd5c56e277f3124804516462c849",
+    "records/invalid-utf8.record": "103a72707f57b8e245581e00224aecc25ef3b03fb72415f9c41a39d0ac0a3b1b",
+    "records/symlink.record": "b83a7aa9b81b3a8695384d0571ec558ad7c025a4ec81372bc1ba2ebe31f1fe1e",
+    "records/missing.record": "3490aaa955fb1031cb3b2c7d115882b3eb131a2f06caf2b1ea8cc0e90e0711ba"
+  }
+}

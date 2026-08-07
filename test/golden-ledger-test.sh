@@ -11,6 +11,8 @@ export LC_ALL=C
 export LEDGER_LABEL=golden-ledger-test
 # shellcheck source=lib/ledger-fixture.sh
 source "$KIT_ROOT/test/lib/ledger-fixture.sh"
+# shellcheck source=lib/engine-fixture.sh
+source "$KIT_ROOT/test/lib/engine-fixture.sh"
 
 if ! "$KIT_ROOT/test/ci-toolchain.sh" --ensure-jq; then
     printf '\033[0;33m[!]\033[0m %s: pinned %s absent and unfetchable — vectors unverifiable\n' \
@@ -33,10 +35,8 @@ ledger_compare_vectors "$SCRATCH/fresh-bash"
 printf 'golden-ledger-test: %d vectors byte-identical under bash %s + %s\n' \
     "${#LEDGER_VECTORS[@]}" "$BASH_VERSION" "$LEDGER_JQ_VERSION"
 
-GO_BUILD=$(mktemp -d) || ledger_fail "go build dir"
-( cd "$KIT_ROOT" && go build -o "$GO_BUILD/substrate-engine" ./cmd/substrate-engine ) \
-    || ledger_fail "engine build failed"
-export SUBSTRATE_ENGINE_BIN="$GO_BUILD/substrate-engine"
+SUBSTRATE_ENGINE_BIN=$(engine_build ledger_fail go) || exit 1
+export SUBSTRATE_ENGINE_BIN
 
 ledger_regenerate "$SCRATCH" "$SCRATCH/fresh-go" go || ledger_fail "go regeneration failed"
 ledger_compare_vectors "$SCRATCH/fresh-go"

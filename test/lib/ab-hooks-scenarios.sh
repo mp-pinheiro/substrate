@@ -64,6 +64,7 @@ matrix() {
     hook_scenario gbp-skip         hooks/gate-before-push.sh "$(pc '"echo hi"')"            jj prepare_none
     hook_scenario gbp-remote       hooks/gate-before-push.sh "$(pc '"jj git push -R other"')" jj prepare_none
     hook_scenario gbp-blocked      hooks/gate-before-push.sh "$(pc '"jj git push"')"        jj prepare_push_stub
+    hook_scenario gbp-receipt-hit  hooks/gate-before-push.sh "$(pc '"jj git push"')"        jj prepare_receipt_hit
 
     hook_scenario scan-clean       hooks/changed-files-scan.sh '{}' jj prepare_clean_file
     hook_scenario scan-slop        hooks/changed-files-scan.sh '{}' jj prepare_slop_file

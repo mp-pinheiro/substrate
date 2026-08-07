@@ -26,6 +26,21 @@ prepare_push_stub() {
     stub_push_gate "$1"
 }
 
+prepare_receipt_hit() {
+    local repo="$1"
+    jq '.contracts = []' "$repo/substrate.json" > "$repo/substrate.json.tmp" \
+        && mv "$repo/substrate.json.tmp" "$repo/substrate.json" || return 1
+    (
+        cd "$repo" || exit 9
+        jj commit -m 'chore: empty contracts for receipt fixture' >/dev/null 2>&1 || exit 9
+        SUBSTRATE_DIR="$PWD/.substrate" REPO_ROOT="$PWD"
+        export SUBSTRATE_DIR REPO_ROOT
+        source "$SUBSTRATE_DIR/receipt-lib.sh"
+        commit=$(current_gate_revision) && vcs=$(current_gate_vcs) \
+            && write_gate_receipt push "$commit" "$vcs" >/dev/null
+    )
+}
+
 prepare_lifecycle_started() {
     printf '{"session_id":"%s"}\n' "$2" \
         | ( cd "$1" && bash .substrate/hooks/agent-lifecycle.sh start ) >/dev/null 2>&1

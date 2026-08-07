@@ -29,7 +29,7 @@ mkdir -p "$HOME" || exit 9
 
 BUILD="$T/engine"
 mkdir -p "$BUILD" || exit 9
-( cd "$KIT_ROOT" && go build -o "$BUILD/substrate-engine" ./cmd/substrate-engine ) \
+( cd "$KIT_ROOT" && go build -trimpath -buildvcs=false -o "$BUILD/substrate-engine" ./cmd/substrate-engine ) \
     || { printf 'ab-hooks-test: engine build failed\n' >&2; exit 9; }
 export SUBSTRATE_ENGINE_BIN="$BUILD/substrate-engine"
 
