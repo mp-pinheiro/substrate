@@ -41,7 +41,7 @@ func TestWriteResolvesJJBackendNonColocated(t *testing.T) {
 	}
 
 	commit := runJJTrim(t, root, "log", "-r", "@-", "--no-graph", "-T", "commit_id")
-	receiptJSON, err := Write(context.Background(), root, "test", commit, "jj", "")
+	receiptJSON, err := Write(context.Background(), root, "test", commit, "jj", "", "")
 	if err != nil {
 		t.Fatalf("Write on a non-colocated jj repo: %v", err)
 	}

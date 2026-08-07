@@ -75,7 +75,7 @@ substrate update --apply --force --checkpoint --message '<=50 chars' \
     --accept-regression=dup_pct          # keyed form only; bare is refused
 ```
 
-The same channel is not yet reachable from `substrate_checkpoint`, which only ever runs `--tighten` (issue #13).
+`substrate_checkpoint` takes an optional `acceptRegression: ["<metric>"]` array for the same purpose — pass it only for a metric regression the user reviewed.
 
 When `substrate-baseline.json` exists, an absent metric key means zero tolerance — new debt categories start at zero.
 

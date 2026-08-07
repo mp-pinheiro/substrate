@@ -262,7 +262,7 @@ gate_receipt_matches_v1() {
 }
 
 write_gate_receipt_v1() {
-    local source="$1" commit="$2" vcs="$3" session="${4:-}" path dir state fingerprint receipt staged candidate current reusable
+    local source="$1" commit="$2" vcs="$3" session="${4:-}" accepted="${5:-}" path dir state fingerprint receipt staged candidate current reusable
     current=$(current_gate_revision) || return 1
     [ "$current" = "$commit" ] || return 1
     state=null
@@ -279,8 +279,8 @@ write_gate_receipt_v1() {
     receipt=$(jq -cn --arg source "$source" --arg commit "$commit" --arg vcs "$vcs" \
         --arg session "$session" --arg fingerprint "$fingerprint" --arg reusable "$reusable" \
         --arg engineVersion "$(cat .substrate/VERSION 2>/dev/null)" \
-        --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson state "$state" \
-        '{commit:$commit,vcs:$vcs,source:$source,session:(if $session == "" then null else $session end),fingerprint:(if $fingerprint == "" then null else $fingerprint end),reusable:($reusable == "true"),engineVersion:$engineVersion,state:$state,at:$at,status:"passed"}') \
+        --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson state "$state" --arg accepted "$accepted" \
+        '{commit:$commit,vcs:$vcs,source:$source,session:(if $session == "" then null else $session end),acceptedRegressions:(if $accepted == "" then null else ($accepted | split(",") | map(select(length > 0))) end),fingerprint:(if $fingerprint == "" then null else $fingerprint end),reusable:($reusable == "true"),engineVersion:$engineVersion,state:$state,at:$at,status:"passed"}') \
         || return 1
     staged=$(mktemp "$path.XXXXXX") || return 1
     if printf '%s\n' "$receipt" > "$staged" && chmod 600 "$staged" && mv -f "$staged" "$path"; then

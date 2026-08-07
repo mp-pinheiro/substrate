@@ -76,11 +76,15 @@ func dispatchWrite(ctx context.Context, args []string) int {
 	if len(args) > 3 {
 		session = args[3]
 	}
+	accepted := ""
+	if len(args) > 4 {
+		accepted = args[4]
+	}
 	repoRoot, err := resolveRepoRoot()
 	if err != nil {
 		return 1
 	}
-	receiptJSON, err := Write(ctx, repoRoot, source, commit, vcsName, session)
+	receiptJSON, err := Write(ctx, repoRoot, source, commit, vcsName, session, accepted)
 	if err != nil {
 		return 1
 	}

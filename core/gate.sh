@@ -237,7 +237,7 @@ ratchet() {
             local accepted="" rejected=""
             while IFS= read -r line; do
                 [ -n "$line" ] || continue
-                local key="${line%%:*}"
+                local key="${line%%: *}"
                 case ",$ACCEPT_KEYS," in
                     *",$key,"*) accepted="${accepted:+$accepted$'\n'}$line" ;;
                     *) rejected="${rejected:+$rejected$'\n'}$line" ;;

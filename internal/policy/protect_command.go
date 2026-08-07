@@ -12,16 +12,19 @@ import (
 const bq = "`"
 
 var (
-	reVerifyMention  = regexp.MustCompile(`(^|[[:space:]/])substrate[[:space:]]+verify([[:space:];&|>]|$)`)
-	reVerifyExact    = regexp.MustCompile(`^[[:space:]]*([^[:space:]]*/)?substrate[[:space:]]+verify[[:space:]]*$`)
-	reCommitForms    = regexp.MustCompile(`(^|[;&|(` + bq + `][[:space:]]*)(jj[[:space:]]+(commit|describe|squash)|git[[:space:]]+commit)([[:space:]"\\]|$)`)
-	reCheckpointSh   = regexp.MustCompile(`(^|[;&|(` + bq + `][[:space:]]*)[^[:space:]]*\.substrate/checkpoint\.sh([[:space:]"\\]|$)`)
-	reCheckpointCmd  = regexp.MustCompile(`(^|[;&|][[:space:]]*|[[:space:]])substrate[[:space:]]+checkpoint([[:space:]]|$)`)
-	reRestructureCmd = regexp.MustCompile(`(^|[;&|][[:space:]]*|[[:space:]])substrate[[:space:]]+restructure([[:space:]]|$)`)
-	reRestructureSh  = regexp.MustCompile(`(^|[;&|(` + bq + `][[:space:]]*)[^[:space:]]*\.substrate/restructure\.sh([[:space:]"\\]|$)`)
-	reBaselineFlags  = regexp.MustCompile(`(^|[[:space:]])(--update-baseline|--tighten|--accept-regression)([[:space:]=]|$)`)
-	reMutator        = regexp.MustCompile(`(^|[;&|][[:space:]]*|[[:space:]])(rm|mv|cp|install|chmod|chown|ln|touch|truncate|tee|dd)([[:space:]]|$)|perl([^;&|]*[[:space:]])-[^[:space:]]*i`)
-	reTeeOrRedir     = regexp.MustCompile(`>>?[^;&|]*\$|tee[[:space:]][^;&|]*\$`)
+	reVerifyMention     = regexp.MustCompile(`(^|[[:space:]/])substrate[[:space:]]+verify([[:space:];&|>]|$)`)
+	reVerifyExact       = regexp.MustCompile(`^[[:space:]]*([^[:space:]]*/)?substrate[[:space:]]+verify[[:space:]]*$`)
+	reCommitForms       = regexp.MustCompile(`(^|[;&|(` + bq + `][[:space:]]*)(jj[[:space:]]+(commit|describe|squash)|git[[:space:]]+commit)([[:space:]"\\]|$)`)
+	reCheckpointSh      = regexp.MustCompile(`(^|[;&|(` + bq + `][[:space:]]*)[^[:space:]]*\.substrate/checkpoint\.sh([[:space:]"\\]|$)`)
+	reCheckpointCmd     = regexp.MustCompile(`(^|[;&|][[:space:]]*|[[:space:]])substrate[[:space:]]+checkpoint([[:space:]]|$)`)
+	reRestructureCmd    = regexp.MustCompile(`(^|[;&|][[:space:]]*|[[:space:]])substrate[[:space:]]+restructure([[:space:]]|$)`)
+	reRestructureSh     = regexp.MustCompile(`(^|[;&|(` + bq + `][[:space:]]*)[^[:space:]]*\.substrate/restructure\.sh([[:space:]"\\]|$)`)
+	reBaselineFlags     = regexp.MustCompile(`(^|[[:space:]])(--update-baseline|--tighten|--accept-regression)([[:space:]=]|$)`)
+	reMutator           = regexp.MustCompile(`(^|[;&|][[:space:]]*|[[:space:]])(rm|mv|cp|install|chmod|chown|ln|touch|truncate|tee|dd)([[:space:]]|$)|perl([^;&|]*[[:space:]])-[^[:space:]]*i`)
+	reTeeOrRedir        = regexp.MustCompile(`>>?[^;&|]*\$|tee[[:space:]][^;&|]*\$`)
+	reCheckpointExact   = compileLocaleRegexp(`^[[:space:]]*([^[:space:]]*/)?substrate[[:space:]]+checkpoint([[:space:]]|$)`)
+	reBaselineFlagsBare = compileLocaleRegexp(`(^|[[:space:]])(--update-baseline|--tighten|--accept-regression)([[:space:]]|$)`)
+	reShellOperator     = regexp.MustCompile(`[;&|<>$` + bq + `]`)
 )
 
 func ProtectCommand(in Input, cfg *config.Config, configPresent, configCorrupt bool) Decision {
@@ -52,7 +55,7 @@ func ProtectCommand(in Input, cfg *config.Config, configPresent, configCorrupt b
 	if matchAnyLine(reRestructureSh, cmd) {
 		return block("BLOCKED: invoke restructures through the harness lifecycle, not the vendored script directly\n")
 	}
-	if matchAnyLine(reBaselineFlags, cmd) {
+	if matchAnyLine(reBaselineFlags, cmd) && !checkpointAcceptExempt(cmd) {
 		return block("BLOCKED: baseline mutations are checkpoint-owned; initial debt or regressions require the user to run the explicit baseline command\n")
 	}
 
@@ -93,6 +96,20 @@ func ProtectCommand(in Input, cfg *config.Config, configPresent, configCorrupt b
 		}
 	}
 	return Decision{}
+}
+
+func checkpointAcceptExempt(cmd string) bool {
+	c := strings.TrimRight(cmd, "\n")
+	if strings.Contains(c, "\n") {
+		return false
+	}
+	if !reCheckpointExact.match(c) {
+		return false
+	}
+	if reShellOperator.MatchString(c) {
+		return false
+	}
+	return !reBaselineFlagsBare.match(c)
 }
 
 func checkSessionBinding(session, cmd, kind string) (Decision, bool) {
