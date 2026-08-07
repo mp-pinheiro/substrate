@@ -71,8 +71,7 @@ maintenance_render_candidate() {
 }
 
 maintenance_gate_candidate() {
-    local candidate="$1" output="$2" caller_home="$3" baseline_existed=0
-    [ -f "$candidate/substrate-baseline.json" ] && baseline_existed=1
+    local candidate="$1" output="$2" caller_home="$3"
     (
         cd "$candidate" || exit 2
         git add -f -A || exit 2
@@ -86,12 +85,8 @@ maintenance_gate_candidate() {
                 exit 3
             fi
         fi
-        # PERF: the verify pass only earns its ~5s when the gate above MUTATED the
-        # baseline; re-running it after a plain pass re-derives the same verdict.
         if [ "$MAINTENANCE_CHECKPOINT" -eq 1 ] && [ -f substrate-baseline.json ]; then
             .substrate/gate.sh --tighten || exit
-            .substrate/gate.sh
-        elif [ "$MAINTENANCE_ACCEPT_BASELINE" -eq 1 ] && [ "$baseline_existed" -eq 0 ]; then
             .substrate/gate.sh
         else
             .substrate/gate.sh
