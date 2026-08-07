@@ -26,6 +26,7 @@ usage: substrate <command> [args]
   update [--apply] [--force]                inspect or re-vendor the engine only
   engine pin [--bin PATH]                    RELEASE ACTION: pin .substrate/engine.json to a built binary (not for dev rebuilds)
   maintenance flags: --checkpoint [--message <message>] [--accept-baseline] [--repo-only] [--json]
+                     [--accept-regression=<metric>[,<metric>]]  move a ratcheted metric that a core change moved
   selftest                                  sandboxed negative-test battery
   audit [plan.md ...]                       execute plan acceptance oracles
   report [--write|--refresh]                advisory maintenance queue (always exits 0)

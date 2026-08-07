@@ -41,6 +41,7 @@ matrix() {
     hook_scenario pc-ckpt-badsess  hooks/protect-command.sh "$(pc '"substrate checkpoint --session other --message x"')" jj prepare_none
     hook_scenario pc-ckpt-ok       hooks/protect-command.sh "$(pc '"substrate checkpoint --session __SESSION__ --message x"')" jj prepare_none
     hook_scenario pc-baseline      hooks/protect-command.sh "$(pc '"echo x --update-baseline"')"      jj prepare_none
+    hook_scenario pc-baseline-keyed hooks/protect-command.sh "$(pc '"substrate update --accept-regression=dup_pct"')" jj prepare_none
     hook_scenario pc-verify-piped  hooks/protect-command.sh "$(pc '"substrate verify | tail -1"')"    jj prepare_none
     hook_scenario pc-verify-plain  hooks/protect-command.sh "$(pc '"substrate verify"')"              jj prepare_none
     hook_scenario pc-mutator       hooks/protect-command.sh "$(pc '"rm -rf .substrate"')"             jj prepare_none

@@ -19,7 +19,7 @@ var (
 	reCheckpointCmd  = regexp.MustCompile(`(^|[;&|][[:space:]]*|[[:space:]])substrate[[:space:]]+checkpoint([[:space:]]|$)`)
 	reRestructureCmd = regexp.MustCompile(`(^|[;&|][[:space:]]*|[[:space:]])substrate[[:space:]]+restructure([[:space:]]|$)`)
 	reRestructureSh  = regexp.MustCompile(`(^|[;&|(` + bq + `][[:space:]]*)[^[:space:]]*\.substrate/restructure\.sh([[:space:]"\\]|$)`)
-	reBaselineFlags  = regexp.MustCompile(`(^|[[:space:]])(--update-baseline|--tighten|--accept-regression)([[:space:]]|$)`)
+	reBaselineFlags  = regexp.MustCompile(`(^|[[:space:]])(--update-baseline|--tighten|--accept-regression)([[:space:]=]|$)`)
 	reMutator        = regexp.MustCompile(`(^|[;&|][[:space:]]*|[[:space:]])(rm|mv|cp|install|chmod|chown|ln|touch|truncate|tee|dd)([[:space:]]|$)|perl([^;&|]*[[:space:]])-[^[:space:]]*i`)
 	reTeeOrRedir     = regexp.MustCompile(`>>?[^;&|]*\$|tee[[:space:]][^;&|]*\$`)
 )
