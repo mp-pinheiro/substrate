@@ -5,6 +5,7 @@ maintenance_parse_args() {
     shift
     MAINTENANCE_PROFILE_CSV=""
     MAINTENANCE_FORCE=0
+    MAINTENANCE_FROM_WORKTREE=0
     MAINTENANCE_CHECKPOINT=0
     MAINTENANCE_ACCEPT_BASELINE=0
     MAINTENANCE_ACCEPT_REGRESSION=""
@@ -17,6 +18,7 @@ maintenance_parse_args() {
             --profile) [ "$#" -ge 2 ] || return 2; MAINTENANCE_PROFILE_CSV="$2"; shift 2 ;;
             --vcs) [ "$#" -ge 2 ] || return 2; MAINTENANCE_REQUESTED_VCS="$2"; shift 2 ;;
             --force) MAINTENANCE_FORCE=1; shift ;;
+            --from-worktree) MAINTENANCE_FROM_WORKTREE=1; shift ;;
             --apply) shift ;;
             --checkpoint) MAINTENANCE_CHECKPOINT=1; shift ;;
             --accept-baseline) MAINTENANCE_ACCEPT_BASELINE=1; shift ;;
@@ -74,5 +76,5 @@ maintenance_parse_args() {
         printf '%s\n' "$MAINTENANCE_MESSAGE" | grep -Eq "$conv" || return 2
         [ "${#MAINTENANCE_MESSAGE}" -le 50 ] || { warn "checkpoint message exceeds 50 characters"; return 2; }
     fi
-    : "$MAINTENANCE_FORCE" "$MAINTENANCE_ACCEPT_BASELINE" "$MAINTENANCE_JSON" "$MAINTENANCE_REPO_ONLY"
+    : "$MAINTENANCE_FORCE" "$MAINTENANCE_FROM_WORKTREE" "$MAINTENANCE_ACCEPT_BASELINE" "$MAINTENANCE_JSON" "$MAINTENANCE_REPO_ONLY"
 }

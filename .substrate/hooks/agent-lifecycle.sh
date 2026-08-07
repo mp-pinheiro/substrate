@@ -7,8 +7,8 @@ SUBSTRATE_DIR="$(cd "$HOOK_DIR/.." && pwd)"
 REPO_ROOT="$(cd "$SUBSTRATE_DIR/.." && pwd)"
 cd "$REPO_ROOT" || exit 2
 # shellcheck source=../engine-shim.sh
-source "$SUBSTRATE_DIR/engine-shim.sh"
-substrate_engine_exec agent-lifecycle "$@"
+source "$SUBSTRATE_DIR/engine-shim.sh" 2>/dev/null || true
+declare -F substrate_engine_exec >/dev/null 2>&1 && substrate_engine_exec agent-lifecycle "$@"
 # shellcheck source=../maintenance-lib.sh
 source "$SUBSTRATE_DIR/maintenance-lib.sh"
 
