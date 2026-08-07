@@ -1,3 +1,5 @@
+export SUBSTRATE_VENDOR_FROM_WORKTREE := "1"
+
 gate *ARGS:
     .substrate/gate.sh {{ARGS}}
 

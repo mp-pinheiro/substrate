@@ -5,6 +5,8 @@ set -uo pipefail
 
 KIT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$KIT_ROOT" || exit 2
+# suites vendor from the checkout under test, by definition
+export SUBSTRATE_VENDOR_FROM_WORKTREE=1
 
 # Explicit, never a glob: test/ also holds capture-*.sh, which REWRITE frozen vectors.
 SUITES=(
@@ -13,7 +15,7 @@ SUITES=(
     engine-rollback-test gitleaks-deep-test gitleaks-scope-test golden-ledger-test
     golden-vectors-test init-idempotent-test maintenance-test parity-test
     receipt-cross-engine-test receipt-test restructure-test vcs-hooks-test
-    vendor-drift-test
+    vendor-drift-test vendor-source-test
 )
 
 # gitleaks costs ~4.7s of fixed rule compilation per invocation (measured on an EMPTY dir)

@@ -61,6 +61,8 @@ copy_atomic_preserving_mode() {
 
 # shellcheck source=./install-assets.sh
 source "$KIT_ROOT/core/install-assets.sh"
+# shellcheck source=./vendor-source.sh
+source "$KIT_ROOT/core/vendor-source.sh"
 # shellcheck source=./user-harness.sh
 source "$KIT_ROOT/core/user-harness.sh"
 merge_hook_groups() {

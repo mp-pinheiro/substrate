@@ -18,12 +18,46 @@ printf '#!/usr/bin/env bash\nprintf "owned\\n"\n' > owned.sh
 printf '#!/usr/bin/env bash\nprintf "user\\n"\n' > user.sh
 chmod +x owned.sh user.sh
 "$KIT_ROOT/bin/substrate" init --profile shell --vcs git >/dev/null 2>&1 || fail "Git init failed"
+cat > .substrate/checks.d/58-baseline-probe.sh <<'SH'
+#!/usr/bin/env bash
+set -uo pipefail
+source "$SUBSTRATE_DIR/gate-lib.sh"
+while IFS=$'\t' read -r name value; do
+    case "$name" in
+        hi:*) metric_hi "$name" "$value" ;;
+        *) metric "$name" "$value" ;;
+    esac
+done < <(jq -r 'to_entries[] | [.key, .value] | @tsv' "$REPO_ROOT/.git/probe-metrics.json")
+SH
+chmod +x .substrate/checks.d/58-baseline-probe.sh
+printf '{"probe:alpha":10}\n' > .git/probe-metrics.json
 git add -A
 git commit -qm 'chore: initialize'
 .substrate/gate.sh --update-baseline >/dev/null 2>&1 || fail "Git baseline failed"
 git add substrate-baseline.json
 git commit -qm 'chore: establish baseline'
-
+[ -z "$(git status --porcelain=v1 --untracked-files=all)" ] || fail "probe seed left the tree dirty"
+printf '{"probe:alpha":20}\n' > .git/probe-metrics.json
+printf 'printf "grow\\n"\n' >> owned.sh
+if .substrate/checkpoint.sh --message 'feat(x): grow' --path owned.sh > "$T/accept.out" 2>&1; then
+    fail "checkpoint accepted an unreviewed metric regression"
+fi
+grep -q 'beyond their grandfathered baseline' "$T/accept.out" || fail "unreviewed regression rejection was not actionable"
+before_msg=$(git log -1 --pretty=%s)
+[ "$before_msg" = 'chore: establish baseline' ] || fail "rejected checkpoint advanced the commit log"
+.substrate/checkpoint.sh --message 'feat(x): grow' --path owned.sh --accept-regression=probe:alpha > "$T/accept.out" 2>&1 \
+    || fail "keyed accept-regression checkpoint failed: $(cat "$T/accept.out")"
+jq -e '.metrics["probe:alpha"] == 20' substrate-baseline.json >/dev/null \
+    || fail "accepted regression did not persist the new floor"
+git show --name-only --pretty= HEAD | grep -qx 'owned.sh' || fail "owned.sh missing from accepted-regression commit"
+git show --name-only --pretty= HEAD | grep -qx 'substrate-baseline.json' || fail "baseline was not co-committed with the accepted regression"
+[ -z "$(git status --porcelain=v1 --untracked-files=all)" ] || fail "accepted-regression checkpoint left pending work"
+jq -e '.acceptedRegressions == ["probe:alpha"]' .git/substrate/gate-receipt.json >/dev/null \
+    || fail "accepted regression key missing from the gate receipt"
+if .substrate/checkpoint.sh --message 'feat(x): y' --path owned.sh --accept-regression > "$T/bare.out" 2>&1; then
+    fail "checkpoint accepted the bare --accept-regression form"
+fi
+grep -q 'requires the keyed form' "$T/bare.out" || fail "bare accept-regression rejection was not actionable"
 printf '{"session_id":"clean-session"}\n' | .substrate/hooks/agent-lifecycle.sh start >/dev/null 
 printf '# now we check the thing\n# first we validate, then we proceed\n# finally we finish\n' >> owned.sh
 printf '{"session_id":"clean-session"}\n' | .substrate/hooks/agent-lifecycle.sh observe >/dev/null

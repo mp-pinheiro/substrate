@@ -55,6 +55,11 @@ maintenance_render_candidate() {
     local candidate="$1" render_home="$2" output="$3" profiles_csv force_flag=()
     profiles_csv=$(IFS=,; printf '%s' "${MAINTENANCE_PROFILES[*]}")
     [ "$MAINTENANCE_FORCE" -eq 0 ] || force_flag=(--force)
+    local source_root kit_root worktree_flag=()
+    source_root=$(pwd -P) || return 2
+    kit_root=$(cd "$KIT_ROOT" && pwd -P) || return 2
+    { [ "$MAINTENANCE_FROM_WORKTREE" -eq 0 ] && [ "$source_root" != "$kit_root" ]; } \
+        || worktree_flag=(--from-worktree)
     (
         cd "$candidate" || exit 2
         export HOME="$render_home"
@@ -62,10 +67,10 @@ maintenance_render_candidate() {
         export SUBSTRATE_MAINTENANCE_RENDER=1
         export SUBSTRATE_RENDER_VCS="$MAINTENANCE_VCS"
         if [ "$MAINTENANCE_OPERATION" = update ]; then
-            "$KIT_ROOT/bin/substrate" __maintenance-render update --apply "${force_flag[@]}"
+            "$KIT_ROOT/bin/substrate" __maintenance-render update --apply "${force_flag[@]}" "${worktree_flag[@]}"
         else
             "$KIT_ROOT/bin/substrate" __maintenance-render "$MAINTENANCE_OPERATION" \
-                --profile "$profiles_csv" --vcs "$MAINTENANCE_VCS" "${force_flag[@]}"
+                --profile "$profiles_csv" --vcs "$MAINTENANCE_VCS" "${force_flag[@]}" "${worktree_flag[@]}"
         fi
     ) > "$output" 2>&1
 }
