@@ -118,6 +118,9 @@ build_claims() {
         if [ "$scopes_active" -eq 1 ] && ! scope_allows "$f" "$(jq -r '.profile' <<< "$entry")"; then
             continue
         fi
+        case "$f" in
+            *$'\x1f'*) die_infra "0x1F byte in path — cannot emit to CLAIMS: $(render_1f "$f")" ;;
+        esac
         printf '%s\t%s\n' "$f" "$entry"
     done < "$INVENTORY" > "$CLAIMS.raw"
     # \u001f keeps empty columns intact: tab is IFS whitespace and would
