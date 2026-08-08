@@ -22,23 +22,42 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("find repo root: %w", err)
 	}
-	dir := filepath.Join(root, ".substrate", "checks.d")
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return fmt.Errorf("read %s: %w", dir, err)
-	}
-	var keys []string
+
 	digests := make(map[string]string)
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".sh") {
-			continue
-		}
-		h, err := sha256File(filepath.Join(dir, e.Name()))
+	var keys []string
+
+	collect := func(dir string) error {
+		entries, err := os.ReadDir(dir)
 		if err != nil {
-			return fmt.Errorf("hash %s: %w", e.Name(), err)
+			if os.IsNotExist(err) {
+				return nil
+			}
+			return fmt.Errorf("read %s: %w", dir, err)
 		}
-		digests[e.Name()] = h
-		keys = append(keys, e.Name())
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".sh") {
+				continue
+			}
+			if _, ok := digests[e.Name()]; ok {
+				continue
+			}
+			h, err := sha256File(filepath.Join(dir, e.Name()))
+			if err != nil {
+				return fmt.Errorf("hash %s: %w", e.Name(), err)
+			}
+			digests[e.Name()] = h
+			keys = append(keys, e.Name())
+		}
+		return nil
+	}
+
+	for _, d := range []string{
+		filepath.Join(root, "checks.d"),
+		filepath.Join(root, ".substrate", "checks.d"),
+	} {
+		if err := collect(d); err != nil {
+			return err
+		}
 	}
 	sort.Strings(keys)
 
