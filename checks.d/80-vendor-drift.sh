@@ -53,6 +53,16 @@ for f in profiles/*/checks.d/*.sh substrate-profiles/*/checks.d/*.sh; do
     printf '%s\n' "${ACTIVE[@]}" | grep -qxF "$p" || continue
     pair "$f" "$SUBSTRATE_DIR/checks.d/$(basename "$f")"
 done
+# profiles vendor whole directories, so types/ and templates/ drift silently
+# unless every file is paired, not just checks.d
+for d in profiles/* substrate-profiles/*; do
+    [ -d "$d" ] || continue
+    p=$(basename "$d")
+    printf '%s\n' "${ACTIVE[@]}" | grep -qxF "$p" || continue
+    while IFS= read -r f; do
+        pair "$f" "$SUBSTRATE_DIR/profiles/$p/${f#"$d"/}"
+    done < <(find "$d" -type f)
+done
 for f in checks.d/*.sh; do
     [ -f "$f" ] && pair "$f" "$SUBSTRATE_DIR/checks.d/$(basename "$f")"
 done

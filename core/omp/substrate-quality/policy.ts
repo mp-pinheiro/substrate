@@ -132,12 +132,79 @@ function resolveThroughExistingParent(path: string): string {
 	}
 }
 
-function refreshReport(root: string): string | null {
+type CommandResult = { exitCode: number; stdout: string; stderr: string };
+
+async function readStream(
+	stream: ReadableStream<Uint8Array>,
+	onLine?: (line: string) => void,
+): Promise<string> {
+	const reader = stream.getReader();
+	const decoder = new TextDecoder();
+	let text = "";
+	let consumed = 0;
+	for (;;) {
+		const chunk = await reader.read();
+		if (chunk.done) break;
+		text += decoder.decode(chunk.value, { stream: true });
+		if (!onLine) continue;
+		for (let nl = text.indexOf("\n", consumed); nl !== -1; nl = text.indexOf("\n", consumed)) {
+			onLine(text.slice(consumed, nl));
+			consumed = nl + 1;
+		}
+	}
+	text += decoder.decode();
+	if (onLine && consumed < text.length) onLine(text.slice(consumed));
+	return text;
+}
+
+// spawnSync blocked the Bun event loop the omp TUI renders on: a checkpoint's
+// two gate batteries froze the pane for ~25s.
+async function runCommand(
+	root: string,
+	command: string[],
+	options: { stdin?: string; onLine?: (line: string) => void; signal?: AbortSignal } = {},
+): Promise<CommandResult> {
+	const proc = Bun.spawn(command, {
+		cwd: root,
+		stdin: options.stdin === undefined ? "ignore" : new TextEncoder().encode(options.stdin),
+		stdout: "pipe",
+		stderr: "pipe",
+		signal: options.signal,
+		// checkpoint.sh's grandchild workers inherit its stdout/stderr pipes; killing
+		// only `proc` leaves them open. detached makes proc the process-group leader.
+		detached: true,
+	});
+	const killTree = () => {
+		try {
+			process.kill(-proc.pid, "SIGKILL");
+		} catch {
+			proc.kill();
+		}
+	};
+	options.signal?.addEventListener("abort", killTree, { once: true });
+	try {
+		// draining one pipe to completion first deadlocks a child that fills the other
+		const [stdout, stderr] = await Promise.all([
+			readStream(proc.stdout, options.onLine),
+			readStream(proc.stderr, options.onLine),
+		]);
+		return { exitCode: await proc.exited, stdout, stderr };
+	} catch (failure) {
+		// a rejected drain must not leave a live VCS transaction tree behind
+		killTree();
+		await proc.exited;
+		throw failure;
+	} finally {
+		options.signal?.removeEventListener("abort", killTree);
+	}
+}
+
+async function refreshReport(root: string): Promise<string | null> {
 	const report = join(root, ".substrate", "report.sh");
 	if (!existsSync(report)) return null;
-	const proc = Bun.spawnSync([report, "--refresh"], { cwd: root, stdout: "pipe", stderr: "pipe" });
-	const stderr = new TextDecoder().decode(proc.stderr).trim();
-	if (proc.exitCode !== 0) return stderr || `report refresh exited ${proc.exitCode}`;
+	const result = await runCommand(root, [report, "--refresh"]);
+	const stderr = result.stderr.trim();
+	if (result.exitCode !== 0) return stderr || `report refresh exited ${result.exitCode}`;
 	return stderr || null;
 }
 
@@ -149,6 +216,8 @@ export {
 	loadConfig,
 	refreshReport,
 	resolveThroughExistingParent,
+	runCommand,
 	SUBSTRATE_POLICY,
 	toolPath,
 };
+export type { CommandResult };

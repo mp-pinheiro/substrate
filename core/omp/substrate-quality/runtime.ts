@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, lstatSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
-import { toolPath } from "./policy";
+import { runCommand, toolPath } from "./policy";
 
 const TRACKING_READ_ONLY_TOOLS: Record<string, true> = {
 	read: true,
@@ -76,27 +76,44 @@ function readRuntimeState(root: string): Record<string, unknown> {
 	}
 }
 
-function commandOutput(root: string, command: string[]): { stdout: Uint8Array; error?: string } {
-	const proc = Bun.spawnSync(command, { cwd: root, stdout: "pipe", stderr: "pipe" });
-	if (proc.exitCode === 0) return { stdout: proc.stdout };
-	const stderr = new TextDecoder().decode(proc.stderr).trim();
-	return { stdout: proc.stdout, error: stderr || `${command[0]} exited ${proc.exitCode}` };
+async function commandOutput(root: string, command: string[]): Promise<{ stdout: string; error?: string }> {
+	const result = await runCommand(root, command);
+	if (result.exitCode === 0) return { stdout: result.stdout };
+	const stderr = result.stderr.trim();
+	return { stdout: result.stdout, error: stderr || `${command[0]} exited ${result.exitCode}` };
 }
 
-function workingPaths(root: string): { paths: string[]; error?: string } {
+// spawnSync made every handler an implicit critical section; async spawns end that.
+// Omp drops any handler running past 30s, so transaction subprocesses are always
+// awaited outside the lock, and withRootLock is never nested. gate:allow-comment
+const rootLocks = new Map<string, Promise<unknown>>();
+
+function withRootLock<T>(root: string, run: () => Promise<T>): Promise<T> {
+	const queued = (rootLocks.get(root) ?? Promise.resolve()).then(run);
+	rootLocks.set(
+		root,
+		queued.then(
+			() => undefined,
+			() => undefined,
+		),
+	);
+	return queued;
+}
+
+async function workingPaths(root: string): Promise<{ paths: string[]; error?: string }> {
 	const paths: string[] = [];
 	if (existsSync(join(root, ".jj"))) {
-		const result = commandOutput(root, ["jj", "diff", "--name-only"]);
+		const result = await commandOutput(root, ["jj", "diff", "--name-only"]);
 		if (result.error) return { paths, error: result.error };
-		paths.push(...new TextDecoder().decode(result.stdout).split("\n").filter(Boolean));
+		paths.push(...result.stdout.split("\n").filter(Boolean));
 	} else {
 		for (const command of [
 			["git", "diff", "--name-only", "-z", "--diff-filter=ACDMRTUXB", "HEAD", "--"],
 			["git", "ls-files", "--others", "--exclude-standard", "-z"],
 		]) {
-			const result = commandOutput(root, command);
+			const result = await commandOutput(root, command);
 			if (result.error) return { paths, error: result.error };
-			paths.push(...new TextDecoder().decode(result.stdout).split("\0").filter(Boolean));
+			paths.push(...result.stdout.split("\0").filter(Boolean));
 		}
 	}
 	const normalized = [...new Set(paths)].sort();
@@ -107,12 +124,12 @@ function workingPaths(root: string): { paths: string[]; error?: string } {
 	return { paths: normalized };
 }
 
-function workingSnapshot(root: string): WorkingSnapshot {
+async function workingSnapshot(root: string): Promise<WorkingSnapshot> {
 	const revisionResult = existsSync(join(root, ".jj"))
-		? commandOutput(root, ["jj", "log", "-r", "@-", "--no-graph", "-T", "commit_id"])
-		: commandOutput(root, ["git", "rev-parse", "HEAD"]);
-	const revision = new TextDecoder().decode(revisionResult.stdout).trim();
-	const result = workingPaths(root);
+		? await commandOutput(root, ["jj", "log", "-r", "@-", "--no-graph", "-T", "commit_id"])
+		: await commandOutput(root, ["git", "rev-parse", "HEAD"]);
+	const revision = revisionResult.stdout.trim();
+	const result = await workingPaths(root);
 	const error = revisionResult.error ?? result.error;
 	if (error) {
 		return {
@@ -184,10 +201,10 @@ function rebaseline(state: AgentTaskState, current: WorkingSnapshot): void {
 
 // Hydration re-owns only fingerprint-verified paths: matching content proves prior
 // agent authorship across restarts; user-touched paths fail the match, stay unowned.
-function ensureTaskState(root: string): AgentTaskState {
+async function ensureTaskState(root: string): Promise<AgentTaskState> {
 	const existing = taskStates.get(root);
 	if (existing) return existing;
-	const snapshot = workingSnapshot(root);
+	const snapshot = await workingSnapshot(root);
 	const state: AgentTaskState = {
 		root,
 		initial: { ...snapshot, entries: { ...snapshot.entries } },
@@ -220,16 +237,16 @@ function ensureTaskState(root: string): AgentTaskState {
 }
 
 // Shared gate-tool preconditions: tracked state must be inspectable and current.
-function taskPreconditions(root: string): {
+async function taskPreconditions(root: string): Promise<{
 	state: AgentTaskState;
 	current: WorkingSnapshot;
 	failure?: string;
-} {
-	const state = ensureTaskState(root);
+}> {
+	const state = await ensureTaskState(root);
 	if (state.trackingError) {
 		return { state, current: state.observed, failure: `ownership tracking failed: ${state.trackingError}` };
 	}
-	const current = workingSnapshot(root);
+	const current = await workingSnapshot(root);
 	if (current.error) return { state, current, failure: `cannot inspect working copy: ${current.error}` };
 	if (current.fingerprint !== state.observed.fingerprint) {
 		return { state, current, failure: "working copy changed outside an observed agent tool call" };
@@ -237,20 +254,25 @@ function taskPreconditions(root: string): {
 	return { state, current };
 }
 
-function checkpointedState(
+async function checkpointedState(
 	root: string,
 	after: WorkingSnapshot,
 	previous: AgentTaskState,
 	commit: string,
-): AgentTaskState {
-	const sessionChanges = new Set(previous.sessionChanges);
-	const changeId = changeIdOf(root, commit);
+	committedPaths: readonly string[],
+): Promise<AgentTaskState> {
+	// `previous` predates the unlocked transaction; a concurrent locked op may
+	// have recorded new ownership on the live entry since — merge onto that.
+	const live = taskStates.get(root) ?? previous;
+	const owned = new Set([...live.owned].filter((path) => !committedPaths.includes(path) && path in after.entries));
+	const sessionChanges = new Set(live.sessionChanges);
+	const changeId = await changeIdOf(root, commit);
 	if (changeId) sessionChanges.add(changeId);
 	return {
 		root,
 		initial: { ...after, entries: { ...after.entries } },
 		observed: after,
-		owned: new Set<string>(),
+		owned,
 		checkpointed: true,
 		sessionChanges,
 	};
@@ -275,11 +297,11 @@ function taskRuntimePatch(state: AgentTaskState): Record<string, unknown> {
 	};
 }
 
-function changeIdOf(root: string, commit: string): string | null {
+async function changeIdOf(root: string, commit: string): Promise<string | null> {
 	if (!existsSync(join(root, ".jj"))) return null;
-	const result = commandOutput(root, ["jj", "log", "-r", commit, "--no-graph", "-T", "change_id"]);
+	const result = await commandOutput(root, ["jj", "log", "-r", commit, "--no-graph", "-T", "change_id"]);
 	if (result.error) return null;
-	const change = new TextDecoder().decode(result.stdout).trim();
+	const change = result.stdout.trim();
 	return /^[a-z0-9]+$/.test(change) ? change : null;
 }
 
@@ -299,6 +321,7 @@ export {
 	taskPreconditions,
 	taskRuntimePatch,
 	taskStates,
+	withRootLock,
 	workingSnapshot,
 };
 export type { AgentTaskState, WorkingSnapshot };
