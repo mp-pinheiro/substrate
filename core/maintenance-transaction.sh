@@ -83,7 +83,7 @@ maintenance_gate_candidate() {
         cd "$candidate" || exit 2
         git add -f -A || exit 2
         export HOME="$caller_home"
-        unset SUBSTRATE_FILE_LIST
+        unset SUBSTRATE_DEV_MODE SUBSTRATE_FILE_LIST
         if [ ! -f substrate-baseline.json ]; then
             if [ "$MAINTENANCE_ACCEPT_BASELINE" -eq 1 ]; then
                 .substrate/gate.sh --update-baseline "${accept[@]}" || exit
