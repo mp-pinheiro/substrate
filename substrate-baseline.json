@@ -2,16 +2,16 @@
   "metrics": {
     "comments:core/check-comments.sh": 3,
     "dead_code": 0,
-    "dup_pct": 1.558680931201667,
+    "dup_pct": 1.5588058505309557,
     "max_file_lines": 460
   },
   "direction": {},
   "accepted": {
     "dup_pct": {
       "from": 1.3866164921465969,
-      "to": 1.558680931201667,
+      "to": 1.5588058505309557,
       "at": "2026-08-08",
-      "reason": "C8 test shares init boilerplate pattern, one-line gate invocation minimal duplication"
+      "reason": "dual-directory check loop in gate.sh adds structural duplication, tracked for future refactor"
     },
     "max_file_lines": {
       "from": 418,
