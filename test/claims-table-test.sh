@@ -16,7 +16,7 @@ for ENGINE in $ENGINES; do
 
     WORK=$(mktemp -d) || fail "$ENGINE scratch dir"
     trap 'rm -rf "$WORK"' EXIT
-    export HOME="$WORK/home" SUBSTRATE_NO_USER_HARNESS=1
+    export HOME="$WORK/home" SUBSTRATE_NO_USER_HARNESS=1 SUBSTRATE_VENDOR_FROM_WORKTREE=1
     mkdir -p "$HOME" "$WORK/repo"
     cd "$WORK/repo" || exit 9
     git init -q -b main
