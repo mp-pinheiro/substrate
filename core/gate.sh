@@ -69,20 +69,20 @@ build_inventory() {
             || die_infra "scoped inventory: SUBSTRATE_FILE_LIST is empty — a scoped gate over nothing cannot pass blind"
         return 0
     fi
-    local mode listing
+    local mode
     mode=$(cfg '.inventory')
     if [ "$mode" = "auto" ] || [ -z "$mode" ]; then
         if [ -d .jj ]; then mode=jj; else mode=git; fi
     fi
     case "$mode" in
-        jj)  listing=$(jj file list) || die_infra "jj file list failed" ;;
-        git) listing=$(git ls-files) || die_infra "git ls-files failed" ;;
+        jj)  while IFS= read -r -d '' f; do
+                 [ -f "$f" ] && printf '%s\n' "$f"
+             done < <(jj file list -T 'path ++ "\0"' || die_infra "jj file list failed") > "$INVENTORY" ;;
+        git) while IFS= read -r -d '' f; do
+                 [ -f "$f" ] && printf '%s\n' "$f"
+             done < <(git ls-files -z || die_infra "git ls-files failed") > "$INVENTORY" ;;
         *) die_infra "unknown inventory mode: $mode" ;;
     esac
-    local f
-    while IFS= read -r f; do
-        [ -f "$f" ] && printf '%s\n' "$f"
-    done <<< "$listing" > "$INVENTORY"
     [ -s "$INVENTORY" ] || die_infra "inventory is empty — wrong directory, or VCS not initialized"
 }
 
