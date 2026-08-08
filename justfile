@@ -14,3 +14,7 @@ test-engine:
     bash test/ab-hooks-test.sh
     bash test/golden-ledger-test.sh
     bash test/engine-rollback-test.sh
+
+
+generate-registry:
+    go run ./cmd/generate-registry > internal/gate/registry_gen.go
