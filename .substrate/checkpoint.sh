@@ -33,7 +33,6 @@ while [ "$#" -gt 0 ]; do
             accept_csv="${1#--accept-regression=}"
             [ -n "$accept_csv" ] \
                 || { printf 'checkpoint blocked: --accept-regression= needs at least one metric\n' >&2; exit 2; }
-            accept=("--accept-regression=$accept_csv" "--reason=$reason")
             shift ;;
         --reason) [ "$#" -ge 2 ] || usage; reason="$2"; shift 2 ;;
         --json) json=1; shift ;;
@@ -49,6 +48,8 @@ conv='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([^)]+\))
     || { printf 'checkpoint blocked: --accept-regression requires --reason "<text>" — the justification is committed to substrate-baseline.json\n' >&2; exit 2; }
 [ -n "$accept_csv" ] || [ -z "$reason" ] \
     || { printf 'checkpoint blocked: --reason applies only to --accept-regression\n' >&2; exit 2; }
+
+[ -n "$accept_csv" ] && accept=("--accept-regression=$accept_csv" "--reason=$reason")
 [ -x .substrate/gate.sh ] && [ -x .substrate/hooks/protect-paths.sh ] \
     || { printf 'checkpoint blocked: vendored Substrate runtime is incomplete — run: substrate update --apply\n' >&2; exit 2; }
 [ -f substrate-baseline.json ] \
