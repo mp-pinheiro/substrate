@@ -249,7 +249,7 @@ ratchet() {
     if ! worse=$(jq -rn --argjson c "$CURRENT_METRICS" --argjson b "$base" --argjson d "$CURRENT_DIR" --argjson bd "$base_dir" --argjson bu "$budgets" \
         '$c | to_entries[]
 | (($d[.key] // $bd[.key] // "lo")) as $dr
-| select(if $dr == "hi" then .value < (($b[.key]) // 0) - 1e-9 else .value > (($b[.key]) // 0) + 1e-9 end)
+| select(if $dr == "hi" then .value < (($b[.key]) // 0) - 1e-9 elif (($bu[.key]) // 0) > 0 then .value > $bu[.key] else .value > (($b[.key]) // 0) + 1e-9 end)
 | . as $e
 | (if $dr == "lo" and (($bu[$e.key] // 0) > 0) then
       (if $e.value > $bu[$e.key] then ", hard cap \($bu[$e.key]) — over cap"
@@ -263,6 +263,14 @@ ratchet() {
         '[$b | to_entries[] | select(if (($d[.key] // $bd[.key] // "lo")) == "hi" then (($c[.key]) // 0) > .value + 1e-9 else (($c[.key]) // 0) < .value - 1e-9 end) | .key] | length'); then
         warn "ratchet: baseline comparison failed"
         FAILURES=$((FAILURES + 1)); return 1
+    fi
+
+    local budget_warn
+    budget_warn=$(jq -rn --argjson c "$CURRENT_METRICS" --argjson bu "$budgets" \
+        '$c | to_entries[] | select((($bu[.key]) // 0) > 0) | select(.value / $bu[.key] >= 0.8) | "\(.key): \(.value)/\($bu[.key]) (\((.value * 100 / $bu[.key]) | floor)% used)"')
+    if [ -n "$budget_warn" ]; then
+        printf '%s\n' "$budget_warn"
+        warn "ratchet: budget metric(s) at 80%+ of cap — consider refactoring"
     fi
 
     if [ -n "$worse" ]; then
