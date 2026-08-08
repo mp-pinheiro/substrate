@@ -2,14 +2,14 @@
   "metrics": {
     "comments:core/check-comments.sh": 3,
     "dead_code": 0,
-    "dup_pct": 1.5070530080778042,
+    "dup_pct": 1.5069924449445427,
     "max_file_lines": 460
   },
   "direction": {},
   "accepted": {
     "dup_pct": {
       "from": 1.3866164921465969,
-      "to": 1.5070530080778042,
+      "to": 1.5069924449445427,
       "at": "2026-08-08",
       "reason": "new test files share fixture setup with existing tests, within acceptable duplication range"
     },
