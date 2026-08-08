@@ -18,6 +18,7 @@ export PATH="$KIT_ROOT/test/.toolchain/bin:$PATH"
 golden_assert_toolchain
 
 export GOLDEN_ENGINE=bash
+export SUBSTRATE_VENDOR_FROM_WORKTREE=1
 
 SCRATCH=$(mktemp -d) || golden_fail "scratch dir"
 trap 'rm -rf "$SCRATCH"' EXIT

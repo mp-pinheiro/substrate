@@ -174,6 +174,7 @@ golden_build_fixture() {
         git init -q -b main || exit 2
         git config user.name substrate || exit 2
         git config user.email substrate@localhost || exit 2
+        export SUBSTRATE_VENDOR_FROM_WORKTREE=1
         "$KIT_ROOT/bin/substrate" init --profile shell --vcs git
     ) > "$log" 2>&1; then
         cat "$log" >&2
