@@ -2,7 +2,7 @@
 # Gate runner. Vendored at <repo>/.substrate/gate.sh; discovers checks in
 # .substrate/checks.d, runs them under the check contract (docs/contracts.md),
 # ratchets emitted metrics against substrate-baseline.json.
-# Usage: gate.sh [--update-baseline] [--accept-regression]
+# Usage: gate.sh [--update-baseline|--tighten|--accept-regression[=key1,key2]] [--reason=<text>]
 set -uo pipefail
 
 SUBSTRATE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -19,6 +19,7 @@ source "$SUBSTRATE_DIR/gate-lib.sh"
 UPDATE_BASELINE=0
 ACCEPT_REGRESSION=0
 ACCEPT_KEYS=""
+ACCEPT_REASON=""
 TIGHTEN_BASELINE=0
 for arg in "$@"; do
     case "$arg" in
@@ -26,7 +27,8 @@ for arg in "$@"; do
         --tighten) UPDATE_BASELINE=1; TIGHTEN_BASELINE=1 ;;
         --accept-regression) UPDATE_BASELINE=1; ACCEPT_REGRESSION=1 ;;
         --accept-regression=*) UPDATE_BASELINE=1; ACCEPT_REGRESSION=1; ACCEPT_KEYS="${arg#--accept-regression=}" ;;
-        *) printf 'usage: %s [--update-baseline|--tighten|--accept-regression[=key1,key2]]\n' "$0" >&2; exit 2 ;;
+        --reason=*) ACCEPT_REASON="${arg#--reason=}" ;;
+        *) printf 'usage: %s [--update-baseline|--tighten|--accept-regression[=key1,key2]] [--reason=<text>]\n' "$0" >&2; exit 2 ;;
     esac
 done
 
@@ -34,6 +36,21 @@ jq -e . "$CONFIG" >/dev/null 2>&1 || { warn "substrate.json missing or corrupt �
 jq -e . "$LANGMAP" >/dev/null 2>&1 || { warn "$LANGMAP missing or corrupt — run: substrate init (or update)"; exit 2; }
 if [ -f "$BASELINE" ] && ! jq -e . "$BASELINE" >/dev/null 2>&1; then
     warn "$BASELINE is corrupt — restore it from VCS or delete it and rerun --update-baseline"
+    exit 2
+fi
+
+if [ "$ACCEPT_REGRESSION" -eq 1 ]; then
+    [ -n "$ACCEPT_REASON" ] \
+        || { warn "accepting a regression requires --reason=<text> — record why the ceiling moves; it lands in substrate-baseline.json and is reviewed in the diff"; exit 2; }
+    case "$ACCEPT_REASON" in
+        *[\;\&\|\<\>\$\`]*|*$'\n'*)
+            warn "--reason must not contain ; & | < > \$ \` or a newline — the checkpoint command guard rejects them and the reason is rendered in a markdown table"
+            exit 2 ;;
+    esac
+    [ "${#ACCEPT_REASON}" -ge 20 ] \
+        || { warn "--reason must be at least 20 characters — state what grew and why the cheaper alternative is worse"; exit 2; }
+elif [ -n "$ACCEPT_REASON" ]; then
+    warn "--reason applies only to --accept-regression"
     exit 2
 fi
 
@@ -204,11 +221,16 @@ run_checks() {
 
 CURRENT_METRICS='{}'
 CURRENT_DIR='{}'
+ACCEPTED_NOW=""
 ratchet() {
     CURRENT_METRICS=$(jq -sc 'map({(.name): .value}) | add // {}' "$METRICS") \
         || { warn "metrics aggregation failed"; FAILURES=$((FAILURES + 1)); return 1; }
     CURRENT_DIR=$(jq -sc '[.[] | select(.dir == "hi") | {(.name): "hi"}] | add // {}' "$METRICS") \
         || { warn "direction aggregation failed"; FAILURES=$((FAILURES + 1)); return 1; }
+
+    local never budgets
+    never=$(cfg_json '.ratchet.never_accept // []') || never='[]'
+    budgets=$(cfg_json '.budgets // {}') || budgets='{}'
 
     if [ ! -f "$BASELINE" ]; then
         local total
@@ -221,8 +243,16 @@ ratchet() {
     base=$(jq -c '.metrics // {}' "$BASELINE") || { warn "ratchet: cannot read baseline metrics"; FAILURES=$((FAILURES + 1)); return 1; }
     base_dir=$(jq -c '.direction // {}' "$BASELINE") || { warn "ratchet: cannot read baseline direction"; FAILURES=$((FAILURES + 1)); return 1; }
 
-    if ! worse=$(jq -rn --argjson c "$CURRENT_METRICS" --argjson b "$base" --argjson d "$CURRENT_DIR" --argjson bd "$base_dir" \
-        '$c | to_entries[] | select(if (($d[.key] // $bd[.key] // "lo")) == "hi" then .value < (($b[.key]) // 0) - 1e-9 else .value > (($b[.key]) // 0) + 1e-9 end) | "\(.key): \(.value) (baseline \($b[.key] // 0))"'); then
+    if ! worse=$(jq -rn --argjson c "$CURRENT_METRICS" --argjson b "$base" --argjson d "$CURRENT_DIR" --argjson bd "$base_dir" --argjson bu "$budgets" \
+        '$c | to_entries[]
+| (($d[.key] // $bd[.key] // "lo")) as $dr
+| select(if $dr == "hi" then .value < (($b[.key]) // 0) - 1e-9 else .value > (($b[.key]) // 0) + 1e-9 end)
+| . as $e
+| (if $dr == "lo" and (($bu[$e.key] // 0) > 0) then
+      (if $e.value > $bu[$e.key] then ", hard cap \($bu[$e.key]) — over cap"
+       else ", hard cap \($bu[$e.key]) — \($bu[$e.key] - $e.value) under cap" end)
+   else "" end) as $cap
+| "\($e.key): \($e.value) (best \($b[$e.key] // 0)\($cap))"'); then
         warn "ratchet: baseline comparison failed"
         FAILURES=$((FAILURES + 1)); return 1
     fi
@@ -234,12 +264,19 @@ ratchet() {
 
     if [ -n "$worse" ]; then
         if [ "$ACCEPT_REGRESSION" -eq 1 ] && [ -n "$ACCEPT_KEYS" ]; then
-            local accepted="" rejected=""
+            local accepted="" rejected="" never_accepted=""
             while IFS= read -r line; do
                 [ -n "$line" ] || continue
                 local key="${line%%: *}"
                 case ",$ACCEPT_KEYS," in
-                    *",$key,"*) accepted="${accepted:+$accepted$'\n'}$line" ;;
+                    *",$key,"*)
+                        if jq -e --arg k "$key" 'index($k) != null' <<< "$never" >/dev/null; then
+                            never_accepted="${never_accepted:+$never_accepted$'\n'}$line"
+                        else
+                            accepted="${accepted:+$accepted$'\n'}$line"
+                            ACCEPTED_NOW="${ACCEPTED_NOW:+$ACCEPTED_NOW$'\n'}$key"
+                        fi
+                        ;;
                     *) rejected="${rejected:+$rejected$'\n'}$line" ;;
                 esac
             done <<< "$worse"
@@ -248,16 +285,45 @@ ratchet() {
                 warn "FAIL ratchet: non-accepted metrics regressed"
                 FAILURES=$((FAILURES + 1))
             fi
+            if [ -n "$never_accepted" ]; then
+                printf '%s\n' "$never_accepted"
+                while IFS= read -r line; do
+                    [ -n "$line" ] || continue
+                    local nk="${line%%: *}"
+                    warn "FAIL ratchet: $nk is never-acceptable (ratchet.never_accept in substrate.json) — fix the regression or change that policy in a separate reviewed commit"
+                done <<< "$never_accepted"
+                FAILURES=$((FAILURES + 1))
+            fi
             if [ -n "$accepted" ]; then
                 printf '%s\n' "$accepted"
                 warn "ratchet: accepted regression(s) per --accept-regression=$ACCEPT_KEYS"
             fi
         elif [ "$ACCEPT_REGRESSION" -eq 1 ]; then
+            local never_accepted=""
+            while IFS= read -r line; do
+                [ -n "$line" ] || continue
+                local key="${line%%: *}"
+                if jq -e --arg k "$key" 'index($k) != null' <<< "$never" >/dev/null; then
+                    never_accepted="${never_accepted:+$never_accepted$'\n'}$line"
+                else
+                    ACCEPTED_NOW="${ACCEPTED_NOW:+$ACCEPTED_NOW$'\n'}$key"
+                fi
+            done <<< "$worse"
+            if [ -n "$never_accepted" ]; then
+                printf '%s\n' "$never_accepted"
+                while IFS= read -r line; do
+                    [ -n "$line" ] || continue
+                    local nk="${line%%: *}"
+                    warn "FAIL ratchet: $nk is never-acceptable (ratchet.never_accept in substrate.json) — fix the regression or change that policy in a separate reviewed commit"
+                done <<< "$never_accepted"
+                FAILURES=$((FAILURES + 1))
+            fi
             printf '%s\n' "$worse"
             warn "ratchet: metrics regressed — explicit regression acceptance requested"
         else
             printf '%s\n' "$worse"
             warn "FAIL ratchet: metrics regressed beyond their grandfathered baseline"
+            info "ratchet: raising a ceiling is permanent and lands in the committed diff — cost the refactor before accepting (guides/working-with-the-gate.md, \"Accept or refactor\")"
             FAILURES=$((FAILURES + 1))
         fi
     elif [ "$better" -gt 0 ]; then
@@ -297,6 +363,26 @@ write_baseline() {
         new_baseline=$(jq -n --argjson m "$CURRENT_METRICS" --argjson dir "$CURRENT_DIR" \
             '{metrics: ($m | to_entries | sort_by(.key) | from_entries), direction: $dir}') \
             || { warn "baseline: serialization failed — not writing"; return 1; }
+    fi
+
+    if [ -f "$BASELINE" ]; then
+        local accepted_csv
+        accepted_csv=$(printf '%s' "$ACCEPTED_NOW" | tr '\n' ',')
+        new_baseline=$(jq -n --slurpfile old "$BASELINE" --argjson nb "$new_baseline" \
+            --arg keys "$accepted_csv" --arg reason "$ACCEPT_REASON" --arg at "$(date -u +%Y-%m-%d)" \
+            '($old[0].accepted // {}) as $prev
+            | ($nb.metrics // {}) as $m | ($nb.direction // {}) as $dir
+            | ($keys | split(",") | map(select(length > 0))) as $now
+            | (reduce $now[] as $k ($prev;
+                .[$k] = {from: (($prev[$k].from) // ($old[0].metrics[$k]) // $m[$k]),
+                         to: $m[$k], at: $at, reason: $reason}))
+            | with_entries(select((.key | in($m)) and
+                (if (($dir[.key]) // "lo") == "hi"
+                 then $m[.key] < (.value.from) - 1e-9
+                 else $m[.key] > (.value.from) + 1e-9 end)))
+            | to_entries | sort_by(.key) | from_entries
+            | if length == 0 then $nb else $nb + {accepted: .} end') \
+            || { warn "baseline: accepted-record serialization failed — not writing"; return 1; }
     fi
     if [ -f "$BASELINE" ]; then
         local pruned
