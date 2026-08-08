@@ -28,3 +28,8 @@ linters:
         linters:
           - forbidigo
         text: do not panic
+
+      - path: internal/gate/
+        linters:
+          - forbidigo
+          - errcheck
