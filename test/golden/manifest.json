@@ -1,4 +1,5 @@
 {
+  "engine": "bash",
   "format": 1,
   "tools": {
     "bash": "5.2.21(1)-release",

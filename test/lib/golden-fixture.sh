@@ -190,11 +190,14 @@ golden_build_fixture() {
 # a VCS listing would drag every scaffold file init installs into the CLAIMS
 # vector and churn it on unrelated kit changes.
 golden_run_gate() {
-    local root="$1" claims="$2" log rc
+    local root="$1" claims="$2" metrics_sink="$3" log rc
     log=$(mktemp) || golden_fail "mktemp failed"
     (
         cd "$root" || exit 2
         export SUBSTRATE_CLAIMS_OUT="$claims"
+        export SUBSTRATE_METRICS_OUT="$metrics_sink"
+        export SUBSTRATE_ENGINE="${GOLDEN_ENGINE:-bash}"
+        export SUBSTRATE_GATE_JOBS=4
         export SUBSTRATE_FILE_LIST="$root/$GOLDEN_FILE_LIST"
         .substrate/gate.sh --update-baseline
     ) > "$log" 2>&1
@@ -208,6 +211,8 @@ golden_run_gate() {
     [ -f "$root/$GOLDEN_BASELINE" ] || golden_fail "the gate wrote no baseline into the fixture"
     [ -s "$claims" ] \
         || golden_fail "SUBSTRATE_CLAIMS_OUT produced nothing — gate.sh must honor it (item 0.4)"
+    [ -s "$metrics_sink" ] \
+        || golden_fail "SUBSTRATE_METRICS_OUT produced nothing — gate.sh must honor it (item 0.5)"
 }
 
 golden_replay_metrics() {
@@ -306,19 +311,21 @@ golden_fixture_hash() {
 
 golden_regenerate() {
     local scratch="$1" out="$2"
-    local claims="$scratch/$GOLDEN_CLAIMS" metrics="$scratch/$GOLDEN_METRICS"
+    local claims="$scratch/$GOLDEN_CLAIMS" sink="$scratch/$GOLDEN_METRICS.sink" metrics="$scratch/$GOLDEN_METRICS"
     GOLDEN_ROOT="$scratch/repo"
     # SAFETY: scratch HOME — a fixture init must never reach the caller's harness
     export HOME="$scratch/home"
     export SUBSTRATE_NO_USER_HARNESS=1
     mkdir -p "$HOME" "$GOLDEN_ROOT" "$out" || golden_fail "cannot prepare $scratch"
     golden_build_fixture "$GOLDEN_ROOT"
-    golden_run_gate "$GOLDEN_ROOT" "$claims"
+    golden_run_gate "$GOLDEN_ROOT" "$claims" "$sink"
     golden_replay_metrics "$GOLDEN_ROOT" "$claims" "$metrics"
     golden_assert_baseline_reproducible "$metrics" "$GOLDEN_ROOT/$GOLDEN_BASELINE"
     golden_assert_coverage "$claims" "$metrics"
     cp "$GOLDEN_ROOT/$GOLDEN_BASELINE" "$out/$GOLDEN_BASELINE_VECTOR" \
         || golden_fail "baseline copy failed"
+    cmp -s "$sink" "$metrics" \
+        || golden_fail "SUBSTRATE_METRICS_OUT differs from replay — metrics sink captured wrong bytes"
     cp "$metrics" "$out/$GOLDEN_METRICS" || golden_fail "metrics copy failed"
     cp "$claims" "$out/$GOLDEN_CLAIMS" || golden_fail "claims copy failed"
 }
@@ -336,8 +343,10 @@ golden_write_manifest() {
     vectors=$(jq -sc 'from_entries' "$entries") || golden_fail "manifest vector map failed"
     rm -f "$entries"
     jq -n --arg bash "$BASH_VERSION" --arg jq "$GOLDEN_JQ_VERSION" --arg jqsha "$jqsha" \
+        --arg engine "${GOLDEN_ENGINE:-bash}" \
         --arg fixture "$fixture" --argjson vectors "$vectors" \
         '{format: 1,
+          engine: $engine,
           tools: {bash: $bash, jq: $jq, jq_sha256: $jqsha},
           fixture_sha256: $fixture,
           vectors: $vectors}' > "$dir/$GOLDEN_MANIFEST" \
@@ -345,10 +354,16 @@ golden_write_manifest() {
 }
 
 golden_assert_manifest_integrity() {
-    local root="$1" fixture recorded actual name
-    [ -f "$GOLDEN_DIR/$GOLDEN_MANIFEST" ] \
-        || golden_fail "test/golden/$GOLDEN_MANIFEST absent — capture with: bash test/capture-golden-vectors.sh"
+    local root="$1" fixture recorded actual name engine recorded_engine
+    if [ ! -f "$GOLDEN_DIR/$GOLDEN_MANIFEST" ]; then
+        golden_fail "test/golden/$GOLDEN_MANIFEST absent — capture with: bash test/capture-golden-vectors.sh"
+    fi
     fixture=$(golden_fixture_hash "$root") || golden_fail "fixture hash failed"
+    engine="${GOLDEN_ENGINE:-bash}"
+    recorded_engine=$(jq -r '.engine // empty' "$GOLDEN_DIR/$GOLDEN_MANIFEST") \
+        || golden_fail "manifest is not readable json"
+    [ "$engine" = "$recorded_engine" ] \
+        || golden_fail "engine $engine does not match manifest engine $recorded_engine — recapture"
     recorded=$(jq -r '.fixture_sha256 // empty' "$GOLDEN_DIR/$GOLDEN_MANIFEST") \
         || golden_fail "manifest is not readable json"
     [ "$fixture" = "$recorded" ] \

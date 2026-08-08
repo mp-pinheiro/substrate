@@ -17,6 +17,8 @@ source "$KIT_ROOT/test/lib/golden-fixture.sh"
 export PATH="$KIT_ROOT/test/.toolchain/bin:$PATH"
 golden_assert_toolchain
 
+export GOLDEN_ENGINE=bash
+
 SCRATCH=$(mktemp -d) || golden_fail "scratch dir"
 trap 'rm -rf "$SCRATCH"' EXIT
 
