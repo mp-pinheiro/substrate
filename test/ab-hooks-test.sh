@@ -13,6 +13,8 @@ source "$KIT_ROOT/test/lib/ab-diff.sh"
 source "$KIT_ROOT/test/lib/ab-hooks-fixtures.sh"
 # shellcheck source=lib/ab-hooks-scenarios.sh
 source "$KIT_ROOT/test/lib/ab-hooks-scenarios.sh"
+# shellcheck source=lib/engine-fixture.sh
+source "$KIT_ROOT/test/lib/engine-fixture.sh"
 
 export LC_ALL=C
 export SUBSTRATE_NO_USER_HARNESS=1
@@ -27,11 +29,9 @@ trap 'rm -rf "$T"' EXIT
 export HOME="$T/home"
 mkdir -p "$HOME" || exit 9
 
-BUILD="$T/engine"
-mkdir -p "$BUILD" || exit 9
-( cd "$KIT_ROOT" && go build -trimpath -buildvcs=false -o "$BUILD/substrate-engine" ./cmd/substrate-engine ) \
-    || { printf 'ab-hooks-test: engine build failed\n' >&2; exit 9; }
-export SUBSTRATE_ENGINE_BIN="$BUILD/substrate-engine"
+fail_fn() { printf 'ab-hooks-test: %s\n' "$*" >&2; exit 9; }
+SUBSTRATE_ENGINE_BIN=$(engine_build fail_fn "ab-hooks-test") || exit 9
+export SUBSTRATE_ENGINE_BIN
 
 # .substrate is vendored once here; two full per-flavour templates follow below.
 TEMPLATE="$T/template"
