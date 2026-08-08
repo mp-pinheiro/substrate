@@ -52,6 +52,7 @@ matrix() {
     hook_scenario pc-verify-plain  hooks/protect-command.sh "$(pc '"substrate verify"')"              jj prepare_none
     hook_scenario pc-mutator       hooks/protect-command.sh "$(pc '"rm -rf .substrate"')"             jj prepare_none
     hook_scenario pc-redirect      hooks/protect-command.sh "$(pc '"echo x > substrate-baseline.json"')" jj prepare_none
+    hook_scenario pc-redirect-argval hooks/protect-command.sh "$(pc '"gh issue comment 16 --body \"--reason=<text> mentions substrate-baseline.json in prose\""')" jj prepare_none
     hook_scenario pc-multiline     hooks/protect-command.sh "$(pc '"echo one\njj commit -m x"')"      jj prepare_none
     hook_scenario pc-multiline-ok  hooks/protect-command.sh "$(pc '"echo commit\necho jj"')"          jj prepare_none
     hook_scenario pc-corrupt       hooks/protect-command.sh "$(pc '"echo hi"')"                       jj prepare_corrupt_config
