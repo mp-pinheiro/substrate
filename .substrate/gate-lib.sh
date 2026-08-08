@@ -12,6 +12,11 @@ die_infra() {
     exit 3
 }
 
+# Render 0x1F (US) bytes as \x1f so error messages are readable.
+render_1f() {
+    printf '%s' "${1//$'\x1f'/\\x1f}"
+}
+
 cfg() {
     jq -r "$1 // empty" "$CONFIG"
 }
