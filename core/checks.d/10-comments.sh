@@ -22,7 +22,7 @@ fi
 if [ "$rc" -eq 0 ]; then
     counts='{}'
 else
-    counts=$(printf '%s\n' "$out" | grep -oE '^[^:]+:[0-9]+: ' | cut -d: -f1 | sort | uniq -c \
+    counts=$(printf '%s\n' "$out" | jq -Rr 'capture("^(?<f>.+?):[0-9]+: ") | .f' | sort | uniq -c \
         | jq -Rn '[inputs | capture("^ *(?<n>[0-9]+) (?<f>.+)$")] | map({(.f): (.n | tonumber)}) | add // {}') \
         || die_infra "comment count aggregation failed"
 fi
