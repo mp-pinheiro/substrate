@@ -376,7 +376,7 @@ write_baseline() {
             | (reduce $now[] as $k ($prev;
                 .[$k] = {from: (($prev[$k].from) // ($old[0].metrics[$k]) // $m[$k]),
                          to: $m[$k], at: $at, reason: $reason}))
-            | with_entries(select((.key | in($m)) and
+            | with_entries(.value.to = ($m[.key] // .value.to) | select((.key | in($m)) and
                 (if (($dir[.key]) // "lo") == "hi"
                  then $m[.key] < (.value.from) - 1e-9
                  else $m[.key] > (.value.from) + 1e-9 end)))

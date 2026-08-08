@@ -156,6 +156,12 @@ printf '{"probe:alpha":3,"probe:beta":40}\n' > .git/probe-metrics.json
 jq -e '.accepted["probe:beta"] | .from == 20 and .to == 40' substrate-baseline.json >/dev/null \
     || fail "sticky from failed — accepted: $(jq -c .accepted substrate-baseline.json)"
 
+# partial payback: to field updates to current ceiling on tighten
+printf '{"probe:alpha":3,"probe:beta":35}\n' > .git/probe-metrics.json
+.substrate/gate.sh --tighten >/dev/null 2>&1 || fail "partial payback tighten failed"
+jq -e '.accepted["probe:beta"] | .from == 20 and .to == 35' substrate-baseline.json >/dev/null \
+    || fail "to field stale after partial payback — accepted: $(jq -c .accepted substrate-baseline.json)"
+
 # refusals: various invalid --reason forms
 printf '{"probe:alpha":3,"probe:beta":50}\n' > .git/probe-metrics.json
 if .substrate/gate.sh --tighten --accept-regression=probe:beta >/dev/null 2>&1; then fail "accepted without --reason"; fi
