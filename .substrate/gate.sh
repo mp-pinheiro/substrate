@@ -63,7 +63,10 @@ trap cleanup EXIT
 
 build_inventory() {
     if [ -n "${SUBSTRATE_FILE_LIST:-}" ]; then
-        cp "$SUBSTRATE_FILE_LIST" "$INVENTORY"
+        cp "$SUBSTRATE_FILE_LIST" "$INVENTORY" \
+            || die_infra "scoped inventory: cannot read SUBSTRATE_FILE_LIST ($SUBSTRATE_FILE_LIST)"
+        [ -s "$INVENTORY" ] \
+            || die_infra "scoped inventory: SUBSTRATE_FILE_LIST is empty — a scoped gate over nothing cannot pass blind"
         return 0
     fi
     local mode listing
