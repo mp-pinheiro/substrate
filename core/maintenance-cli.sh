@@ -30,7 +30,7 @@ maintenance_parse_args() {
                 MAINTENANCE_ACCEPT_REGRESSION="${1#--accept-regression=}"
                 [ -n "$MAINTENANCE_ACCEPT_REGRESSION" ] || { warn "--accept-regression= needs at least one metric"; return 2; }
                 shift ;;
-            --reason) [ "$#" -ge 2 ] || return 2; MAINTENANCE_ACCEPT_REASON="$2"; shift 2 ;; 
+            --reason) [ "$#" -ge 2 ] || return 2; MAINTENANCE_ACCEPT_REASON="$2"; shift 2 ;;
             --message) [ "$#" -ge 2 ] || return 2; MAINTENANCE_MESSAGE="$2"; shift 2 ;;
             --json) MAINTENANCE_JSON=1; shift ;;
             --repo-only) MAINTENANCE_REPO_ONLY=1; shift ;;
