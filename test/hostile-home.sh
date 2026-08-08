@@ -10,6 +10,8 @@ set -uo pipefail
 
 KIT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+export SUBSTRATE_ENGINE=bash
+
 EVIL=$(mktemp -d)
 trap 'rm -rf "$EVIL"' EXIT
 

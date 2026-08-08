@@ -10,6 +10,7 @@ KIT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # scratch inits must never touch the live user harness (~/.claude, ~/.omp)
 export SUBSTRATE_NO_USER_HARNESS=1
 export SUBSTRATE_VENDOR_FROM_WORKTREE=1
+export SUBSTRATE_ENGINE=bash
 
 PASS=0
 FAIL=0
