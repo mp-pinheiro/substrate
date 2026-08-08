@@ -2,14 +2,14 @@
   "metrics": {
     "comments:core/check-comments.sh": 3,
     "dead_code": 0,
-    "dup_pct": 1.4060537298918108,
+    "dup_pct": 1.405939791742636,
     "max_file_lines": 438
   },
   "direction": {},
   "accepted": {
     "dup_pct": {
       "from": 1.3866164921465969,
-      "to": 1.4060537298918108,
+      "to": 1.405939791742636,
       "at": "2026-08-08",
       "reason": "governance code lands in gate checkpoint report and CLI together"
     },
