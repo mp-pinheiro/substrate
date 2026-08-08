@@ -2,14 +2,14 @@
   "metrics": {
     "comments:core/check-comments.sh": 3,
     "dead_code": 0,
-    "dup_pct": 1.5592432259098925,
+    "dup_pct": 1.558680931201667,
     "max_file_lines": 460
   },
   "direction": {},
   "accepted": {
     "dup_pct": {
       "from": 1.3866164921465969,
-      "to": 1.5592432259098925,
+      "to": 1.558680931201667,
       "at": "2026-08-08",
       "reason": "C8 test shares init boilerplate pattern, one-line gate invocation minimal duplication"
     },

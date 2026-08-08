@@ -8,14 +8,21 @@ set -uo pipefail
 SUBSTRATE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SUBSTRATE_DIR/.." && pwd)"
 cd "$REPO_ROOT" || exit 2
+if [ "${SUBSTRATE_DEV_MODE:-0}" = "1" ] && [ -d "$REPO_ROOT/core" ] && [ "$SUBSTRATE_DIR" != "$REPO_ROOT/core" ]; then
+    exec env SUBSTRATE_DEV_MODE=1 bash "$REPO_ROOT/core/gate.sh" "$@"
+fi
+if [ "${SUBSTRATE_DEV_MODE:-0}" = "1" ] && [ -d "$REPO_ROOT/core" ]; then
+    CORE_DIR="$REPO_ROOT/core"
+else
+    CORE_DIR="$SUBSTRATE_DIR"
+fi
 export SUBSTRATE_DIR REPO_ROOT
 export CONFIG="$REPO_ROOT/substrate.json"
-export LANGMAP="$SUBSTRATE_DIR/langmap.json"
+export LANGMAP="$REPO_ROOT/.substrate/langmap.json"
 export BASELINE="$REPO_ROOT/substrate-baseline.json"
 
 # shellcheck source=gate-lib.sh
-source "$SUBSTRATE_DIR/gate-lib.sh"
-
+source "$CORE_DIR/gate-lib.sh"
 UPDATE_BASELINE=0
 ACCEPT_REGRESSION=0
 ACCEPT_KEYS=""
@@ -191,7 +198,7 @@ run_checks() {
     esac
     [ "$max" -ge 1 ] || max=1
     export LC_ALL=C
-    for chk in "$SUBSTRATE_DIR"/checks.d/*.sh; do
+    for chk in "$REPO_ROOT"/.substrate/checks.d/*.sh; do
         [ -f "$chk" ] || continue
         [ "$found" -eq 0 ] && found=1
         name=$(basename "$chk")
@@ -220,7 +227,7 @@ run_checks() {
             running=$((running - 1))
         fi
     done
-    [ "$found" -eq 1 ] || die_infra "no checks in $SUBSTRATE_DIR/checks.d — a gate with zero checks cannot pass blind"
+    [ "$found" -eq 1 ] || die_infra "no checks in $REPO_ROOT/.substrate/checks.d — a gate with zero checks cannot pass blind"
     while [ "$next" -lt "$count" ]; do
         report_check "$next"
         next=$((next + 1))
