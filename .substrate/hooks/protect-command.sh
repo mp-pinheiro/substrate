@@ -93,7 +93,7 @@ block_if_named() {
         printf 'BLOCKED: Bash command can mutate governed path %s (%s); use the protected workflow instead\n' "$needle" "$label" >&2
         exit 2
     fi
-    if printf '%s' "$cmd" | grep -Eq ">>?[[:space:]]*['\"]?[^;&|]*${needle//./\\.}"; then
+    if printf '%s' "$cmd" | grep -Eq "(^|[[:space:]])>>?[[:space:]]*['\"]?[^;&|]*${needle//./\\.}"; then
         printf 'BLOCKED: shell redirection targets governed path %s (%s)\n' "$needle" "$label" >&2
         exit 2
     fi
