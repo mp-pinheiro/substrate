@@ -2,22 +2,22 @@
   "metrics": {
     "comments:core/check-comments.sh": 3,
     "dead_code": 0,
-    "dup_pct": 1.405939791742636,
-    "max_file_lines": 438
+    "dup_pct": 1.405313461849992,
+    "max_file_lines": 449
   },
   "direction": {},
   "accepted": {
     "dup_pct": {
       "from": 1.3866164921465969,
-      "to": 1.405939791742636,
+      "to": 1.405313461849992,
       "at": "2026-08-08",
       "reason": "governance code lands in gate checkpoint report and CLI together"
     },
     "max_file_lines": {
       "from": 418,
-      "to": 438,
+      "to": 449,
       "at": "2026-08-08",
-      "reason": "governance code lands in gate checkpoint report and CLI together"
+      "reason": "mirrors existing SUBSTRATE_CLAIMS_OUT stage-copy idiom. extracting a helper would add indirection for one call site, cost growth"
     }
   }
 }
