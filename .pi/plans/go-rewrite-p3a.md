@@ -1,6 +1,6 @@
 # Plan: Go engine rewrite — P3a (bash-leg remediation + oracle freeze)
 
-state: active (became `.pi/plans/go-rewrite-p3a.md` at W0).
+state: committed (became `.pi/plans/go-rewrite-p3a.md` at W0).
 Parent: `.pi/plans/go-rewrite.md` (resolutions 1–12, amendments A1–A40). Sibling: `.pi/plans/go-rewrite-p3.md` (the full P3 design; P3a = its W0–W3).
 
 ## Context
@@ -176,11 +176,11 @@ Merge gate: identical inventory SET under both backends (`comm` after sort), NOT
 
 ## Acceptance
 - [x] W0 plan landed :: bash -c 'grep -q "^state: active" .pi/plans/go-rewrite-p3a.md && grep -q "^Parent:" .pi/plans/go-rewrite-p3a.md'
-- [ ] W1 metrics sink verified :: bash -c 'SUBSTRATE_METRICS_OUT=$(mktemp) bash .substrate/gate.sh && cmp -s "$SUBSTRATE_METRICS_OUT" test/golden/metrics.jsonl'
-- [ ] W1 oracle infra landed :: bash -c 'grep -q "SUBSTRATE_ENGINE" test/lib/golden-fixture.sh && grep -q "engine" test/golden/manifest.json'
-- [ ] W1 all A31 defects RED :: bash test/gate-inventory-guard-test.sh && bash test/claims-injectivity-test.sh
-- [ ] W2 all bash fixes committed :: bash -c 'git log --oneline | grep -q "C5:" && git log --oneline | grep -q "C8:" && git log --oneline | grep -q "C4:" && git log --oneline | grep -q "C9a:" && git log --oneline | grep -q "C3b:"'
-- [ ] W3 inventory NUL-safe :: bash -c 'grep -q "ls-files -z" .substrate/gate.sh && grep -q "read -r -d \'\'" .substrate/gate.sh'
-- [ ] Phase gate: full battery green :: just battery
-- [ ] Repo green :: bash .substrate/gate.sh
-- [ ] Plan state committed :: bash -c 'grep -q "^state: committed" .pi/plans/go-rewrite-p3a.md'
+- [x] W1 metrics sink verified :: bash -c 'SUBSTRATE_METRICS_OUT=$(mktemp) bash .substrate/gate.sh && cmp -s "$SUBSTRATE_METRICS_OUT" test/golden/metrics.jsonl'
+- [x] W1 oracle infra landed :: bash -c 'grep -q "SUBSTRATE_ENGINE" test/lib/golden-fixture.sh && grep -q "engine" test/golden/manifest.json'
+- [x] W1 all A31 defects RED :: bash test/gate-inventory-guard-test.sh && bash test/claims-injectivity-test.sh
+- [x] W2 all bash fixes committed :: bash -c 'git log --oneline | grep -q "C5:" && git log --oneline | grep -q "C8:" && git log --oneline | grep -q "C4:" && git log --oneline | grep -q "C9a:" && git log --oneline | grep -q "C3b:"'
+- [x] W3 inventory NUL-safe :: bash -c 'grep -q "ls-files -z" .substrate/gate.sh && grep -q "read -r -d \'\'" .substrate/gate.sh'
+- [x] Phase gate: full battery green :: just battery
+- [x] Repo green :: bash .substrate/gate.sh
+- [x] Plan state committed :: bash -c 'grep -q "^state: committed" .pi/plans/go-rewrite-p3a.md'
