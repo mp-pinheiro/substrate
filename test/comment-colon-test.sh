@@ -16,8 +16,11 @@ mkdir -p "$HOME"
 scratch_repo_init "$T/repo" shell || fail "init failed"
 
 cd "$T/repo" || exit 9
+mkdir -p src
 cat > src/foo.sh <<'SH'
 #!/usr/bin/env bash
+echo "hello"
+# fetch the articles
 echo "hello"
 SH
 chmod +x src/foo.sh

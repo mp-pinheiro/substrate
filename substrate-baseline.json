@@ -2,14 +2,14 @@
   "metrics": {
     "comments:core/check-comments.sh": 3,
     "dead_code": 0,
-    "dup_pct": 1.5083259592953102,
+    "dup_pct": 1.5081439774783834,
     "max_file_lines": 460
   },
   "direction": {},
   "accepted": {
     "dup_pct": {
       "from": 1.3866164921465969,
-      "to": 1.5083259592953102,
+      "to": 1.5081439774783834,
       "at": "2026-08-08",
       "reason": "baseline-test migration to scratch_repo_init reduces boilerplate, final transient delta acceptance"
     },
