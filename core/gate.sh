@@ -58,7 +58,7 @@ INVENTORY=$(mktemp)
 METRICS=$(mktemp)
 CLAIMS=$(mktemp)
 export INVENTORY METRICS CLAIMS
-cleanup() { rm -f "$INVENTORY" "$METRICS" "$CLAIMS" "$CLAIMS.raw"; }
+cleanup() { rm -f "$INVENTORY" "$METRICS" "$CLAIMS" "$CLAIMS.raw"; rm -rf "${RUN_DIR:-}"; }
 trap cleanup EXIT
 
 build_inventory() {
@@ -190,6 +190,7 @@ run_checks() {
         ''|*[!0-9]*) max=4 ;;
     esac
     [ "$max" -ge 1 ] || max=1
+    export LC_ALL=C
     for chk in "$SUBSTRATE_DIR"/checks.d/*.sh; do
         [ -f "$chk" ] || continue
         [ "$found" -eq 0 ] && found=1
@@ -224,7 +225,6 @@ run_checks() {
         report_check "$next"
         next=$((next + 1))
     done
-    rm -rf "$RUN_DIR"
 }
 
 CURRENT_METRICS='{}'
