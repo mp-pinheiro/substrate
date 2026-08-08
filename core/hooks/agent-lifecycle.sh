@@ -120,7 +120,7 @@ case "$action" in
         state=$(jq -cn --arg session "$session" --arg root "$REPO_ROOT" --argjson current "$current" \
             '{session:$session,repoRoot:$root,initial:$current,observed:$current,ownedPaths:[],trackingError:$current.error,stopBlocked:false,completedCommit:null}')
         write_state "$STATE" "$state" || { printf 'substrate lifecycle: state write failed\n' >&2; exit 2; }
-        context="Substrate lifecycle active. After direct verification, checkpoint with: substrate checkpoint --session $session --message 'type(scope): subject'. Never commit or push directly."
+        context="Substrate lifecycle active. After direct verification, checkpoint with: substrate checkpoint --session $session --message 'type(scope): subject'. Before accepting a ratchet regression, cost the alternative refactor and present both options; accepting requires a written reason that is committed to substrate-baseline.json. Never commit or push directly."
         [ -z "$report_warning" ] || context="$context $report_warning"
         jq -cn --arg context "$context" '{hookSpecificOutput:{hookEventName:"SessionStart",additionalContext:$context}}'
         ;;

@@ -43,9 +43,13 @@ if .substrate/checkpoint.sh --message 'feat(x): grow' --path owned.sh > "$T/acce
     fail "checkpoint accepted an unreviewed metric regression"
 fi
 grep -q 'beyond their grandfathered baseline' "$T/accept.out" || fail "unreviewed regression rejection was not actionable"
+if .substrate/checkpoint.sh --message 'feat(x): grow' --path owned.sh --accept-regression=probe:alpha > "$T/noreason.out" 2>&1; then
+    fail "checkpoint accepted regression without --reason"
+fi
+grep -q 'requires --reason' "$T/noreason.out" || fail "missing reason rejection was not actionable"
 before_msg=$(git log -1 --pretty=%s)
 [ "$before_msg" = 'chore: establish baseline' ] || fail "rejected checkpoint advanced the commit log"
-.substrate/checkpoint.sh --message 'feat(x): grow' --path owned.sh --accept-regression=probe:alpha > "$T/accept.out" 2>&1 \
+.substrate/checkpoint.sh --message 'feat(x): grow' --path owned.sh --accept-regression=probe:alpha --reason 'probe alpha regressed because the owned fixture grew intentionally' > "$T/accept.out" 2>&1 \
     || fail "keyed accept-regression checkpoint failed: $(cat "$T/accept.out")"
 jq -e '.metrics["probe:alpha"] == 20' substrate-baseline.json >/dev/null \
     || fail "accepted regression did not persist the new floor"

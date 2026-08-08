@@ -61,13 +61,13 @@ fi
 [ "$before" = "$(sha256sum substrate-baseline.json)" ] \
     || fail "failed tightening partially changed the baseline"
 
-if ! out=$(.substrate/gate.sh --tighten --accept-regression=probe:beta 2>&1); then
+if ! out=$(.substrate/gate.sh --tighten --accept-regression=probe:beta --reason='probe beta metric regressed because the probe fixture grew intentionally' 2>&1); then
     fail "keyed accept-regression on a namespaced metric failed: $out"
 fi
 jq -e '.metrics["probe:beta"] == 30' substrate-baseline.json >/dev/null \
     || fail "keyed accept-regression did not persist the new floor for a namespaced metric"
 
-if ! .substrate/gate.sh --update-baseline --accept-regression > "$T/accept.out" 2>&1; then
+if ! .substrate/gate.sh --update-baseline --accept-regression --reason='both probe metrics regressed because the probe fixture grew intentionally' > "$T/accept.out" 2>&1; then
     fail "explicit regression acceptance failed: $(cat "$T/accept.out")"
 fi
 grep -Fq 'accepting regressions' "$T/accept.out" || fail "explicit loosening did not print its diff"
@@ -112,5 +112,68 @@ if .substrate/gate.sh --tighten > "$T/atomic.out" 2>&1; then
 fi
 grep -Fq 'atomic replacement failed' "$T/atomic.out" || fail "atomic write failure was not actionable"
 [ "$before" = "$(sha256sum substrate-baseline.json)" ] || fail "atomic write failure changed the original baseline"
+export PATH="${PATH#$T/fake-bin:}"
+chmod 644 substrate-baseline.json
 
 printf 'baseline-test: monotonic, explicit loosening, reported orphan prune, hi-floor retention, atomic rollback green\n'
+
+# --- accepted-record assertions --- gate:allow-comment
+# Establish probe:beta in the baseline first (it was pruned in step 6)
+jq '.metrics["probe:beta"] = 20' substrate-baseline.json > substrate-baseline.json.tmp \
+    && mv substrate-baseline.json.tmp substrate-baseline.json \
+    || fail "seeding probe:beta into baseline failed"
+jq -e '.metrics["probe:beta"] == 20' substrate-baseline.json >/dev/null || fail "probe:beta not in baseline after seed"
+
+# Accept regression: 20 -> 60
+printf '{"probe:alpha":3,"probe:beta":60}\n' > .git/probe-metrics.json
+if ! .substrate/gate.sh --tighten --accept-regression=probe:beta --reason='first accept probe beta regression sixty characters' 2>&1; then
+    fail "first accept of probe:beta failed"
+fi
+jq -e '.accepted["probe:beta"] | .from == 20 and .to == 60 and .reason == "first accept probe beta regression sixty characters" and (.at | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$"))' \
+    substrate-baseline.json >/dev/null || fail "accepted record missing or malformed for probe:beta"
+
+# idempotent: re-accept with same metrics
+sha_before=$(sha256sum substrate-baseline.json)
+.substrate/gate.sh --tighten --accept-regression=probe:beta --reason='first accept probe beta regression sixty characters' >/dev/null 2>&1 \
+    || fail "idempotent accept of probe:beta failed"
+[ "$sha_before" = "$(sha256sum substrate-baseline.json)" ] \
+    || fail "idempotent accept re-stamped the baseline — at timestamp must not refresh"
+
+# auto-prune: return probe:beta to its from value (20)
+printf '{"probe:alpha":3,"probe:beta":20}\n' > .git/probe-metrics.json
+.substrate/gate.sh --tighten >/dev/null 2>&1 || fail "tightening probe:beta back to from failed"
+jq -e '.accepted | has("probe:beta") | not' substrate-baseline.json >/dev/null \
+    || fail "auto-prune failed — probe:beta record should disappear when metric returns to from"
+
+# sticky from: accept 20 -> 30
+printf '{"probe:alpha":3,"probe:beta":30}\n' > .git/probe-metrics.json
+.substrate/gate.sh --tighten --accept-regression=probe:beta --reason='first sticky accept twenty characters now' 2>&1 || fail "first sticky accept failed"
+jq -e '.accepted["probe:beta"] | .from == 20 and .to == 30' substrate-baseline.json >/dev/null \
+    || fail "first sticky accept from wrong — accepted: $(jq -c .accepted substrate-baseline.json)"
+# then 30 -> 40 gate:allow-comment
+printf '{"probe:alpha":3,"probe:beta":40}\n' > .git/probe-metrics.json
+.substrate/gate.sh --tighten --accept-regression=probe:beta --reason='second sticky accept twenty characters ok' 2>&1 || fail "second sticky accept failed"
+jq -e '.accepted["probe:beta"] | .from == 20 and .to == 40' substrate-baseline.json >/dev/null \
+    || fail "sticky from failed — accepted: $(jq -c .accepted substrate-baseline.json)"
+
+# refusals: various invalid --reason forms
+printf '{"probe:alpha":3,"probe:beta":50}\n' > .git/probe-metrics.json
+if .substrate/gate.sh --tighten --accept-regression=probe:beta >/dev/null 2>&1; then fail "accepted without --reason"; fi
+if .substrate/gate.sh --tighten --accept-regression=probe:beta --reason='short' >/dev/null 2>&1; then fail "accepted with short reason"; fi
+if .substrate/gate.sh --tighten --accept-regression=probe:beta --reason='this reason has a > in it which is forbidden' >/dev/null 2>&1; then fail "accepted reason with >"; fi
+if .substrate/gate.sh --tighten --reason='this reason is perfectly valid but no accept flag' >/dev/null 2>&1; then fail "reason without accept-regression"; fi
+
+# never-accept: add policy and try to accept
+jq '. + {"ratchet": {"never_accept": ["probe:alpha"]}}' substrate.json > substrate.json.tmp && mv substrate.json.tmp substrate.json
+printf '{"probe:alpha":15,"probe:beta":50}\n' > .git/probe-metrics.json
+if .substrate/gate.sh --tighten --accept-regression=probe:alpha --reason='trying to accept a never acceptable metric twenty' > "$T/never.out" 2>&1; then
+    fail "accepted a never-acceptable metric"
+fi
+grep -q 'never-acceptable' "$T/never.out" || fail "never-acceptable rejection was not stated"
+
+# headroom: set budget on max_file_lines, regress within cap
+printf '{"max_file_lines":60}\n' > .git/probe-metrics.json
+jq '.budgets.max_file_lines = 500' substrate.json > substrate.json.tmp && mv substrate.json.tmp substrate.json
+.substrate/gate.sh --tighten > "$T/headroom.out" 2>&1 || true
+grep -q 'hard cap' "$T/headroom.out" || fail "headroom with hard cap was not displayed"
+grep -q 'under cap' "$T/headroom.out" || fail "under cap annotation missing from headroom line"

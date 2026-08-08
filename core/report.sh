@@ -92,6 +92,22 @@ report_ratchet() {
     printf "\nAgent checkpoints save tighter limits automatically. Use \`substrate baseline\` only to adopt initial debt or perform explicit maintenance.\n"
 }
 
+report_raised_ceilings() {
+    printf '\n## Raised ceilings\n\n'
+    printf 'A reviewed regression moved these ceilings. Each entry disappears automatically once the metric returns to its recorded best.\n\n'
+    if ! jq -e '.accepted // {} | length > 0' substrate-baseline.json >/dev/null 2>&1; then
+        printf 'Status: no ceiling has been raised.\n'
+        return 0
+    fi
+    printf '| Metric | Ceiling | Delta | Age | Reason |\n'
+    printf '| --- | --- | ---: | ---: | --- |\n'
+    jq -r 'now as $n | .accepted | to_entries | sort_by(.key)[]
+        | "| `\(.key)` | \(.value.from) -> \(.value.to) | \(.value.to - .value.from) | \((($n - (.value.at | strptime("%Y-%m-%d") | mktime)) / 86400 | floor)) d | \(.value.reason) |"' \
+        substrate-baseline.json 2>/dev/null \
+        || printf 'Status: the accepted-regression record is malformed — inspect substrate-baseline.json.\n'
+    printf '\nPaying a raised ceiling back removes its row. Refuse the next raise while it stands.\n'
+}
+
 run_report() {
     local generated="${1:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
     printf '# Substrate maintenance report\n\n'
@@ -101,6 +117,7 @@ run_report() {
     report_duplication
     report_dead_code
     report_ratchet
+    report_raised_ceilings
 }
 
 REPORT="$REPO_ROOT/substrate-report.md"

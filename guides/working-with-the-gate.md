@@ -36,6 +36,12 @@ src/big.py: 612 lines exceeds the hard cap 500 — split it (budgets.max_file_li
 Split the file. Raising the cap is a config diff everyone sees.
 
 ```
+max_file_lines: 418 (best 413, hard cap 500 — 82 under cap)
+[!] FAIL ratchet: metrics regressed beyond their grandfathered baseline
+```
+The ceiling moved while the hard cap still holds — this is a reviewed choice, not a violation. The gate shows how much headroom remains under the cap so you can judge the regression. If you accept it, the reason you write is committed to `substrate-baseline.json` and reviewed in the diff.
+
+```
 invalid JSON: config/foo.json
 [!] FAIL 40-data-validity
 ```
@@ -64,20 +70,26 @@ A plain gate reports improvements without writing the baseline:
 Agent checkpoints and repository maintenance with `--checkpoint` lower existing ceilings automatically after a green run. Manual baseline changes remain explicit:
 
 ```sh
-substrate baseline --update              # establish debt or lock in a reviewed improvement
-substrate baseline --accept-regression   # deliberate loosening; prints the exact diff
+substrate baseline --update                                     # establish debt or lock in a reviewed improvement
+substrate baseline --accept-regression=dup_pct --reason "..."   # deliberate loosening; reason is committed to the baseline diff
 ```
 
 A change to `core/` can nudge a ratcheted metric on its own — deleting lines shrinks the denominator behind `dup_pct`. Re-vendoring then deadlocks: the gate refuses to write a baseline while `80-vendor-drift` is red, and the vendor transaction refuses to finish while the ratchet is red. Name the metric to break it:
 
 ```sh
 substrate update --apply --force --checkpoint --message '<=50 chars' \
-    --accept-regression=dup_pct          # keyed form only; bare is refused
+    --accept-regression=dup_pct --reason "deliberately identical preamble across seven hooks"
 ```
 
-`substrate_checkpoint` takes an optional `acceptRegression: ["<metric>"]` array for the same purpose — pass it only for a metric regression the user reviewed.
+`substrate_checkpoint` takes an optional `acceptRegression: ["<metric>"]` array and a required `acceptRegressionReason` string for the same purpose — pass both only for a metric regression the user reviewed.
 
-When `substrate-baseline.json` exists, an absent metric key means zero tolerance — new debt categories start at zero.
+When `substrate-baseline.json` exists, an absent metric key means zero tolerance — new debt categories start at zero. `ratchet.never_accept` in `substrate.json` can forbid acceptance of specific metrics outright.
+
+## Accept or refactor
+
+Cost the refactor first and say what it costs. Accept when the growth is structural — the metric moved because the shape of the code changed and the cheaper alternative is worse than the debt: a deliberately identical safety preamble duplicated across hooks, a denominator that shrank because code was deleted, a file that grew because its one responsibility grew.
+
+Refuse when the metric is within a small refactor of holding — a file that can shed lines into a sibling, a duplicate block that wants extracting. Refuse when the key is listed in `ratchet.never_accept`. A raised ceiling is permanent until someone pays it back, it appears in `substrate report` with its age until then, and the reason you write is reviewed in the diff.
 
 ## When the gate itself breaks
 

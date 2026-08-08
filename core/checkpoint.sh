@@ -16,8 +16,9 @@ json=0
 paths=()
 accept=()
 accept_csv=""
+reason=""
 usage() {
-    printf 'usage: %s --message "type(scope): subject" [--session <id> | --path <repo-relative-path> ...] [--accept-regression=<metric>[,<metric>]] [--json]\n' "$0" >&2
+    printf 'usage: %s --message "type(scope): subject" [--session <id> | --path <repo-relative-path> ...] [--accept-regression=<metric>[,<metric>] --reason <text>] [--json]\n' "$0" >&2
     exit 2
 }
 while [ "$#" -gt 0 ]; do
@@ -32,8 +33,8 @@ while [ "$#" -gt 0 ]; do
             accept_csv="${1#--accept-regression=}"
             [ -n "$accept_csv" ] \
                 || { printf 'checkpoint blocked: --accept-regression= needs at least one metric\n' >&2; exit 2; }
-            accept=("--accept-regression=$accept_csv")
             shift ;;
+        --reason) [ "$#" -ge 2 ] || usage; reason="$2"; shift 2 ;;
         --json) json=1; shift ;;
         *) usage ;;
     esac
@@ -42,6 +43,13 @@ done
 conv='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([^)]+\))?!?: [^[:space:]]'
 [ -n "$message" ] && printf '%s\n' "$message" | grep -Eq "$conv" \
     || { printf 'checkpoint blocked: message must follow Conventional Commits — type(scope): subject\n' >&2; exit 2; }
+
+[ -z "$accept_csv" ] || [ -n "$reason" ] \
+    || { printf 'checkpoint blocked: --accept-regression requires --reason "<text>" — the justification is committed to substrate-baseline.json\n' >&2; exit 2; }
+[ -n "$accept_csv" ] || [ -z "$reason" ] \
+    || { printf 'checkpoint blocked: --reason applies only to --accept-regression\n' >&2; exit 2; }
+
+[ -n "$accept_csv" ] && accept=("--accept-regression=$accept_csv" "--reason=$reason")
 [ -x .substrate/gate.sh ] && [ -x .substrate/hooks/protect-paths.sh ] \
     || { printf 'checkpoint blocked: vendored Substrate runtime is incomplete — run: substrate update --apply\n' >&2; exit 2; }
 [ -f substrate-baseline.json ] \

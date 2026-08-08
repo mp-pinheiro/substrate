@@ -117,6 +117,7 @@ async function runCheckpointTransaction(
 	paths: string[],
 	message: string,
 	acceptRegression: string[] = [],
+	reason?: string,
 	io: TransactionIO = {},
 ): Promise<{ receipt: CheckpointReceipt | null; ok: boolean; summary: string }> {
 	const command = [
@@ -125,6 +126,7 @@ async function runCheckpointTransaction(
 		message,
 		...paths.flatMap((path) => ["--path", path]),
 		...(acceptRegression.length > 0 ? [`--accept-regression=${acceptRegression.join(",")}`] : []),
+		...(reason ? ["--reason", reason] : []),
 		"--json",
 	];
 	const result = await spawnTransactionScript(root, command, 40, io);

@@ -65,6 +65,9 @@
   "duplication": {
     "min_tokens": 35
   },
+  "ratchet": {
+    "never_accept": ["dead_code"]
+  },
   "checks": {
     "disabled": []
   }

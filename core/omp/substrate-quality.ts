@@ -54,6 +54,12 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 						"Ratcheted metric keys whose regression the user reviewed and accepted, e.g. [\"max_file_lines\"]. Omit unless the gate reported that exact key regressed.",
 				}),
 			),
+			acceptRegressionReason: pi.typebox.Type.Optional(
+				pi.typebox.Type.String({
+					description:
+						"Why the ceiling must move, >=20 chars, no ; & | < > $ ` or newline. Required whenever acceptRegression is set; it is committed to substrate-baseline.json and reviewed in the diff. State the cheaper alternative you rejected and why.",
+				}),
+			),
 		},
 		{ additionalProperties: false },
 	);
@@ -64,7 +70,7 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 			name: "substrate_checkpoint",
 			label: "Substrate checkpoint",
 			description:
-				"After direct verification, gate the exact agent-owned working paths, tighten improved metrics, and create a local commit. Pass acceptRegression only for a metric regression the user reviewed. Never pushes.",
+				"After direct verification, gate the exact agent-owned working paths, tighten improved metrics, and create a local commit. Pass acceptRegression only for a metric regression the user reviewed; it requires acceptRegressionReason. Never pushes.",
 			parameters: checkpointParameters,
 			blockedPrefix: "checkpoint",
 		},
@@ -88,6 +94,32 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 				}
 				acceptRegression = raw as string[];
 			}
+			let reason: string | undefined;
+			if ("acceptRegressionReason" in params && params.acceptRegressionReason !== undefined) {
+				const rawReason = params.acceptRegressionReason;
+				if (typeof rawReason !== "string") {
+					return blockedToolResult("checkpoint blocked: acceptRegressionReason must be a string");
+				}
+				reason = rawReason;
+			}
+			if (acceptRegression.length > 0 && !reason) {
+				return blockedToolResult(
+					"checkpoint blocked: --accept-regression requires --reason \"<text>\" — the justification is committed to substrate-baseline.json",
+				);
+			}
+			if (reason && acceptRegression.length === 0) {
+				return blockedToolResult("checkpoint blocked: --reason applies only to --accept-regression");
+			}
+			if (reason) {
+				if (reason.length < 20) {
+					return blockedToolResult("checkpoint blocked: --reason must be at least 20 characters");
+				}
+				if (/[;&|<>$`\n]/.test(reason)) {
+					return blockedToolResult(
+						"checkpoint blocked: --reason must not contain ; & | < > $ ` or a newline",
+					);
+				}
+			}
 			const check = await withRootLock(root, () => taskPreconditions(root));
 			if (check.failure) return blockedToolResult(`checkpoint blocked: ${check.failure}`);
 			const state = check.state;
@@ -101,7 +133,7 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 						: "checkpoint blocked: no pending agent-owned changes",
 				);
 			}
-			const result = await runCheckpointTransaction(root, ownedPending, message, acceptRegression, io);
+			const result = await runCheckpointTransaction(root, ownedPending, message, acceptRegression, reason, io);
 			const summary = result.summary;
 			if (!result.receipt) {
 				writeRuntimeState(root, {

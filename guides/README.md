@@ -29,7 +29,7 @@ A mutating agent task is done when direct verification has passed and `substrate
 | Path | Role |
 | --- | --- |
 | `substrate.json` | repo config: active profiles, unscanned ledger, budgets, disabled checks |
-| `substrate-baseline.json` | grandfathered debt snapshot; only the gate runner may write it |
+| `substrate-baseline.json` | grandfathered debt snapshot and accepted-regression records; only the gate runner may write it |
 | `.substrate/` | vendored engine (gate, checks, hooks); transactional `substrate bootstrap --checkpoint` synchronizes it with the kit |
 | `.substrate/checks.d/` | active checks: core 05–59, profile 60–79, repo-local 80–99 |
 | `.claude/{agents,skills}/`, `.omp/{agents,skills}/` | working agents and skills; unmarked same-name assets are repo-owned, while a `.substrate-managed.json` marker grants full kit ownership and stale marked assets are removed |

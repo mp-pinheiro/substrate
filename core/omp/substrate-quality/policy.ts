@@ -19,6 +19,7 @@ const SUBSTRATE_POLICY = [
 	"After direct verification, call `substrate_checkpoint`; it gates, tightens improved metrics, and commits only agent-owned paths.",
 	"Never run `jj commit` or `git commit` directly. Never push automatically; publication remains user-owned.",
 	"Do not bypass checks, edit generated or protected assets, or relax the baseline unless the user explicitly requests that policy change.",
+	"Before accepting a ratchet regression, cost the alternative refactor and present both options; accepting requires a written reason that is committed to substrate-baseline.json.",
 ].join("\n");
 
 // walk up for the vendored gate so subdirectory sessions resolve the repo
