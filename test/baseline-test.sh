@@ -2,27 +2,27 @@
 set -uo pipefail
 
 KIT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-T=$(mktemp -d)
-trap 'rm -rf "$T"' EXIT
-export HOME="$T/home"
-export SUBSTRATE_NO_USER_HARNESS=1
-mkdir -p "$HOME" "$T/repo" "$T/fake-bin"
+# shellcheck source=lib/scratch-repo-fixture.sh
+source "$KIT_ROOT/test/lib/scratch-repo-fixture.sh"
 
 fail() { printf 'baseline-test FAIL: %s\n' "$1" >&2; exit 1; }
+ok()   { printf '\033[0;32m[ok]\033[0m baseline-test: %s\n' "$*"; }
 
+T=$(mktemp -d)
+trap 'rm -rf "$T"' EXIT
+export HOME="$T/home" SUBSTRATE_NO_USER_HARNESS=1
+mkdir -p "$HOME" "$T/fake-bin"
+
+scratch_repo_init "$T/repo" base || fail "init failed"
 cd "$T/repo" || exit 9
-git init -q --initial-branch=main
-git config user.name substrate
-git config user.email substrate@localhost
 printf 'safe\n' > tracked.txt
-"$KIT_ROOT/bin/substrate" init --profile base --vcs git >/dev/null 2>&1 || fail "init failed"
 cat > .substrate/checks.d/58-baseline-probe.sh <<'SH'
 #!/usr/bin/env bash
 set -uo pipefail
 source "$SUBSTRATE_DIR/gate-lib.sh"
 while IFS=$'\t' read -r name value; do
     case "$name" in
-        hi:*) metric_hi "$name" "$value" ;;
+        hi:*|probe_hi) metric_hi "$name" "$value" ;;
         *) metric "$name" "$value" ;;
     esac
 done < <(jq -r 'to_entries[] | [.key, .value] | @tsv' "$REPO_ROOT/.git/probe-metrics.json")
@@ -183,3 +183,24 @@ jq '.budgets.max_file_lines = 500' substrate.json > substrate.json.tmp && mv sub
 .substrate/gate.sh --tighten > "$T/headroom.out" 2>&1 || true
 grep -q 'hard cap' "$T/headroom.out" || fail "headroom with hard cap was not displayed"
 grep -q 'under cap' "$T/headroom.out" || fail "under cap annotation missing from headroom line"
+printf '{"probe:alpha":2,"hi:cov":90}\n' > .git/probe-metrics.json
+.substrate/gate.sh --update-baseline >/dev/null 2>&1 || fail "bare update-baseline with hi-floor failed"
+jq -e '.metrics["hi:cov"] == 90 and .direction["hi:cov"] == "hi"' substrate-baseline.json >/dev/null \
+    || fail "bare update-baseline dropped hi-floor or its direction"
+printf '{"probe:alpha":3}\n' > .git/probe-metrics.json
+.substrate/gate.sh --update-baseline >/dev/null 2>&1 || fail "bare update-baseline with unemitted hi-floor failed"
+jq -e '.metrics["hi:cov"] == 90 and .direction["hi:cov"] == "hi"' substrate-baseline.json >/dev/null \
+    || fail "bare update-baseline lost hi-floor when metric stopped emitting"
+jq -e '.metrics["probe:alpha"] == 3' substrate-baseline.json >/dev/null \
+    || fail "bare update-baseline did not tighten emitted metric"
+ok "bare update-baseline preserves unemitted hi-floors"
+
+printf 'baseline-test: C3b bare-update hi-floor retention green\n'
+rm -f .substrate/checks.d/*.sh
+out=$(.substrate/gate.sh 2>&1)
+rc=$?
+if [ "$rc" -ne 3 ]; then
+    fail "empty checks.d expected exit 3, got $rc"
+fi
+printf '%s\n' "$out" | grep -q 'no checks in' || fail "missing 'no checks in' guard message"
+ok "empty checks.d exits 3 with guard message"
