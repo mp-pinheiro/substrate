@@ -13,7 +13,7 @@ Review the working change with tool output as the ground truth. Opinions must ci
 3. Review ONLY what changed, in this order:
    - Correctness: logic, edge cases, failure modes in the changed lines.
    - Contract adherence: check contract, profile claims, and boundaries in `docs/contracts.md`; gate-lib helpers usage in checks.
-   - Regressions: does the diff weaken a check, loosen a ratchet or baseline, widen the unscanned ledger, or bypass a hook?
+   - Regressions: does the diff weaken a check, loosen a ratchet or baseline, widen the unscanned ledger, or bypass a hook? If the diff shows an `accepted` entry in substrate-baseline.json, read the recorded reason and judge whether it is justified.
    - Plan drift: if `.pi/plans/` has an active plan, do checked acceptance claims still hold? (`bin/substrate audit` executes them.)
 4. Report:
    - Gate verdict (pass/fail + failing checks verbatim).

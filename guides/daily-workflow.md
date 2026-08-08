@@ -53,8 +53,10 @@ Initial baseline creation and regression acceptance remain explicit:
 
 ```sh
 substrate baseline
-substrate baseline --accept-regression
+substrate baseline --accept-regression=max_file_lines --reason "file count grew with new profiles; splitting them into N files adds more overhead than the line count"
 ```
+
+Each acceptance requires a written reason that is committed to `substrate-baseline.json` and reviewed in the diff. Failing to provide one produces a usage error.
 
 ## 4. Push
 
@@ -89,4 +91,4 @@ OMP and Claude refresh ignored local `substrate-report.md` state at session star
 substrate report
 ```
 
-The report is advisory. It separates duplicate-code candidates, possible dead code, and baseline limits, and its age or generation never changes the gate verdict.
+The report is advisory. It separates duplicate-code candidates, possible dead code, baseline limits, and raised ceilings, and its age or generation never changes the gate verdict.

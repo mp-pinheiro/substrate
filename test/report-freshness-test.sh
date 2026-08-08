@@ -34,6 +34,7 @@ grep -q '^# Substrate maintenance report$' substrate-report.md || fail "report h
 grep -q '^## Duplicate code$' substrate-report.md || fail "duplication heading missing"
 grep -q '^## Possible dead code$' substrate-report.md || fail "dead-code heading missing"
 grep -q '^## Baseline limits$' substrate-report.md || fail "baseline heading missing"
+grep -q '^## Raised ceilings$' substrate-report.md || fail "raised-ceilings heading missing"
 git check-ignore -q substrate-report.md || fail "local report is not ignored"
 [ -z "$(git status --porcelain -- substrate-report.md)" ] || fail "report dirtied the working tree"
 

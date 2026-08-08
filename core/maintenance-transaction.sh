@@ -78,7 +78,7 @@ maintenance_render_candidate() {
 maintenance_gate_candidate() {
     local candidate="$1" output="$2" caller_home="$3" accept=()
     [ -z "$MAINTENANCE_ACCEPT_REGRESSION" ] \
-        || accept=("--accept-regression=$MAINTENANCE_ACCEPT_REGRESSION")
+        || accept=("--accept-regression=$MAINTENANCE_ACCEPT_REGRESSION" "--reason=$MAINTENANCE_ACCEPT_REASON")
     (
         cd "$candidate" || exit 2
         git add -f -A || exit 2

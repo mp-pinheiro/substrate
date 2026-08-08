@@ -9,6 +9,7 @@ maintenance_parse_args() {
     MAINTENANCE_CHECKPOINT=0
     MAINTENANCE_ACCEPT_BASELINE=0
     MAINTENANCE_ACCEPT_REGRESSION=""
+    MAINTENANCE_ACCEPT_REASON=""
     MAINTENANCE_JSON=0
     MAINTENANCE_REPO_ONLY=0
     MAINTENANCE_REQUESTED_VCS=auto
@@ -29,12 +30,17 @@ maintenance_parse_args() {
                 MAINTENANCE_ACCEPT_REGRESSION="${1#--accept-regression=}"
                 [ -n "$MAINTENANCE_ACCEPT_REGRESSION" ] || { warn "--accept-regression= needs at least one metric"; return 2; }
                 shift ;;
+            --reason) [ "$#" -ge 2 ] || return 2; MAINTENANCE_ACCEPT_REASON="$2"; shift 2 ;; 
             --message) [ "$#" -ge 2 ] || return 2; MAINTENANCE_MESSAGE="$2"; shift 2 ;;
             --json) MAINTENANCE_JSON=1; shift ;;
             --repo-only) MAINTENANCE_REPO_ONLY=1; shift ;;
             *) warn "unknown $MAINTENANCE_OPERATION flag: $1"; return 2 ;;
         esac
     done
+    [ -z "$MAINTENANCE_ACCEPT_REGRESSION" ] || [ -n "$MAINTENANCE_ACCEPT_REASON" ] \
+        || { warn "--accept-regression requires --reason \"<text>\""; return 2; }
+    [ -n "$MAINTENANCE_ACCEPT_REGRESSION" ] || [ -z "$MAINTENANCE_ACCEPT_REASON" ] \
+        || { warn "--reason applies only to --accept-regression"; return 2; }
     case "$MAINTENANCE_REQUESTED_VCS" in auto|git|jj) ;; *) return 2 ;; esac
     MAINTENANCE_VCS=$(maintenance_vcs) || return 2
     if [ "$MAINTENANCE_REQUESTED_VCS" != auto ] && [ "$MAINTENANCE_REQUESTED_VCS" != "$MAINTENANCE_VCS" ]; then

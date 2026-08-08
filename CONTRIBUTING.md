@@ -20,7 +20,7 @@ just gate
 - Edit canonical files under `core/`, `profiles/`, `agents/`, or `skills/`. Do not hand-edit their managed copies under `.substrate/`, `.claude/`, or `.omp/`.
 - Run `bin/substrate bootstrap` after changing canonical managed assets.
 - Add a profile only when it has a failing fixture and an oracle that proves the profile's own check rejects it. See [`guides/extending-the-framework.md`](guides/extending-the-framework.md).
-- Do not weaken a gate, exclusion, protected path, or baseline to hide a finding. Explain any intentional policy change in the pull request.
+- Do not weaken a gate, exclusion, protected path, or baseline to hide a finding. Every accepted regression carries a mandatory reason committed to `substrate-baseline.json` and reviewed in the pull request diff.
 
 ## Verify the change
 

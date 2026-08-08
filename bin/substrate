@@ -18,15 +18,15 @@ usage: substrate <command> [args]
   bootstrap [--profile a,b] [--force] [--from-worktree]  kickstart or synchronize the current repo
   init --profile a,b [--vcs auto|git|jj] [--from-worktree]  install the gate into a new repo
   gate [--update-baseline|--tighten|--accept-regression] | gate --deep [--no-cache|--print-key]
-  baseline [--update|--accept-regression]
-  checkpoint --message <message> --path <path>... [--accept-regression=<metric>[,<metric>]]  gate, tighten, commit locally
+  baseline [--update|--accept-regression[=key1,key2] --reason <text>]
+  checkpoint --message <message> --path <path>... [--accept-regression=<metric>[,<metric>] --reason <text>]  gate, tighten, commit locally
   restructure --op split|describe|squash --revision <rev> --message <m> ...  reshape agent commits
   doctor                                    config, langmap freshness, toolchain
   verify                                    active OMP runtime + bounded local gate
   update [--apply] [--force] [--from-worktree]  inspect or re-vendor the engine only
   engine pin [--bin PATH]                    RELEASE ACTION: pin .substrate/engine.json to a built binary (not for dev rebuilds)
   maintenance flags: --checkpoint [--message <message>] [--accept-baseline] [--repo-only] [--json]
-                     [--accept-regression=<metric>[,<metric>]]  move a ratcheted metric that a core change moved
+                     [--accept-regression=<metric>[,<metric>] --reason <text>]  move a ratcheted metric that a core change moved
                      --from-worktree on bootstrap/init/update vendors from the kit worktree even when
                      it is dirty or unpushed
   selftest                                  sandboxed negative-test battery
@@ -400,13 +400,17 @@ case "${1:-}" in
     restructure) shift; [ -x .substrate/restructure.sh ] || die "no restructure runtime here — run: substrate update --apply"; exec .substrate/restructure.sh "$@" ;;
     baseline)
         shift
-        flag="${1:---update}"
-        case "$flag" in
-            --update) exec .substrate/gate.sh --update-baseline ;;
-            --accept-regression) exec .substrate/gate.sh --accept-regression ;;
-            --accept-regression=*) exec .substrate/gate.sh "$flag" ;;
-            *) usage ;;
-        esac ;;
+        args=()
+        [ "$#" -gt 0 ] || args=(--update-baseline)
+        while [ "$#" -gt 0 ]; do
+            case "$1" in
+                --update) args+=(--update-baseline); shift ;;
+                --accept-regression|--accept-regression=*) args+=("$1"); shift ;;
+                --reason) [ "$#" -ge 2 ] || usage; args+=("--reason=$2"); shift 2 ;;
+                *) usage ;;
+            esac
+        done
+        exec .substrate/gate.sh "${args[@]}" ;;
     doctor)   shift; cmd_doctor "$@" ;;
     verify)   shift; cmd_verify "$@" ;;
     update)   shift; cmd_update "$@" ;;
