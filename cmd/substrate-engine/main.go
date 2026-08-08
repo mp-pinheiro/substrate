@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 
 	"github.com/mp-pinheiro/substrate/internal/enginepin"
+	"github.com/mp-pinheiro/substrate/internal/gate"
 	"github.com/mp-pinheiro/substrate/internal/hook"
 	"github.com/mp-pinheiro/substrate/internal/receipt"
 )
@@ -41,6 +43,22 @@ func run(args []string) int {
 		}
 		hook.EngineVersion = version
 		return hook.Dispatch(context.Background(), args[1], args[2:], os.Stdin)
+	case "gate":
+		rc := gate.Run(context.Background(), args[1:])
+		if rc == 12 {
+			return 2
+		}
+		return rc
+	case "capabilities":
+		caps := []string{"capabilities", "gate", "gitleaks-deep-key", "hook", "pin", "receipt", "version"}
+		sort.Strings(caps)
+		for _, c := range caps {
+			if _, err := fmt.Fprintf(os.Stdout, "%s\n", c); err != nil {
+				fmt.Fprintf(os.Stderr, "substrate-engine: %v\n", err)
+				return 2
+			}
+		}
+		return 0
 	default:
 		fmt.Fprintf(os.Stderr, "substrate-engine: unknown command: %s\n", args[0])
 		return 2
