@@ -424,6 +424,17 @@ info "substrate gate: $REPO_ROOT"
 build_inventory
 build_claims
 run_checks
+    # Publish the finished metrics table so readers see it complete.
+    if [ -n "${SUBSTRATE_METRICS_OUT:-}" ]; then
+        staged_m=$(mktemp "$SUBSTRATE_METRICS_OUT.XXXXXX") \
+            || die_infra "metrics capture: cannot stage next to $SUBSTRATE_METRICS_OUT"
+        mode_m=$(printf '%04o' "$((0666 & ~0$(umask)))")
+        if ! cp "$METRICS" "$staged_m" || ! chmod "$mode_m" "$staged_m" \
+            || ! mv -f "$staged_m" "$SUBSTRATE_METRICS_OUT"; then
+            rm -f "$staged_m"
+            die_infra "metrics capture: cannot write $SUBSTRATE_METRICS_OUT"
+        fi
+    fi
 ratchet
 
 if [ "$UPDATE_BASELINE" -eq 1 ]; then
