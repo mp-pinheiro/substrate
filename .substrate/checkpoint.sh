@@ -10,6 +10,8 @@ cd "$REPO_ROOT" || exit 2
 # shellcheck source=./receipt-lib.sh
 source "$SUBSTRATE_DIR/receipt-lib.sh"
 
+unset SUBSTRATE_DEV_MODE
+
 message=""
 session=""
 json=0
