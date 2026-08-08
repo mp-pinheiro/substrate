@@ -3,10 +3,11 @@ state: draft
 issue: https://github.com/mp-pinheiro/substrate/issues/12
 parent: .pi/plans/go-rewrite.md
 
-## Goal
-Move the gate runner's bookkeeping into the engine: preflight hand-off, inventory, CLAIMS, check spawn/scheduling/
-reporting, metrics aggregation, the ratchet and baseline writes. Checks stay spawned bash. `core/gate-lib.sh` gets
-ZERO byte changes — the engine feeds it. Five checks (05/15/30/40/10-comments) become native behind a registry.
+**P3a SPLIT (2026-08-08):** W0–W3 (bash-leg remediation + oracle freeze + inventory NUL-safety) have split into `.pi/plans/go-rewrite-p3a.md` (state: active). THIS plan (W4–W9) becomes the P3b basis and stays `draft` until P3a commits. P3a end state: all A31 bash defects fixed with RED-first-turned-green oracles, metrics sink witnessed against the runner, inventory NUL-safe, repo green, P3a committed.
+
+ Move the gate runner's bookkeeping into the engine: preflight hand-off, inventory, CLAIMS, check spawn/scheduling/
+ reporting, metrics aggregation, the ratchet and baseline writes. Checks stay spawned bash. `core/gate-lib.sh` gets
+ ZERO byte changes — the engine feeds it. Five checks (05/15/30/40/10-comments) become native behind a registry.
 
 Read first: `.pi/plans/go-rewrite.md` (12 resolutions, shared-artifact compat table, amendments A1–A20 + A25–A38) and
 `.pi/plans/go-rewrite-p2.md` (bindings B1–B7 and its Landed section — P3 inherits its precedents). Both are
