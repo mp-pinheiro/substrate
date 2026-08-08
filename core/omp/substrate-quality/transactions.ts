@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
-import { findGateRoot } from "./policy";
+import { findGateRoot, runCommand } from "./policy";
 import { commandOutput, type WorkingSnapshot } from "./runtime";
 
 type CheckpointReceipt = {
@@ -16,6 +16,10 @@ type ToolOutcome = {
 	details?: unknown;
 	isError?: boolean;
 };
+
+type ProgressSink = (text: string) => void;
+
+type TransactionIO = { progress?: ProgressSink; signal?: AbortSignal };
 
 function blockedToolResult(message: string): ToolOutcome {
 	return {
@@ -36,7 +40,7 @@ function registerGateTool(
 		parameters: GateToolParameters;
 		blockedPrefix: string;
 	},
-	run: (root: string, params: unknown) => Promise<ToolOutcome>,
+	run: (root: string, params: unknown, io: TransactionIO) => Promise<ToolOutcome>,
 ): void {
 	pi.registerTool({
 		name: spec.name,
@@ -45,14 +49,15 @@ function registerGateTool(
 		parameters: spec.parameters,
 		loadMode: "essential",
 		approval: "exec",
-		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+		async execute(_toolCallId, params, signal, onUpdate, ctx) {
 			const root = findGateRoot(ctx.cwd);
 			if (!root) {
 				return blockedToolResult(
 					`${spec.blockedPrefix} blocked: Substrate is inactive in this working directory`,
 				);
 			}
-			return run(root, params);
+			const progress = onUpdate && ((text: string) => onUpdate({ content: [{ type: "text" as const, text }] }));
+			return run(root, params, { progress, signal });
 		},
 	});
 }
@@ -80,24 +85,40 @@ function checkpointReceipt(output: string): CheckpointReceipt | null {
 	return null;
 }
 
-function spawnTransactionScript(
+async function spawnTransactionScript(
 	root: string,
 	command: string[],
 	tail: number,
-): { exitCode: number; stdout: string; summary: string } {
-	const proc = Bun.spawnSync(command, { cwd: root, stdout: "pipe", stderr: "pipe" });
-	const stdout = new TextDecoder().decode(proc.stdout).trim();
-	const stderr = new TextDecoder().decode(proc.stderr).trim();
+	io: TransactionIO,
+): Promise<{ exitCode: number; stdout: string; summary: string }> {
+	const progress = io.progress;
+	const recent: string[] = [];
+	let emittedAt = 0;
+	// one update per line would put a red gate's output back on the render loop
+	const onLine = progress
+		? (line: string) => {
+				recent.push(line);
+				if (recent.length > tail) recent.shift();
+				if (Date.now() - emittedAt < 100) return;
+				emittedAt = Date.now();
+				progress(recent.join("\n"));
+			}
+		: undefined;
+	const result = await runCommand(root, command, { onLine, signal: io.signal });
+	const stdout = result.stdout.trim();
+	const stderr = result.stderr.trim();
 	const summary = [stdout, stderr].filter(Boolean).join("\n").split("\n").slice(-tail).join("\n");
-	return { exitCode: proc.exitCode ?? 1, stdout, summary };
+	if (progress && recent.length > 0) progress(recent.join("\n"));
+	return { exitCode: result.exitCode, stdout, summary };
 }
 
-function runCheckpointTransaction(
+async function runCheckpointTransaction(
 	root: string,
 	paths: string[],
 	message: string,
 	acceptRegression: string[] = [],
-): { receipt: CheckpointReceipt | null; ok: boolean; summary: string } {
+	io: TransactionIO = {},
+): Promise<{ receipt: CheckpointReceipt | null; ok: boolean; summary: string }> {
 	const command = [
 		join(root, ".substrate", "checkpoint.sh"),
 		"--message",
@@ -106,7 +127,7 @@ function runCheckpointTransaction(
 		...(acceptRegression.length > 0 ? [`--accept-regression=${acceptRegression.join(",")}`] : []),
 		"--json",
 	];
-	const result = spawnTransactionScript(root, command, 40);
+	const result = await spawnTransactionScript(root, command, 40, io);
 	if (result.exitCode !== 0) {
 		return {
 			receipt: null,
@@ -117,12 +138,13 @@ function runCheckpointTransaction(
 	return { receipt: checkpointReceipt(result.stdout), ok: true, summary: result.summary };
 }
 
-function runRestructureTransaction(
+async function runRestructureTransaction(
 	root: string,
 	args: string[],
-): { receipt: Record<string, unknown> | null; ok: boolean; summary: string } {
+	io: TransactionIO = {},
+): Promise<{ receipt: Record<string, unknown> | null; ok: boolean; summary: string }> {
 	const command = [join(root, ".substrate", "restructure.sh"), ...args, "--json"];
-	const result = spawnTransactionScript(root, command, 25);
+	const result = await spawnTransactionScript(root, command, 25, io);
 	if (result.exitCode !== 0) {
 		return {
 			receipt: null,
@@ -143,25 +165,25 @@ function runRestructureTransaction(
 	return { receipt, ok: true, summary: result.summary };
 }
 
-function maintenanceReceiptPath(root: string): string | null {
-	const result = commandOutput(root, ["git", "rev-parse", "--git-common-dir"]);
+async function maintenanceReceiptPath(root: string): Promise<string | null> {
+	const result = await commandOutput(root, ["git", "rev-parse", "--git-common-dir"]);
 	if (result.error) return null;
-	const metadata = new TextDecoder().decode(result.stdout).trim();
+	const metadata = result.stdout.trim();
 	return metadata ? join(resolve(root, metadata), "substrate", "maintenance-receipt.json") : null;
 }
 
-function maintenanceCheckpointReceipt(
+async function maintenanceCheckpointReceipt(
 	root: string,
 	before: WorkingSnapshot,
 	after: WorkingSnapshot,
-): CheckpointReceipt | null {
+): Promise<CheckpointReceipt | null> {
 	if (!before.revision || !after.revision || before.revision === after.revision) return null;
-	const validator = commandOutput(root, [
+	const validator = await commandOutput(root, [
 		join(root, ".substrate", "maintenance-lib.sh"),
 		"repository-receipt-matches",
 	]);
 	if (validator.error) return null;
-	const path = maintenanceReceiptPath(root);
+	const path = await maintenanceReceiptPath(root);
 	if (!path) return null;
 	try {
 		const value: unknown = JSON.parse(readFileSync(path, "utf8"));

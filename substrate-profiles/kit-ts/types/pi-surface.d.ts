@@ -3,7 +3,10 @@
 // against this file means "internally consistent with the recorded surface",
 // NOT "conforms to the installed omp API"; 71-kit-tsc prints which mode ran.
 declare module "@oh-my-pi/pi-coding-agent" {
-	export type ToolContent = { type: string; text?: string };
+	export type ToolContent =
+		| { type: "text"; text: string }
+		| { type: "image"; data: string; mimeType: string };
+	export type ToolResult = { content: ToolContent[]; details?: unknown; isError?: boolean };
 	export type ToolEvent = {
 		toolName: string;
 		input: Record<string, unknown>;
@@ -74,10 +77,10 @@ declare module "@oh-my-pi/pi-coding-agent" {
 			execute(
 				toolCallId: string,
 				params: unknown,
-				signal: unknown,
-				onUpdate: unknown,
+				signal: AbortSignal | undefined,
+				onUpdate: ((partial: ToolResult) => void) | undefined,
 				ctx: ToolCtx,
-			): Promise<{ content: ToolContent[]; details?: unknown; isError?: boolean }>;
+			): Promise<ToolResult>;
 		}): void;
 		registerCommand(
 			name: string,

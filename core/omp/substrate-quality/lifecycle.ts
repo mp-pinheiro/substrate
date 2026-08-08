@@ -6,6 +6,7 @@ import {
 	ensureTaskState,
 	taskRuntimePatch,
 	taskStates,
+	withRootLock,
 	workingSnapshot,
 } from "./runtime";
 import { runCheckpointTransaction } from "./transactions";
@@ -14,8 +15,11 @@ function registerSessionLifecycle(pi: ExtensionAPI): void {
 	pi.on("session_stop", async (event, ctx) => {
 		const root = findGateRoot(ctx.cwd);
 		if (!root) return;
-		const state = ensureTaskState(root);
-		const current = workingSnapshot(root);
+		const opening = await withRootLock(root, async () => ({
+			state: await ensureTaskState(root),
+			current: await workingSnapshot(root),
+		}));
+		const { state, current } = opening;
 		const currentPaths = Object.keys(current.entries).sort();
 		const ownedPending = currentPaths.filter((path) => state.owned.has(path));
 		let autoFailure = "";
@@ -26,19 +30,24 @@ function registerSessionLifecycle(pi: ExtensionAPI): void {
 			!current.error &&
 			current.fingerprint === state.observed.fingerprint
 		) {
-			const result = runCheckpointTransaction(
+			const result = await runCheckpointTransaction(
 				root,
 				ownedPending,
 				"chore(agent): checkpoint owned work at session stop",
 			);
-			if (result.receipt) {
-				const after = workingSnapshot(root);
-				if (!after.error) {
-					const next = checkpointedState(root, after, state, result.receipt.commit);
+			const receipt = result.receipt;
+			if (receipt) {
+				const committed = await withRootLock(root, async () => {
+					const after = await workingSnapshot(root);
+					if (after.error) return false;
+					const next = await checkpointedState(root, after, state, receipt.commit, ownedPending);
 					taskStates.set(root, next);
-					writeRuntimeState(root, { lastCheckpoint: result.receipt, ...taskRuntimePatch(next) });
+					writeRuntimeState(root, { lastCheckpoint: receipt, ...taskRuntimePatch(next) });
+					return true;
+				});
+				if (committed) {
 					ctx.ui.notify(
-						`Substrate auto-checkpoint ${result.receipt.commit.slice(0, 12)} committed agent-owned work. No push performed.`,
+						`Substrate auto-checkpoint ${receipt.commit.slice(0, 12)} committed agent-owned work. No push performed.`,
 						"info",
 					);
 					return;

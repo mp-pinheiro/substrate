@@ -1,13 +1,14 @@
 type ProbeContext = { cwd: string; ui: { notify(message: string, type: string): void } };
 type ProbeEvent = Record<string, unknown>;
 type ProbeHandler = (event: ProbeEvent, ctx: ProbeContext) => Promise<unknown> | unknown;
+type ProbeUpdate = (partial: { content: Array<{ type: string; text?: string }> }) => void;
 type ProbeTool = {
 	name: string;
 	execute(
 		toolCallId: string,
 		params: Record<string, unknown>,
 		signal: undefined,
-		onUpdate: undefined,
+		onUpdate: ProbeUpdate | undefined,
 		ctx: ProbeContext,
 	): Promise<Record<string, unknown>>;
 };

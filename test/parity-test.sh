@@ -69,13 +69,19 @@ const ownedEvent = writeEvent("owned-write", `${repo}/owned.sh`);
 await callAll("tool_call", ownedEvent, ctx);
 writeFileSync(`${repo}/owned.sh`, '#!/usr/bin/env bash\nprintf "owned\\n"\nprintf "changed\\n"\n');
 await resultAll(ownedEvent, ctx);
+const progressFrames = [];
+let loopTicks = 0;
+const liveness = setInterval(() => {
+	loopTicks++;
+}, 20);
 const checkpoint = await tools.substrate_checkpoint.execute(
 	"checkpoint",
 	{ message: "fix(shell): checkpoint omp work" },
 	undefined,
-	undefined,
+	(partial) => progressFrames.push(partial.content[0]?.text ?? ""),
 	ctx,
 );
+clearInterval(liveness);
 const afterStop = (await handlers.session_stop[0]({ stop_hook_active: false }, ctx)) ?? null;
 const extraEvent = writeEvent("extra-write", `${repo}/extra.sh`);
 await callAll("tool_call", extraEvent, ctx);
@@ -134,6 +140,8 @@ console.log(
 		dirtyCheckpoint,
 		pushBlocks,
 		notifications,
+		loopTicks,
+		progressFrames: progressFrames.length,
 	}),
 );
 TS
@@ -147,6 +155,10 @@ jq -e '.deviceResult == null and (.beforeStop.reason | contains("Ownership track
     <<< "$omp_results" >/dev/null || fail "OMP tracked a non-filesystem device write as repo ownership: $omp_results"
 jq -e '.checkpoint.details.status == "passed" and (.checkpoint.isError // false) == false' \
     <<< "$omp_results" >/dev/null || fail "OMP checkpoint did not commit owned work: $omp_results"
+jq -e '.loopTicks > 10' <<< "$omp_results" >/dev/null \
+    || fail "OMP checkpoint froze the event loop — the transaction must not block the render loop: $omp_results"
+jq -e '.progressFrames > 0' <<< "$omp_results" >/dev/null \
+    || fail "OMP checkpoint streamed no progress to onUpdate: $omp_results"
 jq -e '.afterStop == null' <<< "$omp_results" >/dev/null \
     || fail "OMP stop remained blocked after checkpoint: $omp_results"
 jq -e '.autoStop == null' <<< "$omp_results" >/dev/null \

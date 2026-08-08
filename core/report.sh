@@ -119,9 +119,10 @@ ensure_report_ignored() {
     esac
     exclude="$git_dir/info/exclude"
     mkdir -p "$(dirname "$exclude")" || return 1
-    if [ ! -f "$exclude" ] || ! grep -Fqx '/substrate-report.md' "$exclude"; then
-        printf '\n# substrate advisory state\n/substrate-report.md\n' >> "$exclude" || return 1
-    fi
+    touch "$exclude" || return 1
+    grep -Fqx '/substrate-report.md' "$exclude" || printf '\n# substrate advisory state\n/substrate-report.md\n' >> "$exclude" || return 1
+    # write_report's mktemp staging file must be as invisible as the report itself
+    grep -Fqx '/substrate-report.md.*' "$exclude" || printf '\n/substrate-report.md.*\n' >> "$exclude" || return 1
 }
 write_report() {
     local generated staged
