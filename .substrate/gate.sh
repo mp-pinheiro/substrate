@@ -177,7 +177,7 @@ report_check() {
 # Checks are contract-isolated (own tmpdirs, per-check METRICS shard), so they
 # run concurrently up to SUBSTRATE_GATE_JOBS; reporting stays in name order.
 run_checks() {
-    local disabled chk name max running=0 next=0 count=0
+    local disabled chk name max running=0 next=0 count=0 found=0
     disabled=$(cfg_json '.checks.disabled // []')
     RUN_DIR=$(mktemp -d)
     RUN_NAMES=()
@@ -189,6 +189,7 @@ run_checks() {
     [ "$max" -ge 1 ] || max=1
     for chk in "$SUBSTRATE_DIR"/checks.d/*.sh; do
         [ -f "$chk" ] || continue
+        [ "$found" -eq 0 ] && found=1
         name=$(basename "$chk")
         if jq -e --arg n "$name" 'index($n) != null' <<< "$disabled" >/dev/null; then
             warn "$name: disabled in substrate.json"
@@ -215,6 +216,7 @@ run_checks() {
             running=$((running - 1))
         fi
     done
+    [ "$found" -eq 1 ] || die_infra "no checks in $SUBSTRATE_DIR/checks.d — a gate with zero checks cannot pass blind"
     while [ "$next" -lt "$count" ]; do
         report_check "$next"
         next=$((next + 1))
