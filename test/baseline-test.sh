@@ -177,12 +177,11 @@ if .substrate/gate.sh --tighten --accept-regression=probe:alpha --reason='trying
 fi
 grep -q 'never-acceptable' "$T/never.out" || fail "never-acceptable rejection was not stated"
 
-# headroom: set budget on max_file_lines, regress within cap
-printf '{"max_file_lines":60}\n' > .git/probe-metrics.json
+printf '{"max_file_lines":600}\n' > .git/probe-metrics.json
 jq '.budgets.max_file_lines = 500' substrate.json > substrate.json.tmp && mv substrate.json.tmp substrate.json
 .substrate/gate.sh --tighten > "$T/headroom.out" 2>&1 || true
-grep -q 'hard cap' "$T/headroom.out" || fail "headroom with hard cap was not displayed"
-grep -q 'under cap' "$T/headroom.out" || fail "under cap annotation missing from headroom line"
+grep -q 'hard cap' "$T/headroom.out" || fail "hard cap not displayed for over-cap metric"
+grep -q 'over cap' "$T/headroom.out" || fail "over cap annotation missing"
 printf '{"probe:alpha":2,"hi:cov":90}\n' > .git/probe-metrics.json
 .substrate/gate.sh --update-baseline >/dev/null 2>&1 || fail "bare update-baseline with hi-floor failed"
 jq -e '.metrics["hi:cov"] == 90 and .direction["hi:cov"] == "hi"' substrate-baseline.json >/dev/null \
