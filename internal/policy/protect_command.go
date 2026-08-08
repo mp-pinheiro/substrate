@@ -148,7 +148,7 @@ func blockIfNamed(cmd string, mutator bool, needle, label string) (Decision, boo
 		return block("BLOCKED: Bash command can mutate governed path %s (%s); use the protected workflow instead\n", needle, label), true
 	}
 	dotted := escapeDots(needle)
-	if redirRe, ok := compileNeedleRegex(`>>?[[:space:]]*['"]?[^;&|]*` + dotted); ok && matchAnyLine(redirRe, cmd) {
+	if redirRe, ok := compileNeedleRegex(`(^|[[:space:]])>>?[[:space:]]*['"]?[^;&|]*` + dotted); ok && matchAnyLine(redirRe, cmd) {
 		return block("BLOCKED: shell redirection targets governed path %s (%s)\n", needle, label), true
 	}
 	if assignRe, ok := compileNeedleRegex(`[A-Za-z_][A-Za-z0-9_]*=['"]?[^;&|]*` + dotted); ok && matchAnyLine(assignRe, cmd) && matchAnyLine(reTeeOrRedir, cmd) {
