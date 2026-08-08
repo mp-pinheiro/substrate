@@ -2,20 +2,20 @@
   "metrics": {
     "comments:core/check-comments.sh": 3,
     "dead_code": 0,
-    "dup_pct": 1.4029838677071118,
-    "max_file_lines": 452
+    "dup_pct": 1.40253021300675,
+    "max_file_lines": 460
   },
   "direction": {},
   "accepted": {
     "dup_pct": {
       "from": 1.3866164921465969,
-      "to": 1.4029838677071118,
+      "to": 1.40253021300675,
       "at": "2026-08-08",
       "reason": "governance code lands in gate checkpoint report and CLI together"
     },
     "max_file_lines": {
       "from": 418,
-      "to": 452,
+      "to": 460,
       "at": "2026-08-08",
       "reason": "C5 fix: 3 lines of guard in build_inventory for scoped inventory safety"
     }
