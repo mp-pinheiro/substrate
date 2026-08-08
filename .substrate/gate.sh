@@ -359,7 +359,7 @@ write_baseline() {
         return 1
     fi
     local new_baseline staged
-    if [ "$TIGHTEN_BASELINE" -eq 1 ] || { [ "$ACCEPT_REGRESSION" -eq 1 ] && [ -n "$ACCEPT_KEYS" ]; }; then
+    if [ "$TIGHTEN_BASELINE" -eq 1 ] || { [ "$UPDATE_BASELINE" -eq 1 ] && [ -f "$BASELINE" ]; } || { [ "$ACCEPT_REGRESSION" -eq 1 ] && [ -n "$ACCEPT_KEYS" ]; }; then
         new_baseline=$(jq -n --slurpfile old "$BASELINE" --argjson m "$CURRENT_METRICS" --argjson dir "$CURRENT_DIR" --arg keys "${ACCEPT_KEYS:-}" \
             '($old[0].metrics // {}) as $old_m | ($old[0].direction // {}) as $old_d
             | ($keys | split(",") | map(select(length > 0))) as $accepted
