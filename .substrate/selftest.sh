@@ -43,6 +43,7 @@ jq '.checks.disabled += ["50-gitleaks.sh"] | .checks.disabled |= unique' substra
     && mv substrate.json.tmp substrate.json
 note "sandbox: 50-gitleaks.sh disabled (no .git)"
 
+export SUBSTRATE_ENGINE=bash
 GATE=.substrate/gate.sh
 
 out=$($GATE 2>&1)
