@@ -9,6 +9,7 @@ import (
 	"github.com/mp-pinheiro/substrate/internal/enginepin"
 	"github.com/mp-pinheiro/substrate/internal/gate"
 	"github.com/mp-pinheiro/substrate/internal/hook"
+	"github.com/mp-pinheiro/substrate/internal/maintenance"
 	"github.com/mp-pinheiro/substrate/internal/receipt"
 	"github.com/mp-pinheiro/substrate/internal/transaction"
 )
@@ -64,8 +65,40 @@ func run(args []string) int {
 			return 2
 		}
 		return rc
+	case "maintenance":
+		if len(args) > 1 {
+			switch args[1] {
+			case "verify-transition":
+				if len(args) < 5 {
+					fmt.Fprintf(os.Stderr, "usage: substrate-engine maintenance verify-transition <from> <to> <fingerprint>\n")
+					return 2
+				}
+				if err := maintenance.VerifyTransition(args[2], args[3], args[4]); err != nil {
+					fmt.Fprintf(os.Stderr, "substrate-engine: verify-transition: %v\n", err)
+					return 1
+				}
+				return 0
+			case "repository-receipt-matches":
+				if err := maintenance.RepositoryReceiptMatches(""); err != nil {
+					fmt.Fprintf(os.Stderr, "substrate-engine: repository-receipt-matches: %v\n", err)
+					return 1
+				}
+				return 0
+			case "receipt-matches":
+				if err := maintenance.ReceiptMatches(); err != nil {
+					fmt.Fprintf(os.Stderr, "substrate-engine: receipt-matches: %v\n", err)
+					return 1
+				}
+				return 0
+			}
+		}
+		rc := maintenance.RunMaintenance(context.Background(), args[1:])
+		if rc == maintenance.ExitPreflight {
+			return 2
+		}
+		return rc
 	case "capabilities":
-		caps := []string{"capabilities", "checkpoint", "gate", "gitleaks-deep-key", "hook", "pin", "receipt", "restructure", "version"}
+		caps := []string{"capabilities", "checkpoint", "gate", "gitleaks-deep-key", "hook", "maintenance", "pin", "receipt", "restructure", "version"}
 		sort.Strings(caps)
 		for _, c := range caps {
 			if _, err := fmt.Fprintf(os.Stdout, "%s\n", c); err != nil {
