@@ -1,6 +1,5 @@
 # Plan: Go engine rewrite — P4a (checkpoint + restructure in Go)
-
-state: draft
+state: committed
 issue: https://github.com/mp-pinheiro/substrate/issues/12
 parent: .pi/plans/go-rewrite.md
 
