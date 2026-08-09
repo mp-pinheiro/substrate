@@ -22,7 +22,7 @@ mask_durations() {
     sed -E \
         -e 's/\x1b\[[0-9;]*m//g' \
         -e 's/\([0-9]+(\.[0-9]+)?(ms|s)\)/(<duration>)/g' \
-        -e 's/^\[.\] (FAIL )?ratchet: .+$/[ratchet]/' \
+        -e 's/^\[.+\] (FAIL )?ratchet: .+$/[ratchet]/' \
         -e 's/^[a-zA-Z0-9_/:.-]+: [-0-9.eE+]+ \(best .+$/[ratchet]/' \
         -e 's/^\[.\] gate: [0-9]+ check\(s\) failed \([^)]+\)/[gate failed]/' \
         -e 's/ \[[0-9]+\/[0-9]+\]//g' \
