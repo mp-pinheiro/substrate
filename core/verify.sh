@@ -50,7 +50,7 @@ verify_omp_runtime() {
 cmd_verify() {
     local gate_output gate_rc
     [ "$#" -eq 0 ] || die "verify takes no arguments"
-    [ -x .substrate/gate.sh ] || die "no .substrate here — run: substrate init"
+    [ -f .substrate/VERSION ] || die "no .substrate here — run: substrate init"
     verify_omp_runtime || return 1
     info "checking bounded local gate"
     gate_output=$(.substrate/gate.sh 2>&1)
