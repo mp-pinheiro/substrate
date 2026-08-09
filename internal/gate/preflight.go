@@ -68,6 +68,8 @@ func ParseFlags(args []string) (PreflightFlags, []string, error) {
 			f.UpdateBaseline = true
 			f.AcceptRegression = true
 			f.AcceptKeys = strings.TrimPrefix(a, "--accept-regression=")
+		case a == "--list-checks":
+			rest = append(rest, a)
 		case strings.HasPrefix(a, "--reason="):
 			f.AcceptReason = strings.TrimPrefix(a, "--reason=")
 		default:

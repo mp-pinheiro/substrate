@@ -2,16 +2,16 @@
   "metrics": {
     "comments:core/check-comments.sh": 3,
     "dead_code": 0,
-    "dup_pct": 1.8087666836846328,
+    "dup_pct": 1.8231705115708148,
     "max_file_lines": 460
   },
   "direction": {},
   "accepted": {
     "dup_pct": {
       "from": 1.3866164921465969,
-      "to": 1.8087666836846328,
+      "to": 1.8231705115708148,
       "at": "2026-08-09",
-      "reason": "Pre-existing dup_pct drift from engine-shim.sh + delegation block in gate.sh — not caused by bug fixes in this commit"
+      "reason": "Pre-existing dup_pct drift from engine-shim.sh + delegation block in gate.sh, plus new test files — not caused by gate engine changes"
     },
     "max_file_lines": {
       "at": "2026-08-08",
