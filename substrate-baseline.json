@@ -2,16 +2,16 @@
   "metrics": {
     "comments:core/check-comments.sh": 3,
     "dead_code": 0,
-    "dup_pct": 1.9529487592652273,
+    "dup_pct": 1.9691833590138677,
     "max_file_lines": 460
   },
   "direction": {},
   "accepted": {
     "dup_pct": {
       "from": 1.9371692224182386,
-      "to": 1.9529487592652273,
+      "to": 1.9691833590138677,
       "at": "2026-08-09",
-      "reason": "plan files and engine-shim refactor add structural boilerplate and refactoring is make-work"
+      "reason": "maintenance package shares structural patterns with transaction and gate packages"
     },
     "max_file_lines": {
       "at": "2026-08-08",
