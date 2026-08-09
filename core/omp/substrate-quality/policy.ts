@@ -26,7 +26,7 @@ const SUBSTRATE_POLICY = [
 function findGateRoot(cwd: string): string | null {
 	let dir = resolve(cwd);
 	for (;;) {
-		if (existsSync(join(dir, ".substrate", "gate.sh"))) return dir;
+		if (existsSync(join(dir, ".substrate", "VERSION"))) return dir;
 		const parent = dirname(dir);
 		if (parent === dir) return null;
 		dir = parent;
