@@ -1,6 +1,9 @@
 package comments
 
-import "strings"
+import (
+	"strings"
+	"unicode"
+)
 
 func isSpaceByte(b byte) bool {
 	switch b {
@@ -26,11 +29,9 @@ func hasNonSpace(s string) bool {
 	}
 	return false
 }
-
-func hasASCIIAlnum(s string) bool {
-	for i := range s {
-		c := s[i]
-		if (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') {
+func hasAlnum(s string) bool {
+	for _, r := range s {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
 			return true
 		}
 	}
