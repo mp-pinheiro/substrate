@@ -2,14 +2,14 @@
   "metrics": {
     "comments:core/check-comments.sh": 3,
     "dead_code": 0,
-    "dup_pct": 1.7993818074771857,
+    "dup_pct": 1.7894390163574487,
     "max_file_lines": 460
   },
   "direction": {},
   "accepted": {
     "dup_pct": {
       "from": 1.3866164921465969,
-      "to": 1.7993818074771857,
+      "to": 1.7894390163574487,
       "at": "2026-08-09",
       "reason": "New engine-shim.sh helper and delegation block in gate.sh add structurally similar code, slightly raising duplication"
     },
