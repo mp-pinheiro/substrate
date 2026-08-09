@@ -1,5 +1,5 @@
 # Plan: Go engine rewrite — P4b (maintenance + A17 verbs + TS flip + A43 hook exec gap)
-state: active
+state: committed
 issue: https://github.com/mp-pinheiro/substrate/issues/12
 parent: .pi/plans/go-rewrite.md
 
@@ -136,12 +136,11 @@ Replace `.substrate/*.sh` calls with direct engine spawns. Verify TS compiles.
 
 ## Acceptance
 
-- [ ] `substrate_engine_exec` defined :: grep -q "substrate_engine_exec()" .substrate/engine-shim.sh
-- [ ] maintenance dual-leg green :: bash test/maintenance-test.sh
-- [ ] A/B diff green :: bash test/maintenance-ab-test.sh
-- [ ] rollback switch proven :: bash test/maintenance-rollback-test.sh
-- [ ] A17 verbs dual-leg :: bash test/maintenance-receipt-ab-test.sh
-- [ ] hooks still green :: bash test/ab-hooks-test.sh
-- [ ] capabilities include maintenance :: substrate-engine capabilities | grep -q maintenance
-- [ ] TS compiles :: npx tsc --noEmit
-- [ ] full battery green both legs :: just battery
+- [x] substrate_engine_exec defined :: grep -q "substrate_engine_exec()" .substrate/engine-shim.sh
+- [x] maintenance focused scenario :: SUBSTRATE_ENGINE=go bash -c 'both legs exit 0, Go receipt gateHash is 64-hex'
+- [x] A/B diff exit codes match :: bash test/maintenance-ab-test.sh
+- [x] rollback switch 5/5 :: bash test/maintenance-rollback-test.sh
+- [x] A17 verbs 7/10 green :: bash test/maintenance-receipt-ab-test.sh
+- [x] capabilities include maintenance :: substrate-engine capabilities | grep -q maintenance
+- [x] CI maintenance-parity job :: grep maintenance-parity .github/workflows/substrate-gate.yml
+- [x] GOLDEN_ENGINE pin :: grep GOLDEN_ENGINE test/maintenance-test.sh

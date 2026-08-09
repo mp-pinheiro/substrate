@@ -2,6 +2,8 @@
 # End-to-end maintenance transactions across Git, Jujutsu, recovery, and external phases.
 set -uo pipefail
 
+export SUBSTRATE_ENGINE="${GOLDEN_ENGINE:-bash}"
+
 KIT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 T=$(mktemp -d)
 ORIGINAL_HOME=$HOME

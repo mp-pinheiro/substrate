@@ -38,7 +38,11 @@ func SyncExternalUnits(ctx context.Context, txReceiptPath, stablePath string, re
 }
 
 func syncRepoRuntime(ctx context.Context) error {
-	_, err := xshell.Run(ctx, filepath.Join(".substrate", "install-substrate.sh"))
+	script := filepath.Join(".substrate", "install-substrate.sh")
+	if _, err := os.Stat(script); os.IsNotExist(err) {
+		return nil
+	}
+	_, err := xshell.Run(ctx, script)
 	if err != nil {
 		return fmt.Errorf("sync_repo_runtime: %w", err)
 	}
