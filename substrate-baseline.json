@@ -1,14 +1,15 @@
 {
   "metrics": {
     "comments:core/check-comments.sh": 3,
-    "dup_pct": 2.2412520301195924,
+    "dead_code": 0,
+    "dup_pct": 2.2357723577235773,
     "max_file_lines": 460
   },
   "direction": {},
   "accepted": {
     "dup_pct": {
       "from": 1.9371692224182386,
-      "to": 2.2412520301195924,
+      "to": 2.2357723577235773,
       "at": "2026-08-09",
       "reason": "Golden baseline JSON and test fixture setup add necessary fixture data, not code duplication. The increase of 0.009pct comes from required test infrastructure the plan explicitly mandates."
     },
