@@ -88,7 +88,7 @@ Key oracles: full suite + selftest green on BOTH legs with zero test edits; sche
 Workflow: two porters (runner core / native checks) + enemy on the ratchet algebra; baseline vectors are the merge gate.
 
 ### P4 — transactions in Go
-**SPLIT (2026-08-09):** P4a (checkpoint + restructure) committed — see `.pi/plans/go-rewrite-p4a.md` (state: committed). P4b (maintenance + A17 maintenance-lib engine verbs + TS extension flip) is deferred. P4 stays `active` until P4b also lands.
+**SPLIT (2026-08-09):** P4a (checkpoint + restructure) committed — see `.pi/plans/go-rewrite-p4a.md` (state: committed, superseded by P4b). P4b (maintenance + A17 verbs + TS flip + A43 hook exec gap) active — see `.pi/plans/go-rewrite-p4b.md` (state: active). P4 stays `active` until P4b also lands.
 
 Goal: checkpoint/restructure/maintenance state machines ported; engine owns both sides of the lifecycle handshake; TS extension flips to engine spawn (resolution 11).
 - `internal/transaction` (checkpoint, candidate-tree mode, restructure), verbatim jj/git subprocess inventory preserved; `internal/maintenance` (state model, manifest, candidate, apply, exact-commit, receipts, predicates, resume, sync, selfupdate + `internal/store` with flat engine.json — amendment A10).

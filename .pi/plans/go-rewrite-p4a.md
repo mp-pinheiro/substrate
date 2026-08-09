@@ -1,7 +1,8 @@
 # Plan: Go engine rewrite — P4a (checkpoint + restructure in Go)
-state: committed
+state: superseded
 issue: https://github.com/mp-pinheiro/substrate/issues/12
 parent: .pi/plans/go-rewrite.md
+superseded-by: .pi/plans/go-rewrite-p4b.md
 
 Port the checkpoint and restructure transactions from bash to Go behind capability-probe delegation seams (same pattern as P3's gate delegation). The maintenance subsystem is deferred to P4b — it builds on the candidate-tree infrastructure established here. jj/git stay subprocesses; the P2 receipt authority and P1 ledger remain the Go-side state.
 
