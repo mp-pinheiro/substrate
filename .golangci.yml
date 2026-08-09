@@ -33,3 +33,4 @@ linters:
         linters:
           - forbidigo
           - errcheck
+          - staticcheck
