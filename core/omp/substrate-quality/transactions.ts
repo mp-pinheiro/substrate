@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { findGateRoot, runCommand } from "./policy";
@@ -85,6 +85,41 @@ function checkpointReceipt(output: string): CheckpointReceipt | null {
 	return null;
 }
 
+function resolveEngineBin(): string | null {
+	const fromEnv = process.env.SUBSTRATE_ENGINE_BIN;
+	if (fromEnv && existsSync(fromEnv)) return fromEnv;
+	const pathDirs = (process.env.PATH || "").split(":");
+	for (const dir of pathDirs) {
+		const candidate = join(dir, "substrate-engine");
+		if (existsSync(candidate)) return candidate;
+	}
+	return null;
+}
+
+function resolveCheckpointCmd(root: string): string[] {
+	if (process.env.SUBSTRATE_ENGINE !== "bash") {
+		const bin = resolveEngineBin();
+		if (bin) return [bin, "checkpoint"];
+	}
+	return [join(root, ".substrate", "checkpoint.sh")];
+}
+
+function resolveRestructureCmd(root: string): string[] {
+	if (process.env.SUBSTRATE_ENGINE !== "bash") {
+		const bin = resolveEngineBin();
+		if (bin) return [bin, "restructure"];
+	}
+	return [join(root, ".substrate", "restructure.sh")];
+}
+
+function resolveMaintenanceCmd(root: string): string[] {
+	if (process.env.SUBSTRATE_ENGINE !== "bash") {
+		const bin = resolveEngineBin();
+		if (bin) return [bin, "maintenance"];
+	}
+	return [join(root, ".substrate", "maintenance-lib.sh")];
+}
+
 async function spawnTransactionScript(
 	root: string,
 	command: string[],
@@ -94,7 +129,6 @@ async function spawnTransactionScript(
 	const progress = io.progress;
 	const recent: string[] = [];
 	let emittedAt = 0;
-	// one update per line would put a red gate's output back on the render loop
 	const onLine = progress
 		? (line: string) => {
 				recent.push(line);
@@ -121,7 +155,7 @@ async function runCheckpointTransaction(
 	io: TransactionIO = {},
 ): Promise<{ receipt: CheckpointReceipt | null; ok: boolean; summary: string }> {
 	const command = [
-		join(root, ".substrate", "checkpoint.sh"),
+		...resolveCheckpointCmd(root),
 		"--message",
 		message,
 		...paths.flatMap((path) => ["--path", path]),
@@ -145,7 +179,7 @@ async function runRestructureTransaction(
 	args: string[],
 	io: TransactionIO = {},
 ): Promise<{ receipt: Record<string, unknown> | null; ok: boolean; summary: string }> {
-	const command = [join(root, ".substrate", "restructure.sh"), ...args, "--json"];
+	const command = [...resolveRestructureCmd(root), ...args, "--json"];
 	const result = await spawnTransactionScript(root, command, 25, io);
 	if (result.exitCode !== 0) {
 		return {
@@ -181,7 +215,7 @@ async function maintenanceCheckpointReceipt(
 ): Promise<CheckpointReceipt | null> {
 	if (!before.revision || !after.revision || before.revision === after.revision) return null;
 	const validator = await commandOutput(root, [
-		join(root, ".substrate", "maintenance-lib.sh"),
+		...resolveMaintenanceCmd(root),
 		"repository-receipt-matches",
 	]);
 	if (validator.error) return null;
