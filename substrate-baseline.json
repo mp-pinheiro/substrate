@@ -2,14 +2,14 @@
   "metrics": {
     "comments:core/check-comments.sh": 3,
     "dead_code": 0,
-    "dup_pct": 1.9904434367105945,
+    "dup_pct": 1.9868153233891301,
     "max_file_lines": 460
   },
   "direction": {},
   "accepted": {
     "dup_pct": {
       "from": 1.9371692224182386,
-      "to": 1.9904434367105945,
+      "to": 1.9868153233891301,
       "at": "2026-08-09",
       "reason": "engine.go adds structural boilerplate matching other transaction state machines"
     },
