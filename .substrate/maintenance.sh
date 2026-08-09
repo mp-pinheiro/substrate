@@ -12,6 +12,7 @@ source "$MAINTENANCE_LIB_DIR/maintenance-transaction.sh"
 
 
 
+
 maintenance_resume_incomplete() {
     local stable="$1" receipt candidate manifest expected current from status path preimage desired
     local stream units commit to id transaction_dir
@@ -76,6 +77,20 @@ maintenance_resume_incomplete() {
 
 maintenance_run() {
     maintenance_parse_args "$@" || return 2
+    source "${SUBSTRATE_DIR:-$MAINTENANCE_LIB_DIR/..}/engine-shim.sh"
+    local engine_mode="${SUBSTRATE_ENGINE:-auto}"
+    if [ "$engine_mode" = "bash" ]; then
+        :
+    elif substrate_engine_supports maintenance; then
+        if [ "$engine_mode" = "go" ] || [ "$engine_mode" = "auto" ]; then
+            substrate-engine maintenance "$@"
+            local rc=$?
+            [ "$rc" -eq 2 ] && die_infra "engine maintenance returned the reserved unknown-verb code after a successful capability probe"
+            return "$rc"
+        fi
+    elif [ "$engine_mode" = "go" ]; then
+        die_infra "SUBSTRATE_ENGINE=go but no engine binary found or its capabilities probe failed"
+    fi
     guard_vendor_downgrade "$MAINTENANCE_FORCE"
     local metadata store lock stable base manifest dirty_paths dirty_inside dirty_outside dirty_fingerprint
     local overlap tx id candidate archive render_output gate_output gate_hash changed changed_lines units units_json
