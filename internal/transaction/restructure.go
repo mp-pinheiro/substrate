@@ -111,32 +111,32 @@ type restructureOpts struct {
 func parseRestructureArgs(args []string) (restructureOpts, int) {
 	var opts restructureOpts
 	for i := 0; i < len(args); i++ {
-		switch {
-		case args[i] == "--op":
+		switch args[i] {
+		case "--op":
 			i++; if i >= len(args) { rsUsage(); return opts, ExitPreflight }
 			opts.op = args[i]
-		case args[i] == "--revision":
+		case "--revision":
 			i++; if i >= len(args) { rsUsage(); return opts, ExitPreflight }
 			opts.revision = args[i]
-		case args[i] == "--into":
+		case "--into":
 			i++; if i >= len(args) { rsUsage(); return opts, ExitPreflight }
 			opts.into = args[i]
-		case args[i] == "--message":
+		case "--message":
 			i++; if i >= len(args) { rsUsage(); return opts, ExitPreflight }
 			opts.message = args[i]
-		case args[i] == "--message2":
+		case "--message2":
 			i++; if i >= len(args) { rsUsage(); return opts, ExitPreflight }
 			opts.message2 = args[i]
-		case args[i] == "--path":
+		case "--path":
 			i++; if i >= len(args) { rsUsage(); return opts, ExitPreflight }
 			opts.paths = append(opts.paths, args[i])
-		case args[i] == "--session":
+		case "--session":
 			i++; if i >= len(args) { rsUsage(); return opts, ExitPreflight }
 			opts.session = args[i]
-		case args[i] == "--allow-change":
+		case "--allow-change":
 			i++; if i >= len(args) { rsUsage(); return opts, ExitPreflight }
 			opts.allowChanges = append(opts.allowChanges, args[i])
-		case args[i] == "--json":
+		case "--json":
 			opts.json = true
 		default:
 			rsUsage(); return opts, ExitPreflight
