@@ -103,6 +103,22 @@ jobs:
         run: SUBSTRATE_ENGINE=bash .substrate/gate.sh
       - name: Run Go gate
         run: ./build/substrate-engine gate
+
+  transaction-parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - *checkout_shallow
+      - name: Install Jujutsu
+        run: .substrate/install-jj.sh
+      - name: Install Go toolchain
+        run: test/ci-toolchain.sh go
+      - name: Build engine
+        run: go build -trimpath -buildvcs=false -o build/substrate-engine ./cmd/substrate-engine
+      - name: Checkpoint rollback switch
+        run: bash test/transaction-rollback-test.sh
+      - name: Restructure bash leg
+        run: SUBSTRATE_ENGINE=bash bash test/restructure-test.sh
   audit:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
