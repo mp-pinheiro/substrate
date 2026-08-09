@@ -174,9 +174,12 @@ func RunChecks(ctx *RunContext, specs []checkSpec, claimsData []byte) error {
 				nativeMs:  0,
 				start:     time.Now(),
 			})
+			var buf strings.Builder
 			for _, m := range metrics {
-				line := fmt.Sprintf(`{"name":"%s","value":%s,"dir":"%s"}`+"\n", m.Name, string(m.RawValue), m.Dir)
-				os.WriteFile(filepath.Join(runDir, spec.Name+".metrics"), []byte(line), 0644)
+				fmt.Fprintf(&buf, `{"name":"%s","value":%s,"dir":"%s"}`+"\n", m.Name, string(m.RawValue), m.Dir)
+			}
+			if buf.Len() > 0 {
+				os.WriteFile(filepath.Join(runDir, spec.Name+".metrics"), []byte(buf.String()), 0644)
 			}
 
 			if len(jobs)-len(results) >= max {

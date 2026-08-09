@@ -223,12 +223,16 @@ func scopesActive(configPath string) bool {
 		return false
 	}
 	var cfg struct {
-		Scopes []interface{} `json:"scopes"`
+		Scopes map[string]interface{} `json:"scopes"`
 	}
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return false
 	}
 	return len(cfg.Scopes) > 0
+}
+
+type scopeEntry struct {
+	Profiles []string `json:"profiles"`
 }
 
 func scopeAllows(path, profile, repoRoot, configPath string) bool {
@@ -237,24 +241,23 @@ func scopeAllows(path, profile, repoRoot, configPath string) bool {
 		return true
 	}
 	var cfg struct {
-		Scopes map[string]interface{} `json:"scopes"`
+		Scopes map[string]scopeEntry `json:"scopes"`
 	}
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return true
 	}
-	scopes, _ := cfg.Scopes[profile].(map[string]interface{})
-	if scopes == nil {
-		return true
-	}
-	paths, _ := scopes["paths"].([]interface{})
-	for _, p := range paths {
-		pattern, _ := p.(string)
-		match, _ := filepath.Match(pattern, path)
-		if match {
-			return true
+	restricted := false
+	for scopePath, entry := range cfg.Scopes {
+		if strings.HasPrefix(path, scopePath) {
+			restricted = true
+			for _, p := range entry.Profiles {
+				if p == profile {
+					return true
+				}
+			}
 		}
 	}
-	return false
+	return !restricted
 }
 
 func render1F(path string) string {

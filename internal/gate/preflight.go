@@ -71,7 +71,8 @@ func ParseFlags(args []string) (PreflightFlags, []string, error) {
 		case strings.HasPrefix(a, "--reason="):
 			f.AcceptReason = strings.TrimPrefix(a, "--reason=")
 		default:
-			rest = append(rest, a)
+			fmt.Fprintf(os.Stderr, "usage: %s [--update-baseline|--tighten|--accept-regression[=key1,key2]] [--reason=<text>]\n", os.Args[0])
+			return f, nil, fmt.Errorf("unknown flag: %s", a)
 		}
 	}
 	return f, rest, nil
