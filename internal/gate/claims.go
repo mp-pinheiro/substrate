@@ -204,17 +204,24 @@ func shebangInterp(path string) string {
 		return ""
 	}
 	defer f.Close()
-	var buf [128]byte
-	n, _ := f.Read(buf[:])
-	line := string(buf[:n])
+	line, err := bufio.NewReader(f).ReadString('\n')
+	if err != nil && line == "" {
+		return ""
+	}
+	line = strings.TrimSpace(line)
 	if !strings.HasPrefix(line, "#!") {
 		return ""
 	}
-	parts := strings.Fields(line[2:])
+	interp := strings.TrimPrefix(line, "#!")
+	parts := strings.Fields(strings.TrimSpace(interp))
 	if len(parts) == 0 {
 		return ""
 	}
-	return filepath.Base(parts[0])
+	name := filepath.Base(parts[0])
+	if name == "env" && len(parts) > 1 {
+		name = filepath.Base(parts[1])
+	}
+	return name
 }
 
 func scopesActive(configPath string) bool {
