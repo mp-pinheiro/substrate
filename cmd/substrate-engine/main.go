@@ -58,8 +58,14 @@ func run(args []string) int {
 			return 2
 		}
 		return rc
+	case "restructure":
+		rc := transaction.RunRestructure(context.Background(), args[1:])
+		if rc == transaction.ExitPreflight {
+			return 2
+		}
+		return rc
 	case "capabilities":
-		caps := []string{"capabilities", "checkpoint", "gate", "gitleaks-deep-key", "hook", "pin", "receipt", "version"}
+		caps := []string{"capabilities", "checkpoint", "gate", "gitleaks-deep-key", "hook", "pin", "receipt", "restructure", "version"}
 		sort.Strings(caps)
 		for _, c := range caps {
 			if _, err := fmt.Fprintf(os.Stdout, "%s\n", c); err != nil {

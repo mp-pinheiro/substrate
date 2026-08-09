@@ -23,6 +23,7 @@ usage() {
     printf 'usage: %s --message "type(scope): subject" [--session <id> | --path <repo-relative-path> ...] [--accept-regression=<metric>[,<metric>] --reason <text>] [--json]\n' "$0" >&2
     exit 2
 }
+SAVED_ARGS=("$@")
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --message) [ "$#" -ge 2 ] || usage; message="$2"; shift 2 ;;
@@ -56,8 +57,7 @@ ENGINE_MODE="${SUBSTRATE_ENGINE:-auto}"
 if [ "$ENGINE_MODE" = "bash" ]; then
     :
 elif substrate_engine_supports checkpoint; then
-    if [ "$ENGINE_MODE" = "go" ] || [ "$ENGINE_MODE" = "auto" ]; then
-        ${SUBSTRATE_ENGINE_BIN:-substrate-engine} checkpoint "$@"
+        ${SUBSTRATE_ENGINE_BIN:-substrate-engine} checkpoint "${SAVED_ARGS[@]}"
         rc=$?
         [ "$rc" -eq 2 ] && { printf 'engine checkpoint returned unknown-verb after capability probe\n' >&2; exit 2; }
         exit "$rc"
