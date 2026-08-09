@@ -144,6 +144,10 @@ func ParseArgs(args []string) (*Context, error) {
 	}
 
 	if ctx.ProfileCSV != "" {
+		kitRoot, err := resolveKitRoot()
+		if err != nil {
+			return nil, fmt.Errorf("maintenance: resolve kit root: %w", err)
+		}
 		ctx.Profiles = []string{"base"}
 		seen := map[string]bool{"base": true}
 		for _, p := range strings.Split(ctx.ProfileCSV, ",") {
@@ -154,7 +158,7 @@ func ParseArgs(args []string) (*Context, error) {
 			if seen[p] {
 				continue
 			}
-			if _, err := profileDir(p, ""); err != nil {
+			if _, err := profileDir(p, kitRoot); err != nil {
 				return nil, fmt.Errorf("unknown profile: %s", p)
 			}
 			ctx.Profiles = append(ctx.Profiles, p)

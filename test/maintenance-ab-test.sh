@@ -9,11 +9,15 @@ KIT_ROOT="$(cd "$TEST_DIR/.." && pwd)"
 export SUBSTRATE_VENDOR_FROM_WORKTREE=1
 export LC_ALL=C
 
-
+source "$LIB_DIR/engine-fixture.sh"
 source "$LIB_DIR/maintenance-fixture.sh"
+engine_fixture_home
+_engine_fixture_sdk_root "$T"
+export XDG_CONFIG_HOME="$T/xdg-config"
+mkdir -p "$XDG_CONFIG_HOME"
 TMPDIR="${TMPDIR:-/tmp}"
 WORK=$(mktemp -d "$TMPDIR/maintenance-ab.XXXXXX")
-trap 'rm -rf "$WORK"' EXIT
+trap 'rm -rf "$WORK" "$T"' EXIT
 
 pass=0
 fail=0

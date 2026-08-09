@@ -8,11 +8,15 @@ TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LIB_DIR="$TEST_DIR/lib"
 KIT_ROOT="$(cd "$TEST_DIR/.." && pwd)"
 
+source "$LIB_DIR/engine-fixture.sh"
 source "$LIB_DIR/maintenance-fixture.sh"
-
+engine_fixture_home
+_engine_fixture_sdk_root "$T"
+export XDG_CONFIG_HOME="$T/xdg-config"
+mkdir -p "$XDG_CONFIG_HOME"
 TMPDIR="${TMPDIR:-/tmp}"
 WORK=$(mktemp -d "$TMPDIR/maintenance-receipt-ab.XXXXXX")
-trap 'rm -rf "$WORK"' EXIT
+trap 'rm -rf "$WORK" "$T"' EXIT
 
 pass=0
 fail=0

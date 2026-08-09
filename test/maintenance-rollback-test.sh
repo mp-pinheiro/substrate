@@ -21,6 +21,9 @@ T=$(mktemp -d) || exit 9
 trap 'rm -rf "$T"' EXIT
 export HOME="$T/home"
 mkdir -p "$HOME" || exit 9
+_engine_fixture_sdk_root "$T"
+export XDG_CONFIG_HOME="$T/xdg-config"
+mkdir -p "$XDG_CONFIG_HOME"
 
 TRIPWIRE="$T/bin/substrate-engine"
 MARKER="$T/tripwire.log"

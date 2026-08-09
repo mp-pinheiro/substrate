@@ -180,7 +180,13 @@ func RenderCandidate(ctx context.Context, candidateDir, renderHome, output strin
 		args = append(args, worktreeFlag...)
 	}
 
-	res, runErr := xshell.RunIn(ctx, candidateDir, substrateBin, args...)
+	renderEnv := []string{
+		"HOME=" + renderHome,
+		"SUBSTRATE_NO_USER_HARNESS=1",
+		"SUBSTRATE_MAINTENANCE_RENDER=1",
+		"SUBSTRATE_RENDER_VCS=" + c.VCS,
+	}
+	res, runErr := xshell.RunInEnv(ctx, candidateDir, renderEnv, substrateBin, args...)
 	combined := append(res.Stdout, res.Stderr...)
 	if writeErr := os.WriteFile(output, combined, 0644); writeErr != nil {
 		return fmt.Errorf("render candidate: write output: %w", writeErr)
@@ -206,6 +212,19 @@ func GateCandidate(ctx context.Context, candidateDir, output, callerHome string,
 	gateScript := filepath.Join(candidateDir, ".substrate", "gate.sh")
 	baselinePath := filepath.Join(candidateDir, "substrate-baseline.json")
 
+	gateEnv := []string{
+		"HOME=" + callerHome,
+		"SUBSTRATE_ENGINE=bash",
+	}
+	runGate := func(args ...string) ([]byte, error) {
+		res, err := xshell.RunInEnv(ctx, candidateDir, gateEnv, gateScript, args...)
+		combined := append(res.Stdout, res.Stderr...)
+		if err != nil || res.Code != 0 {
+			return combined, fmt.Errorf("gate failed (code %d): %w (stderr: %s)", res.Code, err, res.Stderr)
+		}
+		return combined, nil
+	}
+
 	var combined []byte
 	_, baselineErr := os.Stat(baselinePath)
 	noBaseline := os.IsNotExist(baselineErr)
@@ -213,11 +232,11 @@ func GateCandidate(ctx context.Context, candidateDir, output, callerHome string,
 	if noBaseline {
 		if c.AcceptBaseline {
 			args := append([]string{"--update-baseline"}, acceptFlags...)
-			res, runErr := xshell.RunIn(ctx, candidateDir, gateScript, args...)
-			combined = append(res.Stdout, res.Stderr...)
-			if runErr != nil || res.Code != 0 {
+			out, err := runGate(args...)
+			combined = append(combined, out...)
+			if err != nil {
 				_ = os.WriteFile(output, combined, 0644)
-				return fmt.Errorf("gate candidate: update baseline failed (code %d): %w (stderr: %s)", res.Code, runErr, res.Stderr)
+				return fmt.Errorf("gate candidate: update baseline: %w", err)
 			}
 		} else if c.Checkpoint {
 			fmt.Fprintf(os.Stderr, "maintenance blocked: initial debt requires --accept-baseline\n")
@@ -229,36 +248,32 @@ func GateCandidate(ctx context.Context, candidateDir, output, callerHome string,
 		_, baseErr := os.Stat(baselinePath)
 		if baseErr == nil {
 			tightenArgs := append([]string{"--tighten"}, acceptFlags...)
-			tightenRes, tightenErr := xshell.RunIn(ctx, candidateDir, gateScript, tightenArgs...)
-			combined = append(tightenRes.Stdout, tightenRes.Stderr...)
-			if tightenErr != nil || tightenRes.Code != 0 {
+			out, err := runGate(tightenArgs...)
+			combined = append(combined, out...)
+			if err != nil {
 				_ = os.WriteFile(output, combined, 0644)
-				return fmt.Errorf("gate candidate: tighten failed (code %d): %w (stderr: %s)", tightenRes.Code, tightenErr, tightenRes.Stderr)
+				return fmt.Errorf("gate candidate: tighten: %w", err)
 			}
 
-			gateRes, gateErr := xshell.RunIn(ctx, candidateDir, gateScript)
-			combined = append(combined, gateRes.Stdout...)
-			combined = append(combined, gateRes.Stderr...)
-			if gateErr != nil || gateRes.Code != 0 {
+			out, err = runGate()
+			combined = append(combined, out...)
+			if err != nil {
 				_ = os.WriteFile(output, combined, 0644)
-				return fmt.Errorf("gate candidate: gate failed (code %d): %w (stderr: %s)", gateRes.Code, gateErr, gateRes.Stderr)
+				return fmt.Errorf("gate candidate: gate: %w", err)
 			}
 		}
 	} else if !noBaseline || c.AcceptBaseline {
-		gateArgs := acceptFlags
-		gateRes, gateErr := xshell.RunIn(ctx, candidateDir, gateScript, gateArgs...)
-		combined = append(combined, gateRes.Stdout...)
-		combined = append(combined, gateRes.Stderr...)
-		if gateErr != nil || gateRes.Code != 0 {
+		out, err := runGate(acceptFlags...)
+		combined = append(combined, out...)
+		if err != nil {
 			_ = os.WriteFile(output, combined, 0644)
-			return fmt.Errorf("gate candidate: gate failed (code %d): %w (stderr: %s)", gateRes.Code, gateErr, gateRes.Stderr)
+			return fmt.Errorf("gate candidate: gate: %w", err)
 		}
 	}
 
 	if writeErr := os.WriteFile(output, combined, 0644); writeErr != nil {
 		return fmt.Errorf("gate candidate: write output: %w", writeErr)
 	}
-
 	return nil
 }
 

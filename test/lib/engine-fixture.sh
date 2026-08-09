@@ -11,17 +11,22 @@ engine_fixture_home() {
     mkdir -p "$HOME"
 }
 
-engine_fixture_sdk() {
+_engine_fixture_sdk_root() {
+    local root="$1"
     local sdk_dir="$HOME/.bun/install/global/node_modules/@oh-my-pi/pi-coding-agent/dist/types"
-    mkdir -p "$sdk_dir" "$T/fake-bin"
+    mkdir -p "$sdk_dir" "$root/fake-bin"
     export BUN_INSTALL="$HOME/.bun"
     printf 'sdk-v1\n' > "$sdk_dir/index.d.ts"
-    cat > "$T/fake-bin/actionlint" <<'SH'
+    cat > "$root/fake-bin/actionlint" <<'SH'
 #!/usr/bin/env bash
 exit 0
 SH
-    chmod +x "$T/fake-bin/actionlint"
-    export PATH="$T/fake-bin:$PATH"
+    chmod +x "$root/fake-bin/actionlint"
+    export PATH="$root/fake-bin:$PATH"
+}
+
+engine_fixture_sdk() {
+    _engine_fixture_sdk_root "$T"
 }
 
 engine_build() {

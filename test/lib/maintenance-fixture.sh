@@ -29,9 +29,11 @@ mf_setup_git() {
     printf '#!/usr/bin/env bash\nprintf "user\\n"\n' > user.sh
     chmod +x user.sh
     "$KIT_ROOT/bin/substrate" init --from-worktree --profile shell --vcs git >/dev/null 2>&1 || return 1
-    .substrate/gate.sh --update-baseline >/dev/null 2>&1 || return 1
     git add -A
     git commit -qm 'chore: initialize'
+    cp "$KIT_ROOT/test/golden/maintenance-baseline.json" substrate-baseline.json
+    git add substrate-baseline.json
+    git commit -qm 'chore: establish baseline'
     [ -z "$(git status --porcelain=v1 --untracked-files=all)" ] || return 1
 }
 
@@ -43,14 +45,20 @@ mf_setup_jj() {
     jj config set --user user.name substrate >/dev/null 2>&1
     jj config set --user user.email substrate@localhost >/dev/null 2>&1
     git init -q --initial-branch=main
+    git config user.name substrate
+    git config user.email substrate@localhost
     jj git init --colocate . >/dev/null 2>&1 || return 1
     printf '#!/usr/bin/env bash\nprintf "hello\\n"\n' > owned.sh
     chmod +x owned.sh
     printf '#!/usr/bin/env bash\nprintf "user\\n"\n' > user.sh
     chmod +x user.sh
     "$KIT_ROOT/bin/substrate" init --from-worktree --profile shell --vcs jj >/dev/null 2>&1 || return 1
-    .substrate/gate.sh --update-baseline >/dev/null 2>&1 || return 1
-    jj commit -m 'chore: initialize' >/dev/null 2>&1 || return 1
+    git add -A
+    git commit -qm 'chore: initialize'
+    cp "$KIT_ROOT/test/golden/maintenance-baseline.json" substrate-baseline.json
+    git add substrate-baseline.json
+    git commit -qm 'chore: establish baseline'
+    [ -z "$(git status --porcelain=v1 --untracked-files=all)" ] || return 1
 }
 
 # ── Masking ──────────────────────────────────────────────────

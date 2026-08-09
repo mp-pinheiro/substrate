@@ -2,6 +2,8 @@ package maintenance
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -21,11 +23,11 @@ func RunMaintenance(ctx context.Context, args []string) int {
 		return ExitPreflight
 	}
 
-	if err := os.Chdir(c.RepoRoot); err != nil {
-		logx.Err().Line("maintenance: chdir: %v", err)
+	cwd, err := os.Getwd()
+	if err != nil {
+		logx.Err().Line("maintenance: getwd: %v", err)
 		return ExitPreflight
 	}
-	cwd, _ := os.Getwd()
 	c.RepoRoot = cwd
 
 	metaDir, err := MetadataDir()
@@ -185,6 +187,14 @@ func RunMaintenance(ctx context.Context, args []string) int {
 		return ExitPreflight
 	}
 
+	gateData, err := os.ReadFile(gateOutput)
+	if err != nil {
+		logx.Err().Line("maintenance: read gate output: %v", err)
+		return ExitPreflight
+	}
+	gateSum := sha256.Sum256(gateData)
+	gateHash := hex.EncodeToString(gateSum[:])
+
 	changedLines, _, err := CandidateChanges(ctx, c.CandidateDir, manifest)
 	if err != nil {
 		logx.Err().Line("maintenance: candidate changes: %v", err)
@@ -232,7 +242,7 @@ func RunMaintenance(ctx context.Context, args []string) int {
 			status = StatusCommitted
 			commit = base
 		}
-		receiptData, err := ReceiptJSON(c, id, status, base, base, manifest, changedLines, string(unitsJSON), dirtyFingerprint, "", "", commit)
+		receiptData, err := ReceiptJSON(c, id, status, base, base, manifest, changedLines, string(unitsJSON), dirtyFingerprint, gateHash, "", commit)
 		if err != nil {
 			logx.Err().Line("maintenance: receipt json: %v", err)
 			return ExitPreflight
@@ -253,7 +263,7 @@ func RunMaintenance(ctx context.Context, args []string) int {
 		return externalRC
 	}
 
-	receiptData, err := ReceiptJSON(c, id, StatusPrepared, base, "", manifest, changedLines, string(unitsJSON), dirtyFingerprint, "", c.CandidateDir, "")
+	receiptData, err := ReceiptJSON(c, id, StatusPrepared, base, "", manifest, changedLines, string(unitsJSON), dirtyFingerprint, gateHash, c.CandidateDir, "")
 	if err != nil {
 		logx.Err().Line("maintenance: receipt json: %v", err)
 		return ExitPreflight

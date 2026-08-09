@@ -16,9 +16,10 @@ type Result struct {
 }
 
 type runOpts struct {
-	dir     string
-	stdin   []byte
-	localeC bool
+	dir      string
+	stdin    []byte
+	localeC  bool
+	extraEnv []string
 }
 
 func run(ctx context.Context, name string, args []string, opts runOpts) (Result, error) {
@@ -27,9 +28,16 @@ func run(ctx context.Context, name string, args []string, opts runOpts) (Result,
 	if opts.stdin != nil {
 		cmd.Stdin = bytes.NewReader(opts.stdin)
 	}
-	if opts.localeC {
-		cmd.Env = append(os.Environ(), "LC_ALL=C")
+	if opts.localeC || len(opts.extraEnv) > 0 {
+		cmd.Env = os.Environ()
+		if len(opts.extraEnv) > 0 {
+			cmd.Env = append(cmd.Env, opts.extraEnv...)
+		}
+		if opts.localeC {
+			cmd.Env = append(cmd.Env, "LC_ALL=C")
+		}
 	}
+
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -76,6 +84,10 @@ func RunInC(ctx context.Context, dir string, name string, args ...string) (Resul
 
 func RunStdinC(ctx context.Context, dir string, stdin []byte, name string, args ...string) (Result, error) {
 	return run(ctx, name, args, runOpts{dir: dir, stdin: stdin, localeC: true})
+}
+
+func RunInEnv(ctx context.Context, dir string, env []string, name string, args ...string) (Result, error) {
+	return run(ctx, name, args, runOpts{dir: dir, extraEnv: env})
 }
 
 func Have(bin string) bool {

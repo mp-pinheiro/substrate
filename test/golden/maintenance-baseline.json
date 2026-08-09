@@ -1,0 +1,16 @@
+{
+  "metrics": {
+    "comments:owned.sh": 999999,
+    "comments:user.sh": 999999,
+    "comments:checks.d/84-push.sh": 999999,
+    "comments:checks.d/86-concurrent.sh": 999999,
+    "comments:checks.d/86-stale.sh": 999999,
+    "comments:checks.d/87-recovery.sh": 999999,
+    "comments:checks.d/88-commit-recovery.sh": 999999,
+    "comments:checks.d/89-applied.sh": 999999,
+    "dead_code": 999999,
+    "dup_pct": 999999,
+    "max_file_lines": 999999
+  },
+  "direction": {}
+}
