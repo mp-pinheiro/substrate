@@ -130,6 +130,7 @@ func RunChecks(ctx *RunContext, specs []checkSpec, claimsData []byte) error {
 		"BASELINE=" + ctx.Baseline,
 		"INVENTORY=" + ctx.Inventory,
 		"CLAIMS=" + ctx.Claims,
+		"LC_ALL=C",
 	}
 
 	max := maxJobs()
@@ -182,7 +183,7 @@ func RunChecks(ctx *RunContext, specs []checkSpec, claimsData []byte) error {
 			}
 
 			if len(jobs)-len(results) >= max {
-				reportJob(jobs, &results, &failures)
+				reportJob(jobs, &results, &failures, len(specs))
 			}
 			continue
 		}
@@ -215,7 +216,7 @@ func RunChecks(ctx *RunContext, specs []checkSpec, claimsData []byte) error {
 		})
 
 		if len(jobs)-len(results) >= max {
-			reportJob(jobs, &results, &failures)
+			reportJob(jobs, &results, &failures, len(specs))
 		}
 	}
 
@@ -224,7 +225,7 @@ func RunChecks(ctx *RunContext, specs []checkSpec, claimsData []byte) error {
 	}
 
 	for len(results) < len(jobs) {
-		reportJob(jobs, &results, &failures)
+		reportJob(jobs, &results, &failures, len(specs))
 	}
 
 	ctx.Results = results
@@ -232,13 +233,13 @@ func RunChecks(ctx *RunContext, specs []checkSpec, claimsData []byte) error {
 	return nil
 }
 
-func reportJob(jobs []job, results *[]CheckResult, failures *int) {
+func reportJob(jobs []job, results *[]CheckResult, failures *int, total int) {
 	j := jobs[len(*results)]
 	if j.native {
 		if j.nativeRC == 0 {
-			fmt.Printf("[ok] %s (0ms)\n", j.name)
+			fmt.Printf("[ok] %s (0ms) [%d/%d]\n", j.name, len(*results)+1, total)
 		} else {
-			fmt.Printf("[!] FAIL %s (rc=%d)\n", j.name, j.nativeRC)
+			fmt.Printf("[!] FAIL %s (rc=%d) [%d/%d]\n", j.name, j.nativeRC, len(*results)+1, total)
 			*failures++
 		}
 		*results = append(*results, CheckResult{
@@ -261,9 +262,9 @@ func reportJob(jobs []job, results *[]CheckResult, failures *int) {
 		fmt.Print(outStr)
 	}
 	if rc == 0 {
-		fmt.Printf("[ok] %s (%s)\n", j.name, took)
+		fmt.Printf("[ok] %s (%s) [%d/%d]\n", j.name, took, len(*results)+1, total)
 	} else {
-		fmt.Printf("[!] FAIL %s (%s)\n", j.name, took)
+		fmt.Printf("[!] FAIL %s (%s) [%d/%d]\n", j.name, took, len(*results)+1, total)
 		*failures++
 	}
 	*results = append(*results, CheckResult{
