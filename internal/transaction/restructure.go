@@ -291,7 +291,7 @@ func isAllowedRestructure(change string, allowed []string) bool {
 func childrenChanges(ctx context.Context, repo *vcs.Repo, change string) ([]string, error) {
 	res, err := xshell.RunInC(ctx, repo.Root, "jj", "log", "-r", "children("+change+")", "--no-graph", "-T", "change_id ++ \"\\n\"")
 	if err != nil || res.Code != 0 {
-		return nil, err
+		return nil, fmt.Errorf("restructure: children: %w", err)
 	}
 	return splitNonEmpty(string(res.Stdout)), nil
 }
@@ -323,7 +323,7 @@ func jjOpID(ctx context.Context, repo *vcs.Repo) string {
 func jjHasConflicts(ctx context.Context, repo *vcs.Repo) (bool, error) {
 	res, err := xshell.RunIn(ctx, repo.Root, "jj", "log", "-r", "conflicts()", "--no-graph", "-T", "change_id ++ \"\\n\"")
 	if err != nil || res.Code != 0 {
-		return true, err
+		return true, fmt.Errorf("restructure: conflicts: %w", err)
 	}
 	return strings.TrimSpace(string(res.Stdout)) != "", nil
 }
@@ -331,7 +331,7 @@ func jjHasConflicts(ctx context.Context, repo *vcs.Repo) (bool, error) {
 func jjDiffRange(ctx context.Context, repo *vcs.Repo, from, to string) (string, error) {
 	res, err := xshell.RunIn(ctx, repo.Root, "jj", "diff", "--from", from, "--to", to, "--name-only")
 	if err != nil || res.Code != 0 {
-		return "", err
+		return "", fmt.Errorf("restructure: diff range: %w", err)
 	}
 	return strings.TrimSpace(string(res.Stdout)), nil
 }
@@ -386,11 +386,11 @@ func updateSessionAfterRestructure(stateDir string, repo *vcs.Repo, session, new
 	statePath := filepath.Join(stateDir, session+".json")
 	data, err := os.ReadFile(statePath)
 	if err != nil {
-		return err
+		return fmt.Errorf("restructure: read state: %w", err)
 	}
 	var state map[string]interface{}
 	if err := json.Unmarshal(data, &state); err != nil {
-		return err
+		return fmt.Errorf("restructure: unmarshal state: %w", err)
 	}
 	state["completedCommit"] = newRevision
 	if observed, ok := state["observed"].(map[string]interface{}); ok {
@@ -418,7 +418,10 @@ func updateSessionAfterRestructure(stateDir string, repo *vcs.Repo, session, new
 	state["sessionChanges"] = merged
 	newData, _ := json.Marshal(state)
 	newData = append(newData, '\n')
-	return xshell.WriteFileAtomicPreservingMode(statePath, newData, 0600)
+	if err := xshell.WriteFileAtomicPreservingMode(statePath, newData, 0600); err != nil {
+		return fmt.Errorf("restructure: write state: %w", err)
+	}
+	return nil
 }
 
 func readReceipt(metadataDir string) string {
