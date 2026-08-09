@@ -77,7 +77,7 @@ maintenance_resume_incomplete() {
 
 maintenance_run() {
     maintenance_parse_args "$@" || return 2
-    source "${SUBSTRATE_DIR:-$MAINTENANCE_LIB_DIR/..}/engine-shim.sh"
+    source "${SUBSTRATE_DIR:-$KIT_ROOT/core}/engine-shim.sh"
     local engine_mode="${SUBSTRATE_ENGINE:-auto}"
     if [ "$engine_mode" = "bash" ]; then
         :
