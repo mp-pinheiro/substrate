@@ -175,19 +175,25 @@ func (n Number) Float64() float64 {
 	}
 	return val
 }
-
 func (n Number) MarshalJSON() ([]byte, error) {
 	if n.IsNull {
 		return []byte("null"), nil
 	}
+	if n.Raw != nil {
+		return n.Raw, nil
+	}
 	if n.Sign == 0 {
 		return []byte("0"), nil
 	}
-	b := strings.Builder{}
+	var b strings.Builder
 	if n.Sign < 0 {
 		b.WriteByte('-')
 	}
-	b.WriteString(n.Digits)
+	b.WriteByte(n.Digits[0])
+	if len(n.Digits) > 1 {
+		b.WriteByte('.')
+		b.WriteString(n.Digits[1:])
+	}
 	adjExp := n.Exp + len(n.Digits) - 1
 	if adjExp != 0 {
 		b.WriteByte('E')
