@@ -23,6 +23,7 @@ usage() {
     printf 'usage: %s --op split|describe|squash --revision <rev> --message "type(scope): subject" [--message2 "type(scope): subject"] [--into <rev>] [--path <p> ...] (--session <id> | --allow-change <change-id> ...) [--json]\n' "$0" >&2
     exit 2
 }
+SAVED_ARGS=("$@")
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --op) [ "$#" -ge 2 ] || usage; op="$2"; shift 2 ;;
@@ -40,8 +41,23 @@ done
 case "$op" in
     split|describe|squash) ;;
     *) usage ;;
-esac
 [ -n "$revision" ] || usage
+
+source "$SUBSTRATE_DIR/engine-shim.sh"
+ENGINE_MODE="${SUBSTRATE_ENGINE:-auto}"
+if [ "$ENGINE_MODE" = "bash" ]; then
+    :
+elif substrate_engine_supports restructure; then
+    if [ "$ENGINE_MODE" = "go" ] || [ "$ENGINE_MODE" = "auto" ]; then
+        ${SUBSTRATE_ENGINE_BIN:-substrate-engine} restructure "${SAVED_ARGS[@]}"
+        rc=$?
+        [ "$rc" -eq 2 ] && { printf 'engine restructure returned unknown-verb after capability probe\n' >&2; exit 2; }
+        exit "$rc"
+    fi
+elif [ "$ENGINE_MODE" = "go" ]; then
+    printf 'SUBSTRATE_ENGINE=go but no substrate-engine binary found or its capabilities probe failed\n' >&2
+    exit 2
+fi
 
 if [ ! -e .jj ] || ! command -v jj >/dev/null 2>&1 \
     || [ "$(jj root 2>/dev/null)" != "$REPO_ROOT" ]; then
