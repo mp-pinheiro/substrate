@@ -33,10 +33,14 @@ type checkSpec struct {
 }
 
 type job struct {
-	name    string
-	cmd     *exec.Cmd
-	outPath string
-	start   time.Time
+	name      string
+	cmd       *exec.Cmd
+	outPath   string
+	start     time.Time
+	native    bool
+	nativeRC  int
+	nativeOut string
+	nativeMs  int
 }
 
 func DiscoverChecks(repoRoot, subDir string) ([]checkSpec, error) {
@@ -162,19 +166,22 @@ func RunChecks(ctx *RunContext, specs []checkSpec, claimsData []byte) error {
 			if out != "" {
 				fmt.Print(out)
 			}
-			if rc == 0 {
-				fmt.Printf("[ok] %s\n", spec.Name)
-			} else {
-				fmt.Printf("[!] FAIL %s (rc=%d)\n", spec.Name, rc)
-				failures++
-			}
-			results = append(results, CheckResult{
-				Name:    spec.Name,
-				RC:      rc,
-				MS:      0,
-				Output:  out,
-				Metrics: metrics,
+			jobs = append(jobs, job{
+				name:      spec.Name,
+				native:    true,
+				nativeRC:  rc,
+				nativeOut: out,
+				nativeMs:  0,
+				start:     time.Now(),
 			})
+			for _, m := range metrics {
+				line := fmt.Sprintf(`{"name":"%s","value":%s,"dir":"%s"}`+"\n", m.Name, string(m.RawValue), m.Dir)
+				os.WriteFile(filepath.Join(runDir, spec.Name+".metrics"), []byte(line), 0644)
+			}
+
+			if len(jobs)-len(results) >= max {
+				reportJob(jobs, &results, &failures)
+			}
 			continue
 		}
 
@@ -206,7 +213,7 @@ func RunChecks(ctx *RunContext, specs []checkSpec, claimsData []byte) error {
 		})
 
 		if len(jobs)-len(results) >= max {
-			reportCheck(jobs, &results, &failures)
+			reportJob(jobs, &results, &failures)
 		}
 	}
 
@@ -215,7 +222,7 @@ func RunChecks(ctx *RunContext, specs []checkSpec, claimsData []byte) error {
 	}
 
 	for len(results) < len(jobs) {
-		reportCheck(jobs, &results, &failures)
+		reportJob(jobs, &results, &failures)
 	}
 
 	ctx.Results = results
@@ -223,8 +230,24 @@ func RunChecks(ctx *RunContext, specs []checkSpec, claimsData []byte) error {
 	return nil
 }
 
-func reportCheck(jobs []job, results *[]CheckResult, failures *int) {
+func reportJob(jobs []job, results *[]CheckResult, failures *int) {
 	j := jobs[len(*results)]
+	if j.native {
+		if j.nativeRC == 0 {
+			fmt.Printf("[ok] %s (0ms)\n", j.name)
+		} else {
+			fmt.Printf("[!] FAIL %s (rc=%d)\n", j.name, j.nativeRC)
+			*failures++
+		}
+		*results = append(*results, CheckResult{
+			Name:   j.name,
+			RC:     j.nativeRC,
+			MS:     0,
+			Output: j.nativeOut,
+		})
+		return
+	}
+
 	j.cmd.Wait()
 	j.cmd.Stdout.(*os.File).Close()
 	elapsed := time.Since(j.start)

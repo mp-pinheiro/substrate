@@ -121,10 +121,10 @@ func Run(ctx context.Context, args []string) int {
 
 	took := FormatDuration(int(time.Since(gateStart).Milliseconds()))
 	if ctxRun.Failures > 0 {
-		fmt.Printf("[!] gate: %d check(s) failed (%s)\n", ctxRun.Failures, took)
+		warn("gate: %d check(s) failed (%s)", ctxRun.Failures, took)
 		return 1
 	}
-	fmt.Printf("[ok] gate: all checks passed (%s)\n", took)
+	successMsg("gate: all checks passed (%s)", took)
 	return 0
 }
 
@@ -179,5 +179,13 @@ func writeMetricsSink(metrics []MetricRecord, path string) {
 }
 
 func warn(format string, args ...interface{}) {
-	fmt.Fprintf(os.Stderr, format+"\n", args...)
+	fmt.Fprintf(os.Stderr, "[!] "+format+"\n", args...)
+}
+
+func info(format string, args ...interface{}) {
+	fmt.Fprintf(os.Stderr, "[+] "+format+"\n", args...)
+}
+
+func successMsg(format string, args ...interface{}) {
+	fmt.Fprintf(os.Stderr, "[ok] "+format+"\n", args...)
 }
