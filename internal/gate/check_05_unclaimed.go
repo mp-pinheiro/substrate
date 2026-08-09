@@ -1,7 +1,6 @@
 package gate
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -48,7 +47,7 @@ func check05Unclaimed(ctx context.Context, inv []string, claims []byte, env map[
 			}
 		}
 		if ext == "" && shebangInterps != nil {
-			interp := readShebangInterp2(filepath.Join(repoRoot, f))
+			interp := shebangInterp(filepath.Join(repoRoot, f))
 			if interp != "" && shebangInterps[interp] {
 				continue
 			}
@@ -160,31 +159,4 @@ func parseShebang2(langmap map[string]interface{}) map[string]bool {
 		}
 	}
 	return out
-}
-
-func readShebangInterp2(path string) string {
-	f, err := os.Open(path)
-	if err != nil {
-		return ""
-	}
-	defer f.Close()
-	line, err := bufio.NewReader(f).ReadString('\n')
-	if err != nil {
-		return ""
-	}
-	line = strings.TrimSpace(line)
-	if !strings.HasPrefix(line, "#!") {
-		return ""
-	}
-	interp := strings.TrimPrefix(line, "#!")
-	interp = strings.TrimSpace(interp)
-	parts := strings.Fields(interp)
-	if len(parts) == 0 {
-		return ""
-	}
-	name := filepath.Base(parts[0])
-	if name == "env" && len(parts) > 1 {
-		name = filepath.Base(parts[1])
-	}
-	return name
 }
