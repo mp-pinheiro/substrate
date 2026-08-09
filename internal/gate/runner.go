@@ -76,7 +76,11 @@ func Run(ctx context.Context, args []string) int {
 		Claims:    claims,
 	}
 
-	if err := RunChecks(&ctxRun, specs, nil); err != nil {
+	claimsData, err := os.ReadFile(claims)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "gate: reading CLAIMS: %v\n", err)
+	}
+	if err := RunChecks(&ctxRun, specs, claimsData); err != nil {
 		fmt.Fprintf(os.Stderr, "gate: %v\n", err)
 		return 3
 	}
