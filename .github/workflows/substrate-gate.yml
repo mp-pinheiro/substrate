@@ -87,11 +87,26 @@ jobs:
         run: bash test/golden-ledger-test.sh
       - name: Engine rollback switch
         run: bash test/engine-rollback-test.sh
+
+  gate-parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - *checkout_shallow
+      - name: Install Jujutsu
+        run: .substrate/install-jj.sh
+      - name: Install Go toolchain
+        run: test/ci-toolchain.sh go
+      - name: Build engine
+        run: go build -trimpath -buildvcs=false -o build/substrate-engine ./cmd/substrate-engine
+      - name: Run bash gate
+        run: SUBSTRATE_ENGINE=bash .substrate/gate.sh
+      - name: Run Go gate
+        run: ./build/substrate-engine gate
   audit:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
-    needs: [gate, profile-matrix, engine, hook-parity]
+    needs: [gate, profile-matrix, engine, hook-parity, gate-parity]
     steps:
       - *checkout_shallow
       - *setup_bun

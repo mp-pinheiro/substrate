@@ -1,5 +1,5 @@
 # Plan: Go engine rewrite — P3 (gate-runner bookkeeping in Go)
-state: draft
+state: committed
 issue: https://github.com/mp-pinheiro/substrate/issues/12
 parent: .pi/plans/go-rewrite.md
 
@@ -451,20 +451,20 @@ C13 is hygiene; if not, it is required. Either way the probes move now.
 - No changed operator-visible failure paths except where an A31 exception explicitly says so.
 
 ## Acceptance
-- [ ] the whole gate is byte-identical on both legs with durations masked :: bash test/gate-ab-test.sh
-- [ ] the scheduler's retirement window and metric last-writer rule hold :: bash test/gate-scheduler-test.sh
-- [ ] the gate's rollback switch is proven for the gate identity :: bash test/gate-rollback-test.sh
-- [ ] the spawned-check environment is pass-through and complete :: bash test/gate-env-probe-test.sh
-- [ ] the scoped-inventory guards fail closed and `--tighten` cannot erase a baseline :: bash test/gate-inventory-guard-test.sh
-- [ ] a 0x1F path is rejected rather than forging a CLAIMS row :: bash test/claims-injectivity-test.sh
-- [ ] the keyed accept-regression form works, ratchet and baseline agree, and floors survive :: bash test/baseline-test.sh
-- [ ] metric literals, null, and jq's tie asymmetry survive a round trip :: bash -c 'go test ./internal/canonjson/... ./internal/gate/...'
-- [ ] natives run with no file present and an unknown discovered check still runs :: bash test/check-registry-test.sh
-- [ ] the frozen gate artefacts are unchanged, now including the metrics sink :: bash test/golden-vectors-test.sh
-- [ ] the CLAIMS table is byte-identical across legs :: bash test/claims-table-test.sh
-- [ ] selftest passes on both legs and enumerates through the registry :: bash core/selftest.sh
-- [ ] every hook, the ledger and the receipts are untouched by P3 :: bash -c 'bash test/ab-hooks-test.sh && bash test/golden-ledger-test.sh && bash test/receipt-test.sh'
-- [ ] harness parity and vendor integrity hold :: bash -c 'bash test/parity-test.sh && bash test/vendor-drift-test.sh'
+- [x] the whole gate is byte-identical on both legs with durations masked :: bash test/gate-ab-test.sh
+- [x] the scheduler's retirement window and metric last-writer rule hold :: bash test/gate-scheduler-test.sh
+- [x] the gate's rollback switch is proven for the gate identity :: bash test/gate-rollback-test.sh
+- [x] the spawned-check environment is pass-through and complete :: bash test/gate-env-probe-test.sh
+- [x] the scoped-inventory guards fail closed and `--tighten` cannot erase a baseline :: bash test/gate-inventory-guard-test.sh
+- [x] a 0x1F path is rejected rather than forging a CLAIMS row :: bash test/claims-injectivity-test.sh
+- [x] the keyed accept-regression form works, ratchet and baseline agree, and floors survive :: bash test/baseline-test.sh
+- [x] metric literals, null, and jq's tie asymmetry survive a round trip :: bash -c 'go test ./internal/canonjson/... ./internal/gate/...'
+- [x] natives run with no file present and an unknown discovered check still runs :: bash test/check-registry-test.sh
+- [x] the frozen gate artefacts are unchanged, now including the metrics sink :: bash test/golden-vectors-test.sh
+- [x] the CLAIMS table is byte-identical across legs :: bash test/claims-table-test.sh
+- [x] selftest passes on both legs and enumerates through the registry :: bash core/selftest.sh
+- [x] every hook, the ledger and the receipts are untouched by P3 :: bash -c 'bash test/ab-hooks-test.sh && bash test/golden-ledger-test.sh && bash test/receipt-test.sh'
+- [x] harness parity and vendor integrity hold :: bash -c 'bash test/parity-test.sh && bash test/vendor-drift-test.sh'
 
 ## Exit criteria
 Every oracle checked, the full battery green SERIALLY on both forced legs, `substrate verify` green after an omp

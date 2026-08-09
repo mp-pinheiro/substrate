@@ -1,5 +1,6 @@
 # Plan: Go engine rewrite — P2 (receipts in-process + engine attestation)
-state: committed
+state: superseded
+superseded-by: .pi/plans/go-rewrite-p3.md
 issue: https://github.com/mp-pinheiro/substrate/issues/12
 parent: .pi/plans/go-rewrite.md
 
