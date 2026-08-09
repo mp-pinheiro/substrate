@@ -236,7 +236,7 @@ func classify(name string, lineno int, line, comment string, fromBlock bool, mar
 }
 
 func updateProseRun(st *scanState, findings []Finding, name string, lineno int, fullline bool, comment string) []Finding {
-	if !fullline || !hasASCIIAlnum(comment) {
+	if !fullline || !hasAlnum(comment) {
 		st.proseRun = 0
 		return findings
 	}
