@@ -57,7 +57,7 @@ if [ "$ENGINE_MODE" = "bash" ]; then
     :
 elif substrate_engine_supports checkpoint; then
     if [ "$ENGINE_MODE" = "go" ] || [ "$ENGINE_MODE" = "auto" ]; then
-        substrate-engine checkpoint "$@"
+        ${SUBSTRATE_ENGINE_BIN:-substrate-engine} checkpoint "$@"
         rc=$?
         [ "$rc" -eq 2 ] && { printf 'engine checkpoint returned unknown-verb after capability probe\n' >&2; exit 2; }
         exit "$rc"
