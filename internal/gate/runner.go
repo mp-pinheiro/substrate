@@ -64,7 +64,7 @@ func Run(ctx context.Context, args []string) int {
 	}
 
 	gateStart := time.Now()
-	fmt.Printf("[+] substrate gate: %s\n", repoRoot)
+	fmt.Printf("[+] substrate gate: %s (%d checks)\n", repoRoot, len(specs))
 
 	ctxRun := RunContext{
 		SubDir:    subDir,

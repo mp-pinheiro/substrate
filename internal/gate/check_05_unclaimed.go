@@ -1,6 +1,7 @@
 package gate
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -31,6 +32,8 @@ func check05Unclaimed(ctx context.Context, inv []string, claims []byte, env map[
 	var langmap map[string]interface{}
 	json.Unmarshal(langmapData, &langmap)
 
+	shebangInterps := parseShebang2(langmap)
+	repoRoot := env["REPO_ROOT"]
 	var findings []string
 	rc := 0
 
@@ -41,6 +44,12 @@ func check05Unclaimed(ctx context.Context, inv []string, claims []byte, env map[
 		ext := filepath.Ext(f)
 		if ext != "" && langmap != nil {
 			if _, ok := langmap[ext]; ok {
+				continue
+			}
+		}
+		if ext == "" && shebangInterps != nil {
+			interp := readShebangInterp2(filepath.Join(repoRoot, f))
+			if interp != "" && shebangInterps[interp] {
 				continue
 			}
 		}
@@ -87,21 +96,95 @@ func matchUnscannedShell(pattern, name string) bool {
 		return strings.HasSuffix(name, pattern[1:])
 	}
 	if strings.Contains(pattern, "**") {
-		prefix, suffix, _ := strings.Cut(pattern, "**")
-		if prefix != "" && !strings.HasPrefix(name, prefix) {
-			return false
-		}
-		if suffix != "" {
-			rest := name
-			if prefix != "" {
-				rest = name[len(prefix):]
-			}
-			return strings.HasSuffix(rest, suffix)
-		}
-		return true
+		return matchGlobstar2(pattern, name)
 	}
 	if strings.HasSuffix(pattern, "/*") {
 		return strings.HasPrefix(name, pattern[:len(pattern)-1])
 	}
 	return false
+}
+
+func matchGlobstar2(pattern, name string) bool {
+	patParts := strings.Split(pattern, "/")
+	nameParts := strings.Split(name, "/")
+	return matchGlobstarRec2(patParts, nameParts)
+}
+
+func matchGlobstarRec2(pat, name []string) bool {
+	if len(pat) == 0 {
+		return len(name) == 0
+	}
+	if pat[0] == "**" {
+		for i := 0; i <= len(name); i++ {
+			if matchGlobstarRec2(pat[1:], name[i:]) {
+				return true
+			}
+		}
+		return false
+	}
+	if len(name) == 0 {
+		return false
+	}
+	if match, _ := filepath.Match(pat[0], name[0]); !match {
+		return false
+	}
+	return matchGlobstarRec2(pat[1:], name[1:])
+}
+
+func parseShebang2(langmap map[string]interface{}) map[string]bool {
+	if langmap == nil {
+		return nil
+	}
+	raw, ok := langmap["__shebang__"]
+	if !ok {
+		return nil
+	}
+	arr, ok := raw.([]interface{})
+	if !ok {
+		return nil
+	}
+	out := make(map[string]bool)
+	for _, item := range arr {
+		obj, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		matchArr, ok := obj["match"].([]interface{})
+		if !ok {
+			continue
+		}
+		for _, m := range matchArr {
+			if s, ok := m.(string); ok {
+				out[s] = true
+			}
+		}
+	}
+	return out
+}
+
+func readShebangInterp2(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	line, err := bufio.NewReader(f).ReadString('\n')
+	if err != nil {
+		return ""
+	}
+	line = strings.TrimSpace(line)
+	if !strings.HasPrefix(line, "#!") {
+		return ""
+	}
+	interp := strings.TrimPrefix(line, "#!")
+	interp = strings.TrimSpace(interp)
+	parts := strings.Fields(interp)
+	if len(parts) == 0 {
+		return ""
+	}
+	name := filepath.Base(parts[0])
+	if name == "env" && len(parts) > 1 {
+		name = filepath.Base(parts[1])
+	}
+	return name
 }
