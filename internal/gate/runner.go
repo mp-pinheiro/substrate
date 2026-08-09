@@ -82,12 +82,40 @@ func Run(ctx context.Context, args []string) int {
 		return 3
 	}
 
-	metricsOut := os.Getenv("SUBSTRATE_METRICS_OUT")
-	if metricsOut != "" {
-		allMetrics, err := CollectAllMetrics(ctxRun.Results, ctxRun.RunDir)
-		if err == nil {
-			writeMetricsSink(allMetrics, metricsOut)
+	metricsFile, err := os.CreateTemp("", "substrate-metrics-*")
+	if err == nil {
+		metricsPath := metricsFile.Name()
+		allMetrics, _ := CollectAllMetrics(ctxRun.Results, ctxRun.RunDir)
+		for _, m := range allMetrics {
+			dir := m.Dir
+			if dir == "" {
+				dir = "lo"
+			}
+			fmt.Fprintf(metricsFile, `{"name":"%s","value":%s,"dir":"%s"}`+"\n", m.Name, string(m.RawValue), dir)
 		}
+		metricsFile.Close()
+
+		metricsOut := os.Getenv("SUBSTRATE_METRICS_OUT")
+		if metricsOut != "" {
+			stagedMove(metricsPath, metricsOut)
+		}
+
+		ratchetResult, ratchetFailures := RunRatchet(metricsPath, baselinePath, configPath, flags)
+		if ratchetFailures > 0 {
+			ctxRun.Failures += ratchetFailures
+		}
+
+		if flags.UpdateBaseline {
+			if ctxRun.Failures > 0 {
+				warn("refusing to update baseline with %d failing check(s) — fix detector failures; use --accept-regression only for metric regressions", ctxRun.Failures)
+			} else {
+				if WriteBaseline(baselinePath, metricsPath, configPath, flags, ratchetResult.AcceptedNow) != 0 {
+					ctxRun.Failures++
+				}
+			}
+		}
+
+		os.Remove(metricsPath)
 	}
 	defer os.RemoveAll(ctxRun.RunDir)
 
