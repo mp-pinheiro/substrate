@@ -2,16 +2,16 @@
   "metrics": {
     "comments:core/check-comments.sh": 3,
     "dead_code": 0,
-    "dup_pct": 1.9371692224182386,
+    "dup_pct": 1.9979953224189777,
     "max_file_lines": 460
   },
   "direction": {},
   "accepted": {
     "dup_pct": {
-      "from": 1.7958748221906116,
-      "to": 1.9371692224182386,
+      "from": 1.9371692224182386,
+      "to": 1.9979953224189777,
       "at": "2026-08-09",
-      "reason": "new transaction package adds necessary Go code for P4a checkpoint port"
+      "reason": "restructure.go adds necessary Go code for P4a restructure port"
     },
     "max_file_lines": {
       "at": "2026-08-08",

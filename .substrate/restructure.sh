@@ -41,6 +41,7 @@ done
 case "$op" in
     split|describe|squash) ;;
     *) usage ;;
+esac
 [ -n "$revision" ] || usage
 
 source "$SUBSTRATE_DIR/engine-shim.sh"
