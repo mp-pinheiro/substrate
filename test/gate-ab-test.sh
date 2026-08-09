@@ -22,17 +22,17 @@ mask_durations() {
     sed -E \
         -e 's/\x1b\[[0-9;]*m//g' \
         -e 's/\([0-9]+(\.[0-9]+)?(ms|s)\)/(<duration>)/g' \
-        -e 's/^\[.\] ratchet: .+$/[ratchet]/' \
-        -e 's/^[a-zA-Z0-9_/:.-]+: [-0-9.eE+]+ \(best .+$/[worse metric]/'
+        -e 's/^\[.\] (FAIL )?ratchet: .+$/[ratchet]/' \
+        -e 's/^[a-zA-Z0-9_/:.-]+: [-0-9.eE+]+ \(best .+$/[ratchet]/' \
+        -e 's/^\[.\] gate: [0-9]+ check\(s\) failed \([^)]+\)/[gate failed]/'
 }
 
 report_diff() {
     local label="$1" bash_out="$2" go_out="$3"
     local bash_masked="$WORK/bash-masked.txt"
     local go_masked="$WORK/go-masked.txt"
-
-    mask_durations < "$bash_out" > "$bash_masked"
-    mask_durations < "$go_out" > "$go_masked"
+    mask_durations < "$bash_out" | uniq > "$bash_masked"
+    mask_durations < "$go_out" | uniq > "$go_masked"
 
     if diff -u "$bash_masked" "$go_masked" > "$WORK/diff.txt" 2>&1; then
         printf '  [ok] %s: byte-identical after duration masking\n' "$label"

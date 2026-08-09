@@ -130,7 +130,6 @@ func RunChecks(ctx *RunContext, specs []checkSpec, claimsData []byte) error {
 		"BASELINE=" + ctx.Baseline,
 		"INVENTORY=" + ctx.Inventory,
 		"CLAIMS=" + ctx.Claims,
-		"_CLAIMS_STATE=table",
 	}
 
 	max := maxJobs()
