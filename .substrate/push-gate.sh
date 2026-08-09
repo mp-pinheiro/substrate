@@ -14,12 +14,10 @@ if gate_receipt_matches || maintenance_receipt_matches; then
     printf '[ok] push gate: exact-state receipt accepted\n'
     exit 0
 fi
-if ! output=$(.substrate/gate.sh 2>&1); then
-    printf '%s\n' "$output" >&2
+if ! .substrate/gate.sh; then
     printf 'push blocked: fix the failing gate checks first\n' >&2
     exit 2
 fi
-printf '%s\n' "$output"
 vcs=$(current_gate_vcs) || vcs=git
 commit=$(current_gate_revision) || { printf 'push blocked: cannot resolve the checked revision\n' >&2; exit 2; }
 if receipt=$(write_gate_receipt push "$commit" "$vcs"); then
