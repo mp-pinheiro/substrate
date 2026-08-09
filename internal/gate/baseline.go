@@ -285,14 +285,14 @@ func writeValue(b *strings.Builder, v interface{}) {
 		}
 		sort.Strings(keys)
 		for i, k := range keys {
-			b.WriteString(fmt.Sprintf("    %q: ", k))
+			b.WriteString(fmt.Sprintf("  %q: ", k))
 			writeValue(b, val[k])
 			if i < len(keys)-1 {
 				b.WriteString(",")
 			}
 			b.WriteString("\n")
 		}
-		b.WriteString("  }")
+		b.WriteString("}")
 	case map[string]Number:
 		b.WriteString("{\n")
 		keys := make([]string, 0, len(val))
@@ -303,13 +303,20 @@ func writeValue(b *strings.Builder, v interface{}) {
 		for i, k := range keys {
 			n := val[k]
 			buf, _ := n.MarshalJSON()
-			b.WriteString(fmt.Sprintf("    %q: %s", k, string(buf)))
+			b.WriteString(fmt.Sprintf("  %q: %s", k, string(buf)))
 			if i < len(keys)-1 {
 				b.WriteString(",")
 			}
 			b.WriteString("\n")
 		}
-		b.WriteString("  }")
+		b.WriteString("}")
+	case map[string]string:
+		b.WriteString("{\n")
+		for k, v := range val {
+			encoded, _ := json.Marshal(v)
+			b.WriteString(fmt.Sprintf("  %q: %s,\n", k, string(encoded)))
+		}
+		b.WriteString("}")
 	case Number:
 		buf, _ := val.MarshalJSON()
 		b.WriteString(string(buf))

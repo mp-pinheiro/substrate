@@ -99,11 +99,14 @@ func RunRatchet(metricsOut, baselinePath, configPath string, flags PreflightFlag
 			}
 		}
 		if regressed {
-			bestVal := baseF
-			if budget > 0 && dir != "hi" {
-				bestVal = budget
+			bestText := string(base.Raw)
+			if base.Raw == nil {
+				bestText = "0"
 			}
-			worse = append(worse, fmt.Sprintf("%s: %s (best %.6g%s)", name, string(cur.Raw), bestVal, capMsg))
+			if budget > 0 && dir != "hi" {
+				bestText = fmt.Sprintf("%.0f", budget)
+			}
+			worse = append(worse, fmt.Sprintf("%s: %s (best %s%s)", name, string(cur.Raw), bestText, capMsg))
 		}
 	}
 

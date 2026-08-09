@@ -153,27 +153,14 @@ func (n Number) Float64() float64 {
 	if n.Sign == 0 {
 		return 0
 	}
-	s := n.Digits
-	if len(s) > 15 {
+	f, err := strconv.ParseFloat(string(n.Raw), 64)
+	if err != nil {
 		if n.Sign < 0 {
 			return math.Inf(-1)
 		}
 		return math.Inf(1)
 	}
-	val := float64(0)
-	for _, ch := range s {
-		val = val*10 + float64(ch-'0')
-	}
-	if n.Exp != 0 {
-		val *= math.Pow10(n.Exp)
-	}
-	if n.Sign < 0 {
-		val = -val
-	}
-	if math.IsInf(val, 0) {
-		return val
-	}
-	return val
+	return f
 }
 func (n Number) MarshalJSON() ([]byte, error) {
 	if n.IsNull {

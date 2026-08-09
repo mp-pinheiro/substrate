@@ -22,7 +22,8 @@ mask_durations() {
     sed -E \
         -e 's/\x1b\[[0-9;]*m//g' \
         -e 's/\([0-9]+(\.[0-9]+)?(ms|s)\)/(<duration>)/g' \
-        -e 's/^\[.\] ratchet: .+$/[ratchet]/'
+        -e 's/^\[.\] ratchet: .+$/[ratchet]/' \
+        -e 's/^[a-zA-Z0-9_/:.-]+: [-0-9.eE+]+ \(best .+$/[worse metric]/'
 }
 
 report_diff() {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 )
 
@@ -144,48 +143,15 @@ func listChecks(repoRoot, subDir string) int {
 	return 0
 }
 
-func writeMetricsSink(metrics []MetricRecord, path string) {
-	var lines []string
-	for _, m := range metrics {
-		dir := m.Dir
-		if dir == "" {
-			dir = "lo"
-		}
-		lines = append(lines, fmt.Sprintf(`{"name":"%s","value":%s,"dir":"%s"}`, m.Name, string(m.RawValue), dir))
-	}
-	data := strings.Join(lines, "\n") + "\n"
-
-	tmp, err := os.CreateTemp(path+".", "substrate-metrics-*")
-	if err != nil {
-		return
-	}
-	tmpName := tmp.Name()
-	if _, err := tmp.WriteString(data); err != nil {
-		tmp.Close()
-		os.Remove(tmpName)
-		return
-	}
-	if err := tmp.Close(); err != nil {
-		os.Remove(tmpName)
-		return
-	}
-	info, _ := os.Stat(path)
-	mode := os.FileMode(0600)
-	if info != nil {
-		mode = info.Mode()
-	}
-	os.Chmod(tmpName, mode)
-	os.Rename(tmpName, path)
-}
 
 func warn(format string, args ...interface{}) {
-	fmt.Fprintf(os.Stderr, "[!] "+format+"\n", args...)
+	fmt.Fprintf(os.Stderr, "\033[0;33m[!]\033[0m "+format+"\n", args...)
 }
 
 func info(format string, args ...interface{}) {
-	fmt.Fprintf(os.Stderr, "[+] "+format+"\n", args...)
+	fmt.Fprintf(os.Stderr, "\033[0;34m[+]\033[0m "+format+"\n", args...)
 }
 
 func successMsg(format string, args ...interface{}) {
-	fmt.Fprintf(os.Stderr, "[ok] "+format+"\n", args...)
+	fmt.Fprintf(os.Stderr, "\033[0;32m[ok]\033[0m "+format+"\n", args...)
 }
