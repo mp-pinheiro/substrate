@@ -15,7 +15,9 @@ import (
 var version = "0.0.0-dev"
 
 func main() {
-	os.Exit(run(os.Args[1:]))
+	code := run(os.Args[1:])
+	_ = os.Stdout.Sync()
+	os.Exit(code)
 }
 
 func run(args []string) int {

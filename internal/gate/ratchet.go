@@ -234,9 +234,9 @@ func RunRatchet(metricsOut, baselinePath, configPath string, flags PreflightFlag
 			return result, 1
 		}
 	} else if better > 0 {
-		warn("ratchet: %d metric(s) improved on baseline — checkpoint locks them in automatically", better)
+		info("ratchet: %d metric(s) improved on baseline — checkpoint locks them in automatically", better)
 	} else {
-		fmt.Println("[ok] ratchet: all metrics at or better than baseline")
+		successMsg("ratchet: all metrics at or better than baseline")
 	}
 
 	return result, 0
