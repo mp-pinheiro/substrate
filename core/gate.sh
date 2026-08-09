@@ -56,6 +56,30 @@ elif [ -n "$ACCEPT_REASON" ]; then
     exit 2
 fi
 
+source "$SUBSTRATE_DIR/engine-shim.sh"
+ENGINE_MODE="${SUBSTRATE_ENGINE:-auto}"
+if [ "$ENGINE_MODE" = "bash" ]; then
+    :
+elif substrate_engine_supports gate; then
+    if [ "$ENGINE_MODE" = "go" ] || [ "$ENGINE_MODE" = "auto" ]; then
+        engine_flags=()
+        [ "$UPDATE_BASELINE" -eq 1 ] && engine_flags+=("--update-baseline")
+        [ "$TIGHTEN_BASELINE" -eq 1 ] && engine_flags+=("--tighten")
+        [ "$ACCEPT_REGRESSION" -eq 1 ] && engine_flags+=("--accept-regression")
+        [ -n "$ACCEPT_KEYS" ] && engine_flags+=("--accept-regression=$ACCEPT_KEYS")
+        [ -n "$ACCEPT_REASON" ] && engine_flags+=("--reason=$ACCEPT_REASON")
+        substrate-engine gate "${engine_flags[@]}"
+        rc=$?
+        [ "$rc" -eq 12 ] && exit 2
+        [ "$rc" -eq 2 ] && die_infra "engine gate returned the reserved unknown-verb code after a successful capability probe"
+        exit "$rc"
+    fi
+elif [ "$ENGINE_MODE" = "go" ]; then
+    die_infra "SUBSTRATE_ENGINE=go but no substrate-engine binary found or its capabilities probe failed"
+elif [ "$ENGINE_MODE" != "bash" ] && [ "$ENGINE_MODE" != "auto" ]; then
+    die_infra "unknown SUBSTRATE_ENGINE mode: $ENGINE_MODE — use auto, go, or bash"
+fi
+
 INVENTORY=$(mktemp)
 METRICS=$(mktemp)
 CLAIMS=$(mktemp)
