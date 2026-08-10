@@ -99,16 +99,17 @@ Key oracles: full suite green under both legs zero-edit; lock contention pinned;
 Workflow: one porter per state machine, contract file as spec; enemy on guard-order/error-string fidelity (agents parse these strings).
 
 ### P5 — cutover + deletion
+**SPLIT (2026-08-09):** P5a (Claude cutover + vendored bash deletion + duplication-tax retirement) is active — see `.pi/plans/go-rewrite-p5a.md` (`state: active`). P5b (A15 omp-TS shim + go:embed `asset` subcommand + transitional-parity deletion) is planned. Parent phase `P5` stays `active` until both land.
+
 Goal: one maintenance-transaction commit per repo rewrites Claude registrations to the engine, re-renders `.substrate/` to the resolution-6 layout, deletes the vendored bash engine + 80-vendor-drift + 81-harness-parity (successor: engine attestation check), and the kit repo deletes `core/*.sh` engine sources.
-- `substrate asset` subcommand exposes embedded gate-lib.sh/checks; bin/substrate becomes a launcher; installer/doctor/report/selftest/audit port-or-retain per the cli-install contract (explicit table); `install-substrate.sh` + `install-jq.sh` pinned installers; consumer CI template.
-- `--route`/stand-down spec written ONCE here (user-scoped launcher): payload path extraction, upward walk, per-hook stand-down matching BOTH bash-form and engine-form project registrations — no double-fire (amendment A16).
-- Attestation: fail-closed links except the binary-hash link downgrades to a doctor-visible warning for `0.0.0-*` dev builds or `SUBSTRATE_ENGINE_BIN` overrides (amendment A14).
-- Receipt recipe change: engine identity replaces vendored-tree hashing (resolution 7).
-- Test edits are NOT zero: receipt-test.sh, restructure-test.sh, jj-hooks-test.sh, audit-test.sh (+ bootstrap-test's `source` of core libs) get targeted rewrites to drive engine verbs (amendment A13).
-- Live-cutover + rollback rehearsal tests define provenance explicitly: synthesize the pre-P5 world from the P5-parent revision in a scratch clone; CI workflow sets fetch depth accordingly (amendment A30).
-- 20-duplication/45-contract-drift/50-gitleaks: ported native in P5 scope (or the render keeps them as vendored bash under checks.d — decide at P5 start; they MUST NOT silently vanish) (amendment A11 counterpart).
+- `substrate asset` subcommand exposes embedded gate-lib.sh/checks; bin/substrate becomes a launcher; installer/doctor/report/selftest/audit port-or-retain per the cli-install contract.
+- `--route`/stand-down spec (amendment A16) in P5a child plan; A15 per-event TS→engine ABI in P5b.
+- P5a decisions (2026-08-09, verified): push-gate/gated-push/gitleaks-deep/gitleaks-lib/receipt-lib RETAINED as thin delegated bash wrappers (no engine verbs exist for them). 20/45/50 checks kept as vendored bash. selftest/audit/report retained bash (edited to call engine `gate`).
+- Receipt recipe change: engine identity replaces vendored-tree hashing (resolution 7) — P5a child plan.
+- A13 test edits enumerated in P5a child plan (receipt-lib retained, receipt-test NO rewrite; bootstrap-test/audit-test/restructure-test/jj-hooks-test/hooks tests migrate to engine verbs).
+- cutover-parity CI job replaces gate-parity (bash leg unrunnable post-cutover) — A30 in P5a child plan.
 Key oracles: post-cutover `.substrate/` contains no engine scripts; registrations contain no `.substrate/hooks/` spawns; attestation check green; single-revert rollback rehearsed green.
-Workflow: enemy-first (attack the cutover commit plan before executing), then a single implementing agent — this phase is one atomic transaction, not a fan-out.
+Workflow: enemy-first (critique done 2026-08-09 — 3 blocking gaps found and folded as binding amendments), then a single implementing agent.
 
 ## Adversarial amendments (binding, override phase text)
 - A1 Oracle self-containment: every Go-leg oracle builds its own binary (`go build -o "$(mktemp -d)"/substrate-engine ./cmd/substrate-engine`), exports `SUBSTRATE_ENGINE_BIN`, assumes no PATH/`just`; audit CI executes oracles verbatim and has neither.
