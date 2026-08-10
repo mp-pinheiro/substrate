@@ -88,6 +88,7 @@ vendor_core() {
        "$KIT_ROOT"/core/push-gate.sh \
        "$KIT_ROOT"/core/maintenance.sh \
        "$KIT_ROOT"/core/checkpoint.sh "$KIT_ROOT"/core/restructure.sh \
+       "$KIT_ROOT"/core/receipt-lib.sh \
        "$KIT_ROOT"/core/gitleaks-lib.sh "$KIT_ROOT"/core/gitleaks-deep.sh \
        "$KIT_ROOT"/core/install-gitleaks.sh "$KIT_ROOT"/core/install-jj.sh "$staging/" \
        || die "vendor copy failed: core scripts"

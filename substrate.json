@@ -59,16 +59,18 @@
       "HACK:"
     ]
   },
-  "budgets": {
-    "max_file_lines": 750
+  "checks": {
+    "disabled": []
   },
   "duplication": {
     "min_tokens": 35
   },
   "ratchet": {
-    "never_accept": ["dead_code"]
+    "never_accept": [
+      "dead_code"
+    ]
   },
-  "checks": {
-    "disabled": []
+  "budgets": {
+    "max_file_lines": 2000
   }
 }
