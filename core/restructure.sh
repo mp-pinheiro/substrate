@@ -1,3 +1,5 @@
 #!/usr/bin/env bash
 set -uo pipefail
-exec substrate-engine restructure "$@"
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$DIR/.." && pwd)"
+exec "${SUBSTRATE_ENGINE_BIN:-$ROOT/build/substrate-engine}" restructure "$@"
