@@ -18,6 +18,7 @@
     "*.svg",
     "*.toml",
     "*.txt",
+    "substrate-baseline.json",
     ".claude/settings.json",
     ".gitattributes",
     ".gitignore",
@@ -71,6 +72,6 @@
     ]
   },
   "budgets": {
-    "max_file_lines": 2000
+    "max_file_lines": 500
   }
 }

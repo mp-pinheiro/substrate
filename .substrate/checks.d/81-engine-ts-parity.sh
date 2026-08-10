@@ -43,9 +43,8 @@ if ! grep 'changed-files-scan' "$OMP_TS" | grep -qE 'substrate-engine|engineBase
 fi
 
 OMP_RUNTIME="core/omp/substrate-quality/runtime.ts"
-# The omp extension must delegate ownership tracking to the engine (issue #12 rc #3):
-# feed the ledger via observe, never reimplement the per-file sha256/fingerprint
-# tracker in-process, and never reference deleted hook script paths.
+# The omp extension delegates ownership tracking to the engine (issue #12 rc #3):
+# feed the ledger via observe; never reimplement fingerprints or deleted hooks.
 if ! grep -qE 'engineObserve|agent-lifecycle.*observe' "$OMP_TS" "$OMP_RUNTIME" 2>/dev/null; then
     printf 'omp extension does not feed the engine ownership ledger — engineObserve missing\n'
     rc=1
@@ -62,7 +61,9 @@ fi
 while IFS= read -r dcase; do
     v="${dcase#case \"}"
     v="${v%\"}"
-    [ -n "${hooks[$v]+x}" ] || printf 'note: dispatch verb "%s" has no claude-hooks.json entry (comment-ratchet is folded into changed-files-scan)\n' "$v" >&2
+    if [ "$v" != "comment-ratchet" ] && [ -z "${hooks[$v]+x}" ]; then
+        printf 'note: dispatch verb "%s" has no claude-hooks.json entry\n' "$v" >&2
+    fi
 done < <(grep -oE 'case "[A-Za-z0-9._-]+"' "$DISPATCH_GO")
 
 exit "$rc"
