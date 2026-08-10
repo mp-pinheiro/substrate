@@ -66,9 +66,11 @@ function sessionId(root: string): string {
 	return `substrate-omp-${createHash("sha256").update(resolve(root)).digest("hex").slice(0, 16)}`;
 }
 
-function engineBaseCmd(): string[] {
-	const bin = process.env.SUBSTRATE_ENGINE_BIN;
-	if (bin && existsSync(bin)) return [bin];
+function engineBaseCmd(root: string): string[] {
+	const fromEnv = process.env.SUBSTRATE_ENGINE_BIN;
+	if (fromEnv && existsSync(fromEnv)) return [fromEnv];
+	const local = join(root, "build", "substrate-engine");
+	if (existsSync(local)) return [local];
 	return ["substrate-engine"];
 }
 
@@ -76,9 +78,9 @@ function engineBaseCmd(): string[] {
 // requires it). Idempotent: if status answers, the ledger is already live.
 async function engineEnsureStarted(root: string): Promise<void> {
 	const sid = sessionId(root);
-	const status = await runCommand(root, [...engineBaseCmd(), "hook", "agent-lifecycle", "status", sid]);
+	const status = await runCommand(root, [...engineBaseCmd(root), "hook", "agent-lifecycle", "status", sid]);
 	if (status.exitCode === 0) return;
-	await runCommand(root, [...engineBaseCmd(), "hook", "agent-lifecycle", "start"], {
+	await runCommand(root, [...engineBaseCmd(root), "hook", "agent-lifecycle", "start"], {
 		stdin: JSON.stringify({ session_id: sid }),
 	});
 }
@@ -88,7 +90,7 @@ async function engineEnsureStarted(root: string): Promise<void> {
 // transitions — all ownership policy stays in Go.
 async function engineObserve(root: string): Promise<void> {
 	const sid = sessionId(root);
-	await runCommand(root, [...engineBaseCmd(), "hook", "agent-lifecycle", "observe"], {
+	await runCommand(root, [...engineBaseCmd(root), "hook", "agent-lifecycle", "observe"], {
 		stdin: JSON.stringify({ session_id: sid }),
 	});
 }
@@ -107,7 +109,7 @@ type OwnershipStatus = {
 
 async function engineStatus(root: string): Promise<OwnershipStatus | null> {
 	const sid = sessionId(root);
-	const result = await runCommand(root, [...engineBaseCmd(), "hook", "agent-lifecycle", "status", sid]);
+	const result = await runCommand(root, [...engineBaseCmd(root), "hook", "agent-lifecycle", "status", sid]);
 	if (result.exitCode !== 0) return null;
 	try {
 		return JSON.parse(result.stdout.trim()) as OwnershipStatus;
@@ -135,6 +137,7 @@ function withRootLock<T>(root: string, run: () => Promise<T>): Promise<T> {
 
 export {
 	callKey,
+	engineBaseCmd,
 	engineEnsureStarted,
 	engineObserve,
 	engineStatus,

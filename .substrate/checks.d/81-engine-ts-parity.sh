@@ -37,7 +37,7 @@ if grep -q '\.substrate/hooks/changed-files-scan' "$OMP_TS"; then
     printf '%s still references the deleted .substrate/hooks/changed-files-scan path\n' "$OMP_TS"
     rc=1
 fi
-if ! grep 'changed-files-scan' "$OMP_TS" | grep -q 'substrate-engine'; then
+if ! grep 'changed-files-scan' "$OMP_TS" | grep -qE 'substrate-engine|engineBaseCmd'; then
     printf '%s does not invoke changed-files-scan via substrate-engine\n' "$OMP_TS"
     rc=1
 fi

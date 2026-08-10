@@ -84,9 +84,11 @@ function checkpointReceipt(output: string): CheckpointReceipt | null {
 	return null;
 }
 
-function resolveEngineBin(): string | null {
+function resolveEngineBin(root: string): string | null {
 	const fromEnv = process.env.SUBSTRATE_ENGINE_BIN;
 	if (fromEnv && existsSync(fromEnv)) return fromEnv;
+	const local = join(root, "build", "substrate-engine");
+	if (existsSync(local)) return local;
 	const pathDirs = (process.env.PATH || "").split(":");
 	for (const dir of pathDirs) {
 		const candidate = join(dir, "substrate-engine");
@@ -96,17 +98,17 @@ function resolveEngineBin(): string | null {
 }
 
 function resolveCheckpointCmd(root: string): string[] {
-	const bin = resolveEngineBin();
+	const bin = resolveEngineBin(root);
 	return bin ? [bin, "checkpoint"] : ["substrate-engine", "checkpoint"];
 }
 
 function resolveRestructureCmd(root: string): string[] {
-	const bin = resolveEngineBin();
+	const bin = resolveEngineBin(root);
 	return bin ? [bin, "restructure"] : ["substrate-engine", "restructure"];
 }
 
 function resolveMaintenanceCmd(root: string): string[] {
-	const bin = resolveEngineBin();
+	const bin = resolveEngineBin(root);
 	return bin ? [bin, "maintenance"] : ["substrate-engine", "maintenance"];
 }
 
