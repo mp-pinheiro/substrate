@@ -40,7 +40,10 @@ func TestDifferentialProtectPaths(t *testing.T) {
 		{name: "baseline exact literal blocked", guard: "protect-paths", payload: filePayload("substrate-baseline.json")},
 		{name: "baseline lookalike nested blocked", guard: "protect-paths", payload: filePayload("sub/dir/substrate-baseline.json")},
 		{name: "substrate config exact blocked", guard: "protect-paths", payload: filePayload("substrate.json")},
-		{name: "substrate config nested blocked", guard: "protect-paths", payload: filePayload("sub/dir/substrate.json")},
+		{name: "dot-prefixed substrate config blocked", guard: "protect-paths", payload: filePayload("./substrate.json")},
+		{name: "parent-normalized substrate config blocked", guard: "protect-paths", payload: filePayload("sub/../substrate.json")},
+		{name: "redundant-normalized substrate config blocked", guard: "protect-paths", payload: filePayload("sub/./../substrate.json")},
+		{name: "nested substrate config is not canonical", guard: "protect-paths", payload: filePayload("sub/dir/substrate.json")},
 		{name: "dotSubstrate write blocked", guard: "protect-paths", payload: filePayload(".substrate/foo.txt")},
 		{name: "CLAUDE.md write blocked", guard: "protect-paths", payload: filePayload("CLAUDE.md")},
 		{

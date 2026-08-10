@@ -8,10 +8,6 @@ const HARD: Array<[RegExp, string]> = [
 		"not the repo baseline, but that basename is governed anywhere in the tree — the rule is name-based so it can rule on paths whose parents do not exist yet; rename the file if it is not a substrate baseline",
 	],
 	[/^substrate\.json$/, "human-approved policy config — change it through guarded substrate maintenance"],
-	[
-		/\/substrate\.json$/,
-		"human-approved policy config — change it through guarded substrate maintenance",
-	],
 	[/(^|\/)\.substrate(\/|$)/, "vendored substrate core — change the kit and run: substrate update"],
 	[/(^|\/)CLAUDE\.md$/, "governance doc — propose the edit to the user instead"],
 ];
