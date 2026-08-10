@@ -31,8 +31,14 @@ jobs:
         run: bun install -g @ast-grep/cli@0.45.0 jscpd@5.0.14
       - name: Install active profile toolchains
         run: test/ci-toolchain.sh --active
+      - name: Install Go toolchain
+        run: test/ci-toolchain.sh go
+      - name: Build engine
+        run: |
+          go build -trimpath -buildvcs=false -o build/substrate-engine ./cmd/substrate-engine
+          echo "$PWD/build" >> "$GITHUB_PATH"
       - name: Run gate
-        run: .substrate/gate.sh
+        run: substrate-engine gate
       - name: Scan history for secrets
         uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
@@ -81,28 +87,12 @@ jobs:
         run: .substrate/install-jj.sh
       - name: Install Go toolchain
         run: test/ci-toolchain.sh go
-      - name: Dual-leg hook parity (amendment A27)
+      - name: Go-only hook parity
         run: bash test/ab-hooks-test.sh
-      - name: Session-ledger golden vectors, both legs (amendment A8)
+      - name: Session-ledger golden vectors (go-only)
         run: bash test/golden-ledger-test.sh
       - name: Engine rollback switch
         run: bash test/engine-rollback-test.sh
-
-  gate-parity:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - *checkout_shallow
-      - name: Install Jujutsu
-        run: .substrate/install-jj.sh
-      - name: Install Go toolchain
-        run: test/ci-toolchain.sh go
-      - name: Build engine
-        run: go build -trimpath -buildvcs=false -o build/substrate-engine ./cmd/substrate-engine
-      - name: Run bash gate
-        run: SUBSTRATE_ENGINE=bash .substrate/gate.sh
-      - name: Run Go gate
-        run: ./build/substrate-engine gate
 
   transaction-parity:
     runs-on: ubuntu-latest
@@ -117,8 +107,6 @@ jobs:
         run: go build -trimpath -buildvcs=false -o build/substrate-engine ./cmd/substrate-engine
       - name: Checkpoint rollback switch
         run: bash test/transaction-rollback-test.sh
-      - name: Restructure bash leg
-        run: SUBSTRATE_ENGINE=bash bash test/restructure-test.sh
 
   maintenance-parity:
     runs-on: ubuntu-latest
@@ -140,7 +128,7 @@ jobs:
   audit:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    needs: [gate, profile-matrix, engine, hook-parity, gate-parity, maintenance-parity]
+    needs: [gate, profile-matrix, engine, hook-parity, maintenance-parity, transaction-parity]
     steps:
       - *setup_bun
       - name: Install Jujutsu
