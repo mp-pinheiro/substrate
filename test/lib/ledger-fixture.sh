@@ -48,7 +48,7 @@ ledger_new_template() {
         cd "$template" || exit 1
         git init -q --initial-branch=main || exit 1
         printf 'seed\n' > README.md || exit 1
-        "$KIT_ROOT/bin/substrate" init --profile base || exit 1
+        "$KIT_ROOT/bin/substrate" init --profile base --from-worktree || exit 1
         rm -f .substrate/report.sh || exit 1
     ) >/dev/null 2>&1
     [ -f "$template/.substrate/engine-shim.sh" ]

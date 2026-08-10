@@ -21,7 +21,7 @@ git config user.name substrate
 git config user.email substrate@localhost
 printf '#!/usr/bin/env bash\nprintf "owned\\n"\n' > owned.sh
 chmod +x owned.sh
-"$KIT_ROOT/bin/substrate" init --profile shell --vcs git >/dev/null 2>&1 || fail "fixture init failed"
+"$KIT_ROOT/bin/substrate" init --profile shell --vcs git --from-worktree >/dev/null 2>&1 || fail "fixture init failed"
 git add -A
 git commit -qm 'chore: initialize'
 substrate-engine gate --update-baseline >/dev/null 2>&1 || fail "fixture baseline failed"

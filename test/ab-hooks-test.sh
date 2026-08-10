@@ -41,7 +41,7 @@ mkdir -p "$TEMPLATE" || exit 9
     cd "$TEMPLATE" || exit 9
     git init -q --initial-branch=main
     printf 'seed\n' > README.md
-    "$KIT_ROOT/bin/substrate" init --profile shell
+    "$KIT_ROOT/bin/substrate" init --profile shell --from-worktree
 ) >/dev/null 2>&1 || { printf 'ab-hooks-test: template init failed\n' >&2; exit 9; }
 [ -f "$TEMPLATE/.substrate/engine-shim.sh" ] \
     || { printf 'ab-hooks-test: template lacks engine-shim.sh — re-vendor first\n' >&2; exit 9; }
