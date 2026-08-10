@@ -2,11 +2,12 @@ package gate
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
-	"encoding/json"
+	"strings"
 )
 
 func check30Budgets(ctx context.Context, inv []string, claims []byte, env map[string]string) (int, []MetricRecord, string, error) {
@@ -28,12 +29,20 @@ func check30Budgets(ctx context.Context, inv []string, claims []byte, env map[st
 	if cfg.Budgets.MaxFileLines == 0 {
 		return 0, nil, "budgets opted out in substrate.json (max_file_lines: 0)", nil
 	}
+	unscanned := loadUnscanned2(configPath)
+	exempt := make(map[string]bool)
+	for _, line := range strings.Split(string(claims), "\n") {
+		parts := strings.SplitN(line, "\x1f", 5)
+		if len(parts) >= 4 && parts[3] == "exempt" {
+			exempt[parts[0]] = true
+		}
+	}
 
 	max := 0
 	maxFile := ""
 
 	for _, f := range inv {
-		if !isClaimed(claims, f) {
+		if exempt[f] || isUnscanned2(f, unscanned) || !isClaimed(claims, f) {
 			continue
 		}
 		fullPath := filepath.Join(env["REPO_ROOT"], f)
