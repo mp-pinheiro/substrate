@@ -1,0 +1,1 @@
+usage: agent-lifecycle.sh start|observe|verify <session>|complete <session> <commit>|stop|end

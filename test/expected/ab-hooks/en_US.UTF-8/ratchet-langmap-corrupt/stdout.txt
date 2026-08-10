@@ -1,0 +1,2 @@
+
+comment ratchet: detector infrastructure failed (rc=3) — fix it before editing

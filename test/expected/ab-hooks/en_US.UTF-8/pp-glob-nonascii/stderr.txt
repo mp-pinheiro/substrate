@@ -1,0 +1,1 @@
+blocked: é.secret is protected by substrate.json protected_paths

@@ -2,7 +2,7 @@
 # Restructure transaction: allow-listed targets, atomic split/describe/squash,
 # tree preservation, session integration, and the omp tool wrapper.
 set -uo pipefail
-export SUBSTRATE_ENGINE="${GOLDEN_ENGINE:-bash}"
+export SUBSTRATE_ENGINE="${GOLDEN_ENGINE:-go}"
 
 fail() { printf 'restructure-test FAIL: %s\n' "$1" >&2; exit 1; }
 

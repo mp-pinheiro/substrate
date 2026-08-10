@@ -1,0 +1,1 @@
+blocked: substrate.json is corrupt — fix it before writing anything else

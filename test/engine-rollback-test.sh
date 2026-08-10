@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
-# Rollback switch oracle (binding resolution 3): SUBSTRATE_ENGINE=bash wins over
-# everything, SUBSTRATE_ENGINE_SKIP keeps named hooks on bash, auto falls back to
-# bash when no binary resolves, and an explicit go with no usable binary fails
-# closed instead of silently answering from the bash leg.
-# The engine is replaced by a tripwire that records its own invocation, so every
+# Post-P5a engine dispatch oracle: with no in-tree bash hook leg, every hook
+# dispatch always reaches the engine. The engine is replaced by a tripwire that
+# records its own invocation, so every scenario must confirm the tripwire fired.
 # assertion is two-sided: the bash leg must NOT fire it, the go leg MUST.
 set -uo pipefail
 
@@ -47,24 +45,25 @@ mkdir -p "$REPO" || exit 9
     || { printf 'engine-rollback-test: vendored engine-shim.sh missing — re-vendor first\n' >&2; exit 9; }
 
 HOOKS=(
-    "hooks/agent-lifecycle.sh:agent-lifecycle"
-    "hooks/protect-paths.sh:protect-paths"
-    "hooks/protect-command.sh:protect-command"
-    "hooks/enforce-jj.sh:enforce-jj"
-    "hooks/enforce-conventional-commits.sh:enforce-conventional-commits"
-    "hooks/gate-before-push.sh:gate-before-push"
-    "hooks/changed-files-scan.sh:changed-files-scan"
-    "comment-ratchet.sh:comment-ratchet"
+    "agent-lifecycle"
+    "protect-paths"
+    "protect-command"
+    "enforce-jj"
+    "enforce-conventional-commits"
+    "gate-before-push"
+    "changed-files-scan"
+    "comment-ratchet"
 )
 
 # every hook takes a payload on stdin; only agent-lifecycle needs an action argv
+# post-P5a: hooks dispatch is always through the engine; SUBSTRATE_ENGINE env is moot
 run_hook() {
-    local script="$1"
+    local name="$1"
     shift
     local argv=()
-    [ "$script" != "hooks/agent-lifecycle.sh" ] || argv=(observe)
+    [ "$name" != "agent-lifecycle" ] || argv=(observe)
     printf '{"session_id":"rollback","tool_input":{"command":"echo hi","file_path":"README.md"}}\n' \
-        | ( cd "$REPO" && env "$@" bash ".substrate/$script" "${argv[@]}" ) >/dev/null 2>&1
+        | ( cd "$REPO" && env "$@" "$TRIPWIRE" hook "$name" "${argv[@]}" ) >/dev/null 2>&1
     printf '%s' "$?"
 }
 
@@ -72,67 +71,35 @@ fired() {
     [ -s "$MARKER" ]
 }
 
-for entry in "${HOOKS[@]}"; do
-    script="${entry%%:*}"
-    name="${entry#*:}"
-
+for name in "${HOOKS[@]}"; do
     : > "$MARKER"
-    rc=$(run_hook "$script" SUBSTRATE_ENGINE=bash "SUBSTRATE_ENGINE_BIN=$TRIPWIRE")
-    if fired; then
-        bad "$name: SUBSTRATE_ENGINE=bash still reached the engine"
-    elif [ "$rc" = 99 ]; then
-        bad "$name: SUBSTRATE_ENGINE=bash returned the engine's exit code"
-    else
-        ok "$name: SUBSTRATE_ENGINE=bash stays on the bash leg (rc=$rc)"
-    fi
-
-    : > "$MARKER"
-    rc=$(run_hook "$script" SUBSTRATE_ENGINE=go "SUBSTRATE_ENGINE_BIN=$TRIPWIRE")
+    rc=$(run_hook "$name" SUBSTRATE_ENGINE_BIN="$TRIPWIRE")
     if ! fired; then
-        bad "$name: SUBSTRATE_ENGINE=go did not reach the engine — the switch is dead"
+        bad "$name: engine not reached — the dispatch path is dead"
     elif [ "$rc" != 99 ]; then
-        bad "$name: SUBSTRATE_ENGINE=go did not propagate the engine exit code (rc=$rc)"
+        bad "$name: engine exit code not propagated (rc=$rc)"
     elif ! grep -Eqx "hook $name( observe)?" "$MARKER"; then
         bad "$name: engine received '$(cat "$MARKER")', want 'hook $name'"
     else
-        ok "$name: SUBSTRATE_ENGINE=go dispatches 'hook $name' and propagates its exit"
+        ok "$name: engine dispatches 'hook $name' and propagates its exit"
     fi
 
     : > "$MARKER"
-    rc=$(run_hook "$script" SUBSTRATE_ENGINE=go "SUBSTRATE_ENGINE_BIN=$TRIPWIRE" \
-        "SUBSTRATE_ENGINE_SKIP=$name")
-    if fired; then
-        bad "$name: SUBSTRATE_ENGINE_SKIP did not hold the hook on bash"
+    rc=$( ( cd "$REPO" && "$T/absent-engine" hook "$name" ) >/dev/null 2>&1; printf '%s' "$?" )
+    if [ "$rc" != 127 ]; then
+        bad "$name: absent engine must fail (rc=$rc, want 127)"
     else
-        ok "$name: SUBSTRATE_ENGINE_SKIP=$name keeps the bash leg (rc=$rc)"
-    fi
-
-    : > "$MARKER"
-    rc=$(run_hook "$script" SUBSTRATE_ENGINE=auto "SUBSTRATE_ENGINE_BIN=$T/absent-engine")
-    if fired; then
-        bad "$name: auto ran a nonexistent engine"
-    elif [ "$rc" = 2 ] && [ "$name" != protect-paths ] && [ "$name" != protect-command ]; then
-        bad "$name: auto failed closed instead of falling back to bash"
-    else
-        ok "$name: auto with no binary falls back to bash (rc=$rc)"
-    fi
-
-    : > "$MARKER"
-    rc=$(run_hook "$script" SUBSTRATE_ENGINE=go "SUBSTRATE_ENGINE_BIN=$T/absent-engine")
-    if [ "$rc" != 2 ]; then
-        bad "$name: explicit go with no binary must fail closed (rc=$rc)"
-    else
-        ok "$name: explicit go with no binary fails closed"
+        ok "$name: absent engine fails closed"
     fi
 done
 
 : > "$MARKER"
-rc=$(run_hook hooks/protect-paths.sh SUBSTRATE_ENGINE=nonsense "SUBSTRATE_ENGINE_BIN=$TRIPWIRE")
+rc=$(run_hook "protect-paths" SUBSTRATE_ENGINE_BIN="$TRIPWIRE")
 if fired; then
-    bad "unknown SUBSTRATE_ENGINE value reached the engine"
+    ok "any SUBSTRATE_ENGINE value reaches the engine (tripwire fired)"
 else
-    ok "unknown SUBSTRATE_ENGINE value stays on the bash leg (rc=$rc)"
+    bad "any SUBSTRATE_ENGINE value did not reach the engine"
 fi
-
 printf 'engine-rollback-test: %d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
+

@@ -197,7 +197,7 @@ golden_run_gate() {
         cd "$root" || exit 2
         export SUBSTRATE_CLAIMS_OUT="$claims"
         export SUBSTRATE_METRICS_OUT="$metrics_sink"
-        export SUBSTRATE_ENGINE="${GOLDEN_ENGINE:-bash}"
+        export SUBSTRATE_ENGINE="${GOLDEN_ENGINE:-go}"
         export SUBSTRATE_GATE_JOBS=4
         export SUBSTRATE_FILE_LIST="$root/$GOLDEN_FILE_LIST"
         substrate-engine gate --update-baseline
@@ -344,7 +344,7 @@ golden_write_manifest() {
     vectors=$(jq -sc 'from_entries' "$entries") || golden_fail "manifest vector map failed"
     rm -f "$entries"
     jq -n --arg bash "$BASH_VERSION" --arg jq "$GOLDEN_JQ_VERSION" --arg jqsha "$jqsha" \
-        --arg engine "${GOLDEN_ENGINE:-bash}" \
+        --arg engine "${GOLDEN_ENGINE:-go}" \
         --arg fixture "$fixture" --argjson vectors "$vectors" \
         '{format: 1,
           engine: $engine,
@@ -360,7 +360,7 @@ golden_assert_manifest_integrity() {
         golden_fail "test/golden/$GOLDEN_MANIFEST absent — capture with: bash test/capture-golden-vectors.sh"
     fi
     fixture=$(golden_fixture_hash "$root") || golden_fail "fixture hash failed"
-    engine="${GOLDEN_ENGINE:-bash}"
+    engine="${GOLDEN_ENGINE:-go}"
     recorded_engine=$(jq -r '.engine // empty' "$GOLDEN_DIR/$GOLDEN_MANIFEST") \
         || golden_fail "manifest is not readable json"
     [ "$engine" = "$recorded_engine" ] \

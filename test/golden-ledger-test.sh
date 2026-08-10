@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-# Byte oracle for test/golden/ledger: bash leg reproduces the committed
-# vectors, then a self-built go leg (amendments A1/A25) replays the same
-# fixture against them, proving A8 non-ASCII/invalid-UTF-8 handling
-# bug-for-bug. Exit 3 (unverifiable) only when the pinned jq is unfetchable.
+# Byte oracle for test/golden/ledger: the go engine reproduces the committed
+# vectors, proving A8 non-ASCII/invalid-UTF-8 handling. Post-P5a there is no
+# in-tree bash hook leg; the committed golden vectors are the regression oracle.
 # Usage: test/golden-ledger-test.sh
 set -uo pipefail
 
@@ -20,8 +19,7 @@ if ! "$KIT_ROOT/test/ci-toolchain.sh" --ensure-jq; then
     exit 3
 fi
 export PATH="$KIT_ROOT/test/.toolchain/bin:$PATH"
-command -v go >/dev/null 2>&1 || ledger_fail "go is required for the go-leg replay"
-ledger_assert_toolchain
+command -v go >/dev/null 2>&1 || ledger_fail "go is required"
 
 [ -d "$LEDGER_DIR" ] \
     || ledger_fail "test/golden/ledger absent — capture it with: bash test/capture-golden-ledger.sh"
@@ -29,15 +27,10 @@ ledger_assert_toolchain
 SCRATCH=$(mktemp -d) || ledger_fail "scratch dir"
 trap 'rm -rf "$SCRATCH"' EXIT
 
-ledger_regenerate "$SCRATCH" "$SCRATCH/fresh-bash" bash || ledger_fail "bash regeneration failed"
-ledger_compare_vectors "$SCRATCH/fresh-bash"
-
-printf 'golden-ledger-test: %d vectors byte-identical under bash %s + %s\n' \
-    "${#LEDGER_VECTORS[@]}" "$BASH_VERSION" "$LEDGER_JQ_VERSION"
 
 SUBSTRATE_ENGINE_BIN=$(engine_build ledger_fail go) || exit 1
 export SUBSTRATE_ENGINE_BIN
 
-ledger_regenerate "$SCRATCH" "$SCRATCH/fresh-go" go || ledger_fail "go regeneration failed"
-ledger_compare_vectors "$SCRATCH/fresh-go"
-printf 'golden-ledger-test: go leg reproduces the same %d vectors\n' "${#LEDGER_VECTORS[@]}"
+ledger_regenerate "$SCRATCH" "$SCRATCH/fresh" go || ledger_fail "regeneration failed"
+ledger_compare_vectors "$SCRATCH/fresh"
+printf 'golden-ledger-test: %d vectors byte-identical\n' "${#LEDGER_VECTORS[@]}"

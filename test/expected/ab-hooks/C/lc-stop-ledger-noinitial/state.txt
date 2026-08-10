@@ -1,0 +1,3 @@
+--- .git/substrate/agent-sessions dir
+--- .git/substrate/agent-sessions/<SESSION>.json file
+{"session":"<SESSION>","repoRoot":"<REPO>","observed":{"revision":"<HEX40>","entries":{},"fingerprint":"<SHA256>","error":null},"ownedPaths":[],"trackingError":null,"stopBlocked":false,"completedCommit":"<HEX40>","initial":{"revision":"<HEX40>","entries":{},"fingerprint":"<SHA256>","error":null},"driftNotice":null,"sessionChanges":["<HEX40>"]}

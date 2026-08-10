@@ -1,0 +1,1 @@
+{"paths":["owned.sh"],"fingerprint":"<SHA256>"}

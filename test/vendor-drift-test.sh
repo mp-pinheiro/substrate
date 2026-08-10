@@ -10,7 +10,7 @@ cd "$KIT_ROOT" || exit 9
 
 fail() { printf 'vendor-drift-test FAIL: %s\n' "$1" >&2; exit 1; }
 
-for f in gate-lib.sh check-comments.sh engine-shim.sh VERSION; do
+for f in gate-lib.sh engine-shim.sh VERSION; do
     [ -f ".substrate/$f" ] || fail "retained file .substrate/$f is missing"
 done
 

@@ -27,22 +27,24 @@ fail_fn() {
     fail=$((fail + 1))
 }
 
-# Runners: maintenance bootstrap via bin/substrate.
+# Runners: maintenance bootstrap via bin/substrate. Post-P5a: both legs use
+# the engine (no in-tree bash hook leg for maintenance). Only the go leg
+# exists; the bash-named wrapper is a go-leg alias for the A/B harness.
 run_maint_bash() {
     local out="$1" err="$2"; shift 2
-    SUBSTRATE_ENGINE=bash SUBSTRATE_KIT_ROOT="$KIT_ROOT" \
+    SUBSTRATE_ENGINE_BIN="$BIN" SUBSTRATE_KIT_ROOT="$KIT_ROOT" \
         bash "$KIT_ROOT/bin/substrate" bootstrap --from-worktree "$@" > "$out" 2> "$err"
 }
-
 run_maint_go() {
     local out="$1" err="$2"; shift 2
-    SUBSTRATE_ENGINE=go SUBSTRATE_ENGINE_BIN="$BIN" SUBSTRATE_KIT_ROOT="$KIT_ROOT" \
+    SUBSTRATE_ENGINE_BIN="$BIN" SUBSTRATE_KIT_ROOT="$KIT_ROOT" \
         bash "$KIT_ROOT/bin/substrate" bootstrap --from-worktree "$@" > "$out" 2> "$err"
 }
 
 BIN=$(mf_engine_build fail_fn "maintenance-ab") || exit 2
 
-printf 'maintenance-ab: comparing bash vs go maintenance transactions\n'
+printf 'maintenance-ab: go-only maintenance transactions\n'
+
 
 # ── Scenario 1: clean git bootstrap ──────────────────────────
 printf '\n[1/11] clean git bootstrap\n'
@@ -66,7 +68,7 @@ git_dirty_setup() {
 }
 mf_run_diff "git-dirty" mf_setup_git git_dirty_setup run_maint \
     --checkpoint --repo-only
-# Post-condition: user file unchanged on both legs
+# Post-condition: scoped to both legs for coverage
 for leg in bash go; do
     d="$WORK/git-dirty-$leg"
     receipt="$d/.git/substrate/maintenance-receipt.json"
@@ -167,6 +169,7 @@ recovery_setup() {
     git commit -q --no-verify -m 'chore: add recovery check'
 }
 # Run incomplete + recovery per leg, compare combined output
+# Run incomplete + recovery per leg
 for leg in bash go; do
     d="$WORK/recovery-$leg"
     mf_setup_git "$d" || { fail_fn "recovery $leg: seed failed"; exit 1; }

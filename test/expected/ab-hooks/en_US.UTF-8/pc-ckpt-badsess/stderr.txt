@@ -1,0 +1,1 @@
+BLOCKED: Claude checkpoint command must carry its current lifecycle session id

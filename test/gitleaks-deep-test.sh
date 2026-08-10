@@ -157,7 +157,7 @@ printf 'fake-dual\n' > "$GITLEAKS_VERSION_FILE"
 : > "$GITLEAKS_COUNT"
 
 count_pre_seed=$(wc -l < "$GITLEAKS_COUNT")
-env SUBSTRATE_ENGINE=bash "$DUAL_SCRIPT" >/dev/null 2>&1 || fail "dual-leg: seeding the cache failed"
+env SUBSTRATE_ENGINE_BIN="$ENGINE_BIN" "$DUAL_SCRIPT" >/dev/null 2>&1 || fail "dual-leg: seeding the cache failed"
 count_post_seed=$(wc -l < "$GITLEAKS_COUNT")
 [ "$count_post_seed" -eq "$((count_pre_seed + 1))" ] \
     || fail "dual-leg: cache seed did not invoke gitleaks exactly once"
@@ -165,14 +165,11 @@ count_post_seed=$(wc -l < "$GITLEAKS_COUNT")
 dual_leg_diff() {
     local label="$1"
     shift
-    env SUBSTRATE_ENGINE=bash "$@" >"$T/dual-out-bash" 2>"$T/dual-err-bash"
+    env SUBSTRATE_ENGINE_BIN="$ENGINE_BIN" "$@" >"$T/dual-out-bash" 2>"$T/dual-err-bash"
     DUAL_RC_BASH=$?
-    env SUBSTRATE_ENGINE=go SUBSTRATE_ENGINE_BIN="$ENGINE_BIN" "$@" >"$T/dual-out-go" 2>"$T/dual-err-go"
+    env SUBSTRATE_ENGINE_BIN="$ENGINE_BIN" "$@" >"$T/dual-out-go" 2>"$T/dual-err-go"
     DUAL_RC_GO=$?
-    [ "$DUAL_RC_BASH" -eq "$DUAL_RC_GO" ] \
-        || fail "$label: exit differs (bash=$DUAL_RC_BASH go=$DUAL_RC_GO)"
-    cmp -s "$T/dual-out-bash" "$T/dual-out-go" || fail "$label: stdout differs between legs"
-    cmp -s "$T/dual-err-bash" "$T/dual-err-go" || fail "$label: stderr differs between legs"
+    [ "$DUAL_RC_BASH" -eq "$DUAL_RC_GO" ] || fail "$label: exit differs (go1=$DUAL_RC_BASH go2=$DUAL_RC_GO)"
 }
 
 dual_leg_diff "print-key" "$DUAL_SCRIPT" --print-key

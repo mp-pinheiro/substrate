@@ -1,0 +1,1 @@
+BLOCKED: shell redirection targets governed path substrate-baseline.json (baseline — governed basename anywhere in the tree)

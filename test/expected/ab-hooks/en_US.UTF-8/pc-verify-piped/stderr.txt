@@ -1,0 +1,1 @@
+BLOCKED: run substrate verify directly and unmodified; pipes, redirects, and chained commands can hide a failing verdict

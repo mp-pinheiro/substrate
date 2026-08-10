@@ -1,0 +1,2 @@
+gate red: 60-shellcheck.sh
+push blocked: fix the failing gate checks first

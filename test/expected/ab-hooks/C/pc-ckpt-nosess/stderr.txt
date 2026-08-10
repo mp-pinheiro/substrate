@@ -1,0 +1,1 @@
+BLOCKED: Claude checkpoint command has no valid lifecycle session

@@ -1,0 +1,1 @@
+blocked: secrets/token.txt is protected by substrate.json protected_paths

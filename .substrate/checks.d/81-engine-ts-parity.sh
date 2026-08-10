@@ -45,7 +45,7 @@ fi
 while IFS= read -r dcase; do
     v="${dcase#case \"}"
     v="${v%\"}"
-    [ -n "${hooks[$v]+x}" ] || printf 'note: dispatch verb "%s" has no claude-hooks.json entry (P5b)\n' "$v" >&2
+    [ -n "${hooks[$v]+x}" ] || printf 'note: dispatch verb "%s" has no claude-hooks.json entry (comment-ratchet is folded into changed-files-scan)\n' "$v" >&2
 done < <(grep -oE 'case "[A-Za-z0-9._-]+"' "$DISPATCH_GO")
 
 exit "$rc"

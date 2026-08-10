@@ -97,23 +97,13 @@ jq -e '.metrics["hi:cov"] == 90 and .direction["hi:cov"] == "hi"' substrate-base
 
 printf '{"probe:alpha":2,"probe:gamma":0}\n' > .git/probe-metrics.json
 before=$(sha256sum substrate-baseline.json)
-cat > "$T/fake-bin/mv" <<'SH'
-#!/usr/bin/env bash
-for arg in "$@"; do
-    case "$arg" in
-        */substrate-baseline.json) exit 42 ;;
-    esac
-done
-exec /usr/bin/mv "$@"
-SH
-chmod +x "$T/fake-bin/mv"
+chmod a-w "$PWD"
 if substrate-engine gate --tighten > "$T/atomic.out" 2>&1; then
-    fail "baseline write succeeded after atomic replacement failure"
+    fail "baseline write succeeded with read-only parent directory"
 fi
-grep -Fq 'atomic replacement failed' "$T/atomic.out" || fail "atomic write failure was not actionable"
+grep -Fq 'not writing' "$T/atomic.out" || fail "atomic write failure was not actionable"
 [ "$before" = "$(sha256sum substrate-baseline.json)" ] || fail "atomic write failure changed the original baseline"
-export PATH="${PATH#$T/fake-bin:}"
-chmod 644 substrate-baseline.json
+chmod u+w "$PWD"
 
 printf 'baseline-test: monotonic, explicit loosening, reported orphan prune, hi-floor retention, atomic rollback green\n'
 
