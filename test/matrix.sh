@@ -71,7 +71,7 @@ for name in "${profiles[@]}"; do
         fi
         git add -A && git commit -qm init
 
-        out=$(.substrate/gate.sh --update-baseline 2>&1)
+        out=$(substrate-engine gate --update-baseline 2>&1)
         rc=$?
         if [ "$rc" -ne 0 ]; then
             printf '%s\n' "$out"
@@ -113,7 +113,7 @@ for name in "${profiles[@]}"; do
                 cp "$src" "./$bad_dest"
             fi
             git add -A && git commit -qm bad-fixture
-            out=$(.substrate/gate.sh 2>&1)
+            out=$(substrate-engine gate 2>&1)
             rc=$?
             if [ "$rc" -ne 0 ] && grep -qF "$fails_check" <<< "$out"; then
                 echo "own-check oracle: $fails_check rejected $(basename "$bad_rel")"

@@ -23,7 +23,7 @@ chmod +x ok.sh $'bad\x1fname.sh'
 export SUBSTRATE_FILE_LIST="$T/repo/.filelist"
 printf 'ok.sh\nbad\x1fname.sh\n' > "$SUBSTRATE_FILE_LIST"
 
-out=$(.substrate/gate.sh 2>&1)
+out=$(substrate-engine gate 2>&1)
 rc=$?
 if [ "$rc" -ne 3 ]; then
     fail "expected exit 3 for 0x1F path, got $rc. Output: $out"

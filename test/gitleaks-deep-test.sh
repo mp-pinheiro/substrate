@@ -41,7 +41,7 @@ git commit -qm 'chore: retire credential'
 git remote add origin "$T/history-origin.git"
 git push -q -u origin main
 "$KIT_ROOT/bin/substrate" init --profile base --vcs git >/dev/null 2>&1 || fail "history fixture init failed"
-.substrate/gate.sh --update-baseline >/dev/null 2>&1 || fail "history fixture baseline failed"
+substrate-engine gate --update-baseline >/dev/null 2>&1 || fail "history fixture baseline failed"
 if "$KIT_ROOT/bin/substrate" gate --deep --no-cache > "$T/history.out" 2>&1; then
     fail "deep scan missed a secret in reachable history"
 fi

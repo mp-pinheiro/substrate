@@ -74,6 +74,7 @@ merge_hook_groups() {
             (.command // "") as $command
             | ((current_managed_commands | index($command)) != null)
                 or ($command | test("^bash \"\\$\\{CLAUDE_PROJECT_DIR:-\\.\\}/\\.substrate/hooks/[A-Za-z0-9._-]+\\.sh\"([ ][A-Za-z0-9._-]+)*$"))
+                or ($command | test("^substrate-engine hook [A-Za-z0-9._-]+([ ][A-Za-z0-9._-]+)*$"))
                 or ($command | test("^bash \"\\$HOME/\\.claude/hooks/substrate-launch\\.sh\" [A-Za-z0-9._-]+([ ][A-Za-z0-9._-]+)*$"));
         def strip_managed($groups):
             [$groups[]?
@@ -221,7 +222,7 @@ install_vcs_hooks() {
     if git rev-parse --git-dir >/dev/null 2>&1; then
         if hooks_dir=$(git rev-parse --git-path hooks 2>/dev/null) \
             && mkdir -p "$hooks_dir"; then
-            install_git_hook "$hooks_dir/pre-commit" 'exec bash "$(git rev-parse --show-toplevel)/.substrate/hooks/changed-files-scan.sh"' || rc=1
+            install_git_hook "$hooks_dir/pre-commit" 'exec substrate-engine hook changed-files-scan' || rc=1
             install_git_hook "$hooks_dir/pre-push" 'exec bash "$(git rev-parse --show-toplevel)/.substrate/push-gate.sh"' || rc=1
         else
             warn "effective Git hooks directory is unavailable"
@@ -272,29 +273,29 @@ install_recipe() {
     repo_path_safe justfile "gate recipe" || return 1
     repo_path_safe Makefile "gate target" || return 1
     if [ -f justfile ]; then
-        if grep -q '.substrate/gate.sh' justfile; then
+        if grep -qE 'substrate-engine gate|\.substrate/gate\.sh' justfile; then
             success "gate recipe wired (just gate)"
         elif grep -qE '^gate[ :]' justfile; then
-            warn "justfile already owns a 'gate' recipe — point it at .substrate/gate.sh yourself (appending would redefine the recipe and break just entirely)"
+            warn "justfile already owns a 'gate' recipe — point it at substrate-engine gate yourself (appending would redefine the recipe and break just entirely)"
             return 1
         else
-            printf '\ngate *ARGS:\n    .substrate/gate.sh {{ARGS}}\n' >> justfile \
+            printf '\ngate *ARGS:\n    substrate-engine gate {{ARGS}}\n' >> justfile \
                 || { warn "gate recipe write failed"; return 1; }
             success "gate recipe wired (just gate)"
         fi
     elif [ -f Makefile ]; then
-        if grep -q '.substrate/gate.sh' Makefile; then
+        if grep -q 'substrate-engine gate' Makefile; then
             success "gate target wired (make gate)"
         elif grep -qE '^gate:' Makefile; then
-            warn "Makefile already owns a 'gate' target — point it at .substrate/gate.sh yourself"
+            warn "Makefile already owns a 'gate' target — point it at substrate-engine gate yourself"
             return 1
         else
-            printf '\ngate:\n\t.substrate/gate.sh\n' >> Makefile \
+            printf '\ngate:\n\tsubstrate-engine gate\n' >> Makefile \
                 || { warn "gate target write failed"; return 1; }
             success "gate target wired (make gate)"
         fi
     else
-        printf 'gate *ARGS:\n    .substrate/gate.sh {{ARGS}}\n' > justfile \
+        printf 'gate *ARGS:\n    substrate-engine gate {{ARGS}}\n' > justfile \
             || { warn "gate recipe write failed"; return 1; }
         success "gate recipe wired (just gate)"
     fi

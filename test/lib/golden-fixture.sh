@@ -200,7 +200,7 @@ golden_run_gate() {
         export SUBSTRATE_ENGINE="${GOLDEN_ENGINE:-bash}"
         export SUBSTRATE_GATE_JOBS=4
         export SUBSTRATE_FILE_LIST="$root/$GOLDEN_FILE_LIST"
-        .substrate/gate.sh --update-baseline
+        substrate-engine gate --update-baseline
     ) > "$log" 2>&1
     rc=$?
     if [ "$rc" -ne 0 ]; then

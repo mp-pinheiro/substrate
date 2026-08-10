@@ -19,7 +19,7 @@ git add -A
 git commit -qm 'seed'
 
 rm -f .substrate/checks.d/*.sh
-out=$(.substrate/gate.sh 2>&1)
+out=$(substrate-engine gate 2>&1)
 rc=$?
 
 if [ "$rc" -ne 3 ]; then

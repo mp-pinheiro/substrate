@@ -23,7 +23,7 @@ printf '{"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "comman
 env -u CI "$KIT_ROOT/bin/substrate" init --profile shell >/dev/null 2>&1 || fail "first init failed"
 count1=$(jq '[(.hooks.PreToolUse // [])[], (.hooks.PostToolUse // [])[]] | length' .claude/settings.json)
 grep -q 'my-own-hook.sh' .claude/settings.json || fail "repo-owned hook dropped by first init"
-grep -q '.substrate/hooks/protect-paths.sh' .claude/settings.json || fail "substrate hooks not wired"
+grep -q 'substrate-engine hook protect-paths' .claude/settings.json || fail "substrate hooks not wired"
 
 env -u CI "$KIT_ROOT/bin/substrate" init --profile shell >/dev/null 2>&1
 count2=$(jq '[(.hooks.PreToolUse // [])[], (.hooks.PostToolUse // [])[]] | length' .claude/settings.json)
@@ -76,7 +76,7 @@ T3=$(mktemp -d)
     git commit -q -m 'chore: seed repo-owned inputs'
     env -u CI "$KIT_ROOT/bin/substrate" init --profile shell >/dev/null 2>&1 || exit 21
     git add -A
-    .substrate/gate.sh --update-baseline >/dev/null 2>&1 || exit 22
+    substrate-engine gate --update-baseline >/dev/null 2>&1 || exit 22
     git add substrate-baseline.json
     git commit -q -m 'chore: seed substrate'
 

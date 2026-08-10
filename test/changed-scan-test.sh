@@ -13,7 +13,7 @@ export SUBSTRATE_NO_USER_HARNESS=1
 fail() { printf 'changed-scan-test FAIL: %s\n' "$1" >&2; exit 1; }
 
 run_scan() {
-    bash .substrate/hooks/changed-files-scan.sh </dev/null 2>"$1"
+    substrate-engine hook changed-files-scan </dev/null 2>"$1"
 }
 
 seed_repo() {
@@ -129,7 +129,7 @@ mkdir -p "$T/git-repo"
     seed_repo git
     git add -A
     git commit -qm 'feat: seed'
-    out=$(env -u CI .substrate/gate.sh --update-baseline 2>&1) || fail "git: baseline not green: $out"
+    out=$(env -u CI substrate-engine gate --update-baseline 2>&1) || fail "git: baseline not green: $out"
     git add -A
     git commit -qm 'chore: baseline'
     # private TMPDIR: memo_keys reads the cache dir, and /tmp keeps every earlier run's cache
@@ -146,7 +146,7 @@ mkdir -p "$T/jj-repo"
     cd "$T/jj-repo" || exit 9
     jj git init >/dev/null 2>&1 || { printf 'changed-scan-test: jj unavailable — jj case skipped\n'; exit 0; }
     seed_repo jj
-    out=$(env -u CI .substrate/gate.sh --update-baseline 2>&1) || fail "jj: baseline not green: $out"
+    out=$(env -u CI substrate-engine gate --update-baseline 2>&1) || fail "jj: baseline not green: $out"
     jj commit -m 'feat: seed' >/dev/null 2>&1
     battery jj
 
