@@ -2,6 +2,7 @@ package policy
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/mp-pinheiro/substrate/internal/bashglob"
@@ -22,9 +23,9 @@ func ProtectPaths(in Input, cfg *config.Config, repoRoot string) Decision {
 		return block("blocked: substrate.json contracts entries need name/regen/paths — fix the config\n")
 	}
 
-	abs := path
+	abs := filepath.Clean(path)
 	if !strings.HasPrefix(abs, "/") {
-		abs = repoRoot + "/" + abs
+		abs = filepath.Clean(repoRoot + "/" + abs)
 	}
 
 	if info, err := os.Lstat(abs); err == nil && info.Mode()&os.ModeSymlink != 0 {
@@ -39,7 +40,7 @@ func ProtectPaths(in Input, cfg *config.Config, repoRoot string) Decision {
 		return block("blocked: %s is a symlink to %s — writing through it clobbers the target; edit the target explicitly if that is intended\n", path, target)
 	}
 
-	rel := path
+	rel := filepath.Clean(path)
 	if strings.HasPrefix(rel, repoRoot+"/") {
 		rel = strings.TrimPrefix(rel, repoRoot+"/")
 	}
@@ -99,7 +100,7 @@ func checkHard(name string) (Decision, bool) {
 		return block("blocked: baseline changes only via the gate (--update-baseline)\n"), true
 	case bashglob.Match("*/substrate-baseline.json", name):
 		return block("blocked: %s is not the repo baseline, but that basename is governed anywhere in the tree — the rule is name-based so it can rule on paths whose parents do not exist yet; rename the file if it is not a substrate baseline\n", name), true
-	case bashglob.Match("substrate.json", name), bashglob.Match("*/substrate.json", name):
+	case bashglob.Match("substrate.json", name):
 		return block("blocked: substrate.json contains human-approved policy — change it through guarded substrate maintenance\n"), true
 	case bashglob.Match(".substrate/*", name), bashglob.Match("*/.substrate/*", name):
 		return block("blocked: %s is vendored substrate core — change the kit and run: substrate update\n", name), true
