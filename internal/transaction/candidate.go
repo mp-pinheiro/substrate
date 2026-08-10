@@ -60,10 +60,9 @@ func (c *Candidate) buildFromRevision(ctx context.Context, repo *vcs.Repo, base 
 		return err
 	}
 
-	// Verify vendored gate exists in candidate.
-	gatePath := filepath.Join(c.Dir, ".substrate", "gate.sh")
-	if _, err := os.Stat(gatePath); err != nil {
-		return fmt.Errorf("candidate: revision %s does not carry the vendored gate runtime", base)
+	versionPath := filepath.Join(c.Dir, ".substrate", "VERSION")
+	if _, err := os.Stat(versionPath); err != nil {
+		return fmt.Errorf("candidate: revision %s does not carry the vendored substrate runtime", base)
 	}
 
 	return nil
@@ -134,7 +133,11 @@ func (c *Candidate) RunGate(ctx context.Context, args ...string) (string, error)
 	saved := os.Getenv("SUBSTRATE_FILE_LIST")
 	_ = os.Unsetenv("SUBSTRATE_FILE_LIST")
 	defer func() { _ = os.Setenv("SUBSTRATE_FILE_LIST", saved); }()
-	res, err := xshell.RunIn(ctx, c.Dir, filepath.Join(c.Dir, ".substrate", "gate.sh"), args...)
+	bin, err := xshell.EngineBin()
+	if err != nil {
+		return "", fmt.Errorf("candidate gate: %w", err)
+	}
+	res, err := xshell.RunIn(ctx, c.Dir, bin, append([]string{"gate"}, args...)...)
 	if err != nil {
 		return string(res.Stdout) + string(res.Stderr), fmt.Errorf("candidate gate: %w", err)
 	}

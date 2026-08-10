@@ -94,3 +94,14 @@ func Have(bin string) bool {
 	_, err := exec.LookPath(bin)
 	return err == nil
 }
+
+func EngineBin() (string, error) {
+	if bin := os.Getenv("SUBSTRATE_ENGINE_BIN"); bin != "" {
+		return bin, nil
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("xshell: resolve engine binary: %w", err)
+	}
+	return exe, nil
+}

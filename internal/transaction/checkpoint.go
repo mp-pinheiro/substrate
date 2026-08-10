@@ -33,12 +33,6 @@ func RunCheckpoint(ctx context.Context, args []string) int {
 		return ExitPreflight
 	}
 
-	gatePath := filepath.Join(repoRoot, ".substrate", "gate.sh")
-	protectPath := filepath.Join(repoRoot, ".substrate", "hooks", "protect-paths.sh")
-	if !isExecutable(gatePath) || !isExecutable(protectPath) {
-		logx.Err().Line("checkpoint blocked: vendored Substrate runtime is incomplete — run: substrate update --apply")
-		return ExitPreflight
-	}
 	baselinePath := filepath.Join(repoRoot, "substrate-baseline.json")
 	if _, err := os.Stat(baselinePath); err != nil {
 		logx.Err().Line("checkpoint blocked: establish initial debt explicitly with: substrate baseline")
@@ -65,11 +59,6 @@ func RunCheckpoint(ctx context.Context, args []string) int {
 
 	var ownedPaths []string
 	if opts.session != "" {
-		lifecyclePath := filepath.Join(repoRoot, ".substrate", "hooks", "agent-lifecycle.sh")
-		if !isExecutable(lifecyclePath) {
-			logx.Err().Line("checkpoint blocked: Claude lifecycle runtime is unavailable")
-			return ExitPreflight
-		}
 		substrateDir := filepath.Join(repoRoot, ".substrate")
 		pathsCfg, err := config.DiscoverFromSubstrateDir(substrateDir)
 		if err != nil {
@@ -409,14 +398,12 @@ func resolveRepoRoot() (string, error) {
 	return dir, nil
 }
 
-func isExecutable(path string) bool {
-	info, err := os.Stat(path)
-	return err == nil && info.Mode()&0111 != 0
-}
-
 func runGate(ctx context.Context, repoRoot string, args ...string) (string, error) {
-	gatePath := filepath.Join(repoRoot, ".substrate", "gate.sh")
-	res, err := xshell.RunIn(ctx, repoRoot, gatePath, args...)
+	bin, err := xshell.EngineBin()
+	if err != nil {
+		return "", fmt.Errorf("gate: %w", err)
+	}
+	res, err := xshell.RunIn(ctx, repoRoot, bin, append([]string{"gate"}, args...)...)
 	if err != nil {
 		return "", fmt.Errorf("gate: %w", err)
 	}

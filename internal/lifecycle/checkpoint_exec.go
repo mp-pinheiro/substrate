@@ -7,10 +7,10 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 
 	"github.com/mp-pinheiro/substrate/internal/canonjson"
+	"github.com/mp-pinheiro/substrate/internal/xshell"
 )
 
 // runMerged reproduces bash's `2>&1`: a shared pipe fd preserves real write
@@ -76,8 +76,12 @@ func commitFieldOf(line string) string {
 }
 
 func (e *Engine) runAutoCheckpoint(ctx context.Context, session string) (string, int, error) {
-	checkpointPath := filepath.Join(e.paths.SubstrateDir, "checkpoint.sh")
-	return runMerged(ctx, e.paths.RepoRoot, checkpointPath,
+	bin, err := xshell.EngineBin()
+	if err != nil {
+		return "", -1, fmt.Errorf("auto-checkpoint: %w", err)
+	}
+	return runMerged(ctx, e.paths.RepoRoot, bin,
+		"checkpoint",
 		"--session", session,
 		"--message", "chore(agent): checkpoint owned work at session stop",
 		"--json")
