@@ -19,30 +19,30 @@ jj config set --user user.name substrate >/dev/null 2>&1
 jj config set --user user.email substrate@localhost >/dev/null 2>&1
 jj git init --colocate . >/dev/null 2>&1 || fail "jj init failed"
 "$KIT_ROOT/bin/substrate" init --profile shell --vcs jj >/dev/null 2>&1 || fail "substrate init failed"
-.substrate/gate.sh --update-baseline >/dev/null 2>&1 || fail "baseline failed"
+substrate-engine gate --update-baseline >/dev/null 2>&1 || fail "baseline failed"
 jj commit -m 'chore: initialize' >/dev/null 2>&1 || fail "seed commit failed"
 seed_change=$(jj log -r @- --no-graph -T 'change_id')
 
 printf '#!/usr/bin/env bash\nset -euo pipefail\nprintf "one\\n"\n' > one.sh
 printf '#!/usr/bin/env bash\nset -euo pipefail\nprintf "two\\n"\n' > two.sh
 chmod +x one.sh two.sh
-.substrate/checkpoint.sh --message 'feat(shell): add both scripts' --path one.sh --path two.sh >/dev/null \
+substrate-engine checkpoint --message 'feat(shell): add both scripts' --path one.sh --path two.sh >/dev/null \
     || fail "checkpoint of the split fixture failed"
 target_change=$(jj log -r @- --no-graph -T 'change_id')
 
-if .substrate/restructure.sh --op split --revision "$seed_change" --path one.sh \
+if substrate-engine restructure --op split --revision "$seed_change" --path one.sh \
     --message 'refactor(shell): steal seed' --allow-change "$target_change" > "$T/out" 2>&1; then
     fail "restructure accepted a non-session revision"
 fi
 grep -q 'not an agent session-authored commit' "$T/out" || fail "allow-list rejection was not actionable"
 
-if .substrate/restructure.sh --op split --revision "$target_change" --path one.sh \
+if substrate-engine restructure --op split --revision "$target_change" --path one.sh \
     --message 'no conventional prefix' --allow-change "$target_change" > "$T/out" 2>&1; then
     fail "restructure accepted a non-conventional message"
 fi
 grep -q 'Conventional Commits' "$T/out" || fail "message rejection was not actionable"
 
-.substrate/restructure.sh --op split --revision "$target_change" --path one.sh \
+substrate-engine restructure --op split --revision "$target_change" --path one.sh \
     --message 'refactor(shell): isolate one' --message2 'refactor(shell): keep two' \
     --allow-change "$target_change" --json > "$T/split.json" 2> "$T/split.err" \
     || fail "split transaction failed: $(cat "$T/split.err")"
@@ -61,14 +61,14 @@ jj diff -r "$remainder_change" --name-only | grep -qx 'one.sh' && fail "split re
 jq -e '.operation == "restructure"' "$(git rev-parse --git-common-dir)/substrate/restructure-receipt.json" >/dev/null \
     || fail "restructure receipt file missing"
 
-.substrate/restructure.sh --op describe --revision "$target_change" \
+substrate-engine restructure --op describe --revision "$target_change" \
     --message 'refactor(shell): isolate one better' \
     --allow-change "$target_change" --allow-change "$remainder_change" >/dev/null 2>&1 \
     || fail "describe transaction failed"
 [ "$(jj log -r "$target_change" --no-graph -T 'description.first_line()')" = 'refactor(shell): isolate one better' ] \
     || fail "describe did not rename the commit"
 
-.substrate/restructure.sh --op squash --revision "$target_change" --into "$remainder_change" \
+substrate-engine restructure --op squash --revision "$target_change" --into "$remainder_change" \
     --message 'refactor(shell): merge halves' \
     --allow-change "$target_change" --allow-change "$remainder_change" >/dev/null 2>&1 \
     || fail "squash transaction failed"
@@ -78,16 +78,16 @@ jj diff -r "$remainder_change" --name-only | grep -qx 'one.sh' || fail "squash r
 jj diff -r "$remainder_change" --name-only | grep -qx 'two.sh' || fail "squash result lost two.sh"
 [ -z "$(jj diff --name-only)" ] || fail "squash left the working copy dirty"
 
-printf '{"session_id":"restructure-session"}\n' | .substrate/hooks/agent-lifecycle.sh start >/dev/null
+printf '{"session_id":"restructure-session"}\n' | substrate-engine hook agent-lifecycle start >/dev/null
 printf '#!/usr/bin/env bash\nset -euo pipefail\nprintf "cli\\n"\n' > cli.sh
 chmod +x cli.sh
-printf '{"session_id":"restructure-session"}\n' | .substrate/hooks/agent-lifecycle.sh observe >/dev/null
-.substrate/checkpoint.sh --session restructure-session --message 'feat(shell): add cli script' >/dev/null \
+printf '{"session_id":"restructure-session"}\n' | substrate-engine hook agent-lifecycle observe >/dev/null
+substrate-engine checkpoint --session restructure-session --message 'feat(shell): add cli script' >/dev/null \
     || fail "session checkpoint failed"
 session_state="$(git rev-parse --git-common-dir)/substrate/agent-sessions/restructure-session.json"
 session_change=$(jq -r '.sessionChanges[0] // empty' "$session_state")
 [ -n "$session_change" ] || fail "complete did not seed sessionChanges"
-.substrate/restructure.sh --op describe --revision "$session_change" \
+substrate-engine restructure --op describe --revision "$session_change" \
     --message 'feat(shell): add cli entrypoint' --session restructure-session >/dev/null 2>&1 \
     || fail "session-scoped describe failed"
 [ "$(jj log -r "$session_change" --no-graph -T 'description.first_line()')" = 'feat(shell): add cli entrypoint' ] \
@@ -95,17 +95,18 @@ session_change=$(jq -r '.sessionChanges[0] // empty' "$session_state")
 [ "$(jq -r '.completedCommit' "$session_state")" = "$(jj log -r @- --no-graph -T 'commit_id')" ] \
     || fail "session state did not track the restructured revision"
 printf '{"session_id":"restructure-session","stop_hook_active":false}\n' \
-    | .substrate/hooks/agent-lifecycle.sh stop >/dev/null 2>&1 \
+    | substrate-engine hook agent-lifecycle stop >/dev/null 2>&1 \
     || fail "stop stayed blocked after session restructure"
-printf '{"session_id":"restructure-session"}\n' | .substrate/hooks/agent-lifecycle.sh end >/dev/null
+printf '{"session_id":"restructure-session"}\n' | substrate-engine hook agent-lifecycle end >/dev/null
 
-mkdir -p "$T/git-only/.substrate"
-cp "$KIT_ROOT/core/restructure.sh" "$T/git-only/.substrate/restructure.sh"
-cp "$KIT_ROOT/core/receipt-lib.sh" "$T/git-only/.substrate/receipt-lib.sh"
-chmod +x "$T/git-only/.substrate/restructure.sh"
+mkdir -p "$T/git-only"
 git init -q "$T/git-only"
-if "$T/git-only/.substrate/restructure.sh" --op describe --revision abc --message 'fix: x' \
-    --allow-change abc > "$T/out" 2>&1; then
+(
+    cd "$T/git-only" || exit 9
+    SUBSTRATE_VENDOR_FROM_WORKTREE=1 "$KIT_ROOT/bin/substrate" init --profile shell --vcs git >/dev/null 2>&1
+) >/dev/null 2>&1
+if ( cd "$T/git-only" && substrate-engine restructure --op describe --revision abc --message 'fix: x' \
+    --allow-change abc ) > "$T/out" 2>&1; then
     fail "restructure ran outside a jj repository"
 fi
 grep -q 'requires a Jujutsu repository' "$T/out" || fail "git-repo rejection was not actionable"

@@ -49,7 +49,8 @@ git commit -qm 'chore: seed repository-owned files'
 
 "$KIT_ROOT/bin/substrate" bootstrap --profile shell --checkpoint --accept-baseline --repo-only >/dev/null 2>&1 \
     || fail "fresh bootstrap failed"
-[ -x .substrate/gate.sh ] || fail "gate was not vendored"
+[ -f .substrate/VERSION ] || fail ".substrate was not vendored"
+grep -q 'substrate-engine hook' .claude/settings.json || fail "engine-form hooks were not installed"
 [ -x .substrate/install-jj.sh ] || fail "Jujutsu installer was not vendored"
 grep -q 'repo-hook.sh' .claude/settings.json || fail "repo hook was dropped"
 grep -q 'retired-hook.sh' .claude/settings.json \
@@ -77,9 +78,9 @@ grep -q '^repo-owned agent$' .omp/agents/enemy.md \
 [ "$(stat -c '%a' .claude/settings.json)" = "444" ] \
     || fail "Claude settings mode changed during atomic synchronization"
 cp .claude/settings.json "$T/settings.saved"
-jq '.note = "protect-paths.sh"
+jq '.note = "protect-paths"
     | .hooks.PreToolUse |= map(
-        if any(.hooks[]?; (.command // "") | contains("/protect-paths.sh"))
+        if any(.hooks[]?; (.command // "") | contains("protect-paths"))
         then .matcher = "Read" else . end
     )' .claude/settings.json > "$T/settings.malformed"
 mv "$T/settings.malformed" .claude/settings.json

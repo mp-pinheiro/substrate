@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# Stop-branch decision matrix for core/hooks/agent-lifecycle.sh (stop, 206-265):
-# every exit of that branch gets a scratch colocated jj repo, a session ledger
-# built through the real start/observe path, and a byte-compared capture of
-# stdout, stderr, exit status and the whole ledger directory.
-# WHY: .substrate/checkpoint.sh is a committed test double — the stop branch's
-# contract with it is exit status, last stdout line and argv (all asserted
-# below); the real transaction is checkpoint-test.sh's subject.
+# Stop-branch decision matrix for the agent-lifecycle stop hook: every exit
+# gets a scratch colocated jj repo, a session ledger built through the real
+# start/observe path, and a byte-compared capture of stdout, stderr, exit
+# status and the whole ledger directory. The checkpoint stub is an engine
+# wrapper at SUBSTRATE_ENGINE_BIN that intercepts the self-spawned checkpoint
+# verb; the real transaction is checkpoint-test.sh's subject.
 # Per-scenario jq ceilings are the measured post-0.1a counts (whole hook: payload
 # parse + snapshot + the batched derivation + protocol writers), so any re-added
 # fork reds. capture mode skips them so expectations record the current engine.
@@ -36,34 +35,36 @@ mkdir -p "$HOME" || exit 9
 command -v jj >/dev/null 2>&1 || { printf 'ab-stop-test: jj is required\n' >&2; exit 9; }
 export JJ_USER=substrate JJ_EMAIL=substrate@localhost
 
+AB_ENGINE_REAL="${SUBSTRATE_ENGINE_BIN:-$(command -v substrate-engine)}"
+AB_ENGINE_WRAPPER="$T/engine-wrapper"
+cat > "$AB_ENGINE_WRAPPER" <<EOF
+#!/usr/bin/env bash
+if [ "\${1:-}" = checkpoint ] && [ -n "\${AB_STUB_ARGV:-}" ]; then
+    printf '%s\0' "\$@" >> "\$AB_STUB_ARGV"
+    printf '%s\n' "\${AB_STUB_LINE:-}"
+    exit "\${AB_STUB_EXIT:-0}"
+fi
+exec '$AB_ENGINE_REAL' "\$@"
+EOF
+chmod +x "$AB_ENGINE_WRAPPER"
+
 seed_repo() {
     local repo="$1"
-    mkdir -p "$repo/.substrate/hooks" || return 1
-    cp "$KIT_ROOT/core/hooks/agent-lifecycle.sh" "$repo/.substrate/hooks/" || return 1
-    cp "$KIT_ROOT/core/engine-shim.sh" "$repo/.substrate/" || return 1
-    cp "$KIT_ROOT/core/maintenance-lib.sh" "$KIT_ROOT/core/maintenance-receipt.sh" \
-        "$repo/.substrate/" || return 1
-    cat > "$repo/.substrate/checkpoint.sh" <<'SH'
-#!/usr/bin/env bash
-set -uo pipefail
-[ -z "${AB_STUB_ARGV:-}" ] || printf '%s\0' "$@" >> "$AB_STUB_ARGV"
-printf '%s\n' "${AB_STUB_LINE:-}"
-exit "${AB_STUB_EXIT:-0}"
-SH
-    chmod +x "$repo/.substrate/checkpoint.sh" || return 1
     printf 'printf "owned\\n"\n' > "$repo/owned.sh"
     printf 'printf "user\\n"\n' > "$repo/user.sh"
     (
         cd "$repo" || exit 9
         git init -q --initial-branch=main || exit 9
         jj git init --colocate . || exit 9
+        SUBSTRATE_VENDOR_FROM_WORKTREE=1 "$KIT_ROOT/bin/substrate" init --profile shell --vcs jj >/dev/null 2>&1 || exit 9
         jj commit -m 'chore: seed stop-path fixture' || exit 9
     ) >/dev/null 2>&1
+    ab_env "SUBSTRATE_ENGINE_BIN=$AB_ENGINE_WRAPPER"
 }
 
 lifecycle() {
     printf '{"session_id":"%s"}\n' "$2" \
-        | ( cd "$1" && bash .substrate/hooks/agent-lifecycle.sh "$3" ) >/dev/null 2>&1
+        | ( cd "$1" && substrate-engine hook agent-lifecycle "$3" ) >/dev/null 2>&1
 }
 
 stop_payload() {
@@ -176,7 +177,7 @@ scenario() {
     ab_watch .git/substrate/agent-sessions
     ab_shim jq "$SCENARIO_JJ" || return 1
     payload="$(stop_payload "$session" "$active")"$'\n'
-    ab_run "$repo" "$payload" bash .substrate/hooks/agent-lifecycle.sh stop
+    ab_run "$repo" "$payload" substrate-engine hook agent-lifecycle stop
     ab_ceiling jq "$ceiling"
     ab_ceiling jj "$JJ_CEILING"
     [ -z "$assert" ] || "$assert" "$repo" "$session"

@@ -2,8 +2,6 @@
 # End-to-end maintenance transactions across Git, Jujutsu, recovery, and external phases.
 set -uo pipefail
 
-export SUBSTRATE_ENGINE="${GOLDEN_ENGINE:-bash}"
-
 KIT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 T=$(mktemp -d)
 ORIGINAL_HOME=$HOME
@@ -258,7 +256,7 @@ jq -e '.repository.status == "committed" and .repository.vcs == "jj" and .noPush
     || fail "Jujutsu receipt is incomplete"
 [ "$jj_dirty_hash" = "$(sha256sum app.sh)" ] || fail "Jujutsu maintenance changed unrelated work"
 assert_exact_commit "$jj_receipt" || fail "Jujutsu maintenance commit differs from its receipt"
-".substrate/maintenance-lib.sh" receipt-matches \
+substrate-engine maintenance receipt-matches \
     || fail "Jujutsu exact receipt rejected preserved dirty work"
 
 printf 'maintenance-test: Git/Jujutsu transactions, recovery, baseline, external phases, no-push green\n'

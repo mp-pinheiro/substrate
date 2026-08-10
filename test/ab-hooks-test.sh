@@ -113,12 +113,18 @@ SH
 }
 
 stub_checkpoint() {
-    cat > "$1/.substrate/checkpoint.sh" <<'SH'
+    local real="${SUBSTRATE_ENGINE_BIN:-$(command -v substrate-engine)}"
+    local wrapper="$AB_SCENARIO_DIR/engine-wrapper"
+    cat > "$wrapper" <<EOF
 #!/usr/bin/env bash
-printf '%s\n' '{"commit":"fedcba9876543210fedcba9876543210fedcba98","status":"passed"}'
-exit 0
-SH
-    chmod +x "$1/.substrate/checkpoint.sh"
+if [ "\${1:-}" = checkpoint ]; then
+    printf '%s\n' '{"commit":"fedcba9876543210fedcba9876543210fedcba98","status":"passed"}'
+    exit 0
+fi
+exec '$real' "\$@"
+EOF
+    chmod +x "$wrapper"
+    ab_env "SUBSTRATE_ENGINE_BIN=$wrapper"
 }
 
 hook_scenario() {

@@ -53,7 +53,7 @@ cmd_verify() {
     [ -f .substrate/VERSION ] || die "no .substrate here — run: substrate init"
     verify_omp_runtime || return 1
     info "checking bounded local gate"
-    gate_output=$(.substrate/gate.sh 2>&1)
+    gate_output=$(substrate-engine gate 2>&1)
     gate_rc=$?
     if [ "$gate_rc" -ne 0 ]; then
         printf '%s\n' "$gate_output"

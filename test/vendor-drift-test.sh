@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Firing oracle for 80-vendor-drift: mutate one vendored byte and the check
-# must go red naming the drifted pair; restore and it must pass again.
+# Post-P5a: 80-vendor-drift.sh is deleted — the vendored engine bodies are
+# gone, so drift between core/ and .substrate/ is structurally impossible for
+# the deleted set. Verify the P5 layout: retained files present, deleted files
+# absent.
 set -uo pipefail
 
 KIT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -8,28 +10,15 @@ cd "$KIT_ROOT" || exit 9
 
 fail() { printf 'vendor-drift-test FAIL: %s\n' "$1" >&2; exit 1; }
 
-export SUBSTRATE_DIR="$KIT_ROOT/.substrate"
-export REPO_ROOT="$KIT_ROOT"
-export CONFIG="$KIT_ROOT/substrate.json"
-export LANGMAP="$KIT_ROOT/.substrate/langmap.json"
-INVENTORY=$(mktemp)
-export INVENTORY
-git ls-files > "$INVENTORY"
+for f in gate-lib.sh check-comments.sh engine-shim.sh VERSION; do
+    [ -f ".substrate/$f" ] || fail "retained file .substrate/$f is missing"
+done
 
-target=".substrate/gate-lib.sh"
-backup=$(mktemp)
-cp "$target" "$backup"
-trap 'cp "$backup" "$target"; rm -f "$backup" "$INVENTORY"' EXIT
+for f in gate.sh checkpoint.sh restructure.sh comment-ratchet.sh \
+         maintenance-lib.sh maintenance-cli.sh maintenance-receipt.sh \
+         maintenance-sync.sh maintenance-transaction.sh; do
+    [ ! -e ".substrate/$f" ] || fail "deleted file .substrate/$f still vendored"
+done
+[ ! -e ".substrate/hooks" ] || fail ".substrate/hooks still vendored"
 
-checks.d/80-vendor-drift.sh >/dev/null || fail "clean tree does not pass vendor drift"
-
-printf '\n' >> "$target"
-out=$(checks.d/80-vendor-drift.sh)
-rc=$?
-[ "$rc" -ne 0 ] || fail "check stayed green with a mutated vendored file"
-printf '%s' "$out" | grep -q 'gate-lib.sh' || fail "red run does not name the drifted file"
-
-cp "$backup" "$target"
-checks.d/80-vendor-drift.sh >/dev/null || fail "restored tree does not pass again"
-
-printf 'vendor-drift-test: fires on mutation, green on restore\n'
+printf 'vendor-drift-test: P5 layout verified (retained present, deleted absent)\n'

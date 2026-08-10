@@ -55,7 +55,7 @@ jq -e --arg r "$kit_rev" '.kitRevision == $r and .source == "trunk"' .substrate/
 # Dirty kit source (core/): refuses
 reset_kit
 new_consumer || fail "consumer setup failed (case 2)"
-printf '\n' >> "$T/kit/core/gate.sh"
+printf '\n' >> "$T/kit/core/gate-lib.sh"
 if "$T/kit/bin/substrate" init --profile base --vcs git > "$T/case2.out" 2>&1; then
     fail "init from a dirty kit checkout was not refused"
 fi
@@ -73,7 +73,7 @@ grep -q 'uncommitted vendor sources' "$T/case3.out" || fail "dirty skills/ refus
 # Unpushed kit commit: refuses; --from-worktree opts in
 reset_kit
 new_consumer || fail "consumer setup failed (case 4)"
-printf '\n' >> "$T/kit/core/gate.sh"
+printf '\n' >> "$T/kit/core/gate-lib.sh"
 git -C "$T/kit" commit -qam 'chore: unpushed kit change'
 if "$T/kit/bin/substrate" init --profile base --vcs git > "$T/case4.out" 2>&1; then
     fail "init from an unpushed kit revision was not refused"
@@ -93,7 +93,7 @@ new_consumer || fail "consumer setup failed (case 5a)"
 jq -e '.source == "trunk"' .substrate/vendor.json >/dev/null || fail "jj-leg clean init did not record trunk"
 
 new_consumer || fail "consumer setup failed (case 5b)"
-printf '\n' >> "$T/kit/core/gate.sh"
+printf '\n' >> "$T/kit/core/gate-lib.sh"
 (cd "$T/kit" && jj commit -m 'chore: unpushed jj change') >/dev/null 2>&1 \
     || fail "jj commit failed"
 if "$T/kit/bin/substrate" init --profile base --vcs git > "$T/case5b.out" 2>&1; then
@@ -106,12 +106,5 @@ grep -q 'is not contained in main@origin' "$T/case5b.out" || fail "jj-leg unpush
     || fail "kit-self vendoring was refused despite the exemption"
 rm -rf "$T/kit/.jj"
 
-# Standalone-hook regression for the guarded engine-shim source
-mkdir -p "$T/bare"
-cp "$KIT_ROOT/core/hooks/enforce-jj.sh" "$T/bare/"
-if ! (cd "$T/bare" && bash enforce-jj.sh < /dev/null) 2>"$T/bare.err"; then
-    fail "standalone enforce-jj.sh exited non-zero without the vendored engine-shim"
-fi
-[ ! -s "$T/bare.err" ] || fail "standalone enforce-jj.sh leaked stderr without the vendored engine-shim: $(cat "$T/bare.err")"
 
-printf 'vendor-source-test: fitness guard, provenance, worktree opt-in, jj leg, kit-self exemption, standalone hook green\n'
+printf 'vendor-source-test: fitness guard, provenance, worktree opt-in, jj leg, kit-self exemption green\n'
