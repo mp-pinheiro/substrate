@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Dual-leg hook parity (amendment A27): the bash-leg recording is the
-# independent oracle for the Go leg — it must be captured fresh each run,
-# never hardcoded, or the harness would compare an implementation against itself.
-# The engine binary is built here into a unique directory (amendments A1, A25):
-# no PATH assumption, no `just`, no shared /tmp binary to hit ETXTBSY.
+# Hook parity oracle (post-P5a go-only): every scenario dispatches through the
+# engine binary and is byte-compared (stdout, stderr, exit, watched state)
+# against committed golden vectors under test/expected/ab-hooks. There is no
+# in-tree bash hook leg, so the go engine is its own regression oracle:
+# AB_MODE=capture regenerates the frozen recordings. Volatile bytes (absolute
+# paths, session ids, commit ids, hashes, timestamps) are masked first.
 set -uo pipefail
 
 KIT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -128,7 +129,7 @@ EOF
 }
 
 hook_scenario() {
-    local name="$1" script="$2" payload="$3" vcs="$4" prepare="$5"
+    local name="$1" script="$2" payload="$3" vcs="$4" prepare="$5" identity
     shift 5
     local repo session
     ab_begin "$name" || return 1
@@ -149,42 +150,36 @@ hook_scenario() {
     ab_mask "$session" '<SESSION>'
     ab_watch .git/substrate/agent-sessions
     payload="${payload//__SESSION__/$session}"
-    ab_run "$repo" "$payload" bash ".substrate/$script" "$@"
+    identity="${script##*/}"; identity="${identity%.sh}"
+    ab_run "$repo" "$payload" "$SUBSTRATE_ENGINE_BIN" hook "$identity" "$@"
     ab_end
 }
 
 leg() {
-    local mode="$1" engine="$2"
-    AB_MODE="$mode"
-    AB_WORK="$T/work-$AB_LOCALE-$engine"
-    SUBSTRATE_ENGINE="$engine"
-    export AB_MODE AB_WORK AB_EXPECTED_ROOT SUBSTRATE_ENGINE
+    AB_MODE="${AB_MODE:-verify}"
+    AB_WORK="$T/work-$AB_LOCALE"
+    export AB_MODE AB_WORK AB_EXPECTED_ROOT
     ab_init ab-hooks || return 9
     matrix
     ab_report
 }
 
-# AB_HOOKS_EXPECTED keeps the bash-leg recording for inspection/CI upload;
-# unset, it lives and dies in the scratch tree.
-AB_HOOKS_EXPECTED_BASE="${AB_HOOKS_EXPECTED:-$T/expected}"
+# Committed golden vectors under test/expected/ab-hooks are the post-P5a
+# oracle; AB_MODE=capture regenerates them.
+AB_HOOKS_EXPECTED_BASE="${AB_HOOKS_EXPECTED:-$KIT_ROOT/test/expected/ab-hooks}"
 AB_LOCALES="${AB_LOCALES:-C en_US.UTF-8}"
 
 overall_rc=0
 for AB_LOCALE in $AB_LOCALES; do
     export LC_ALL="$AB_LOCALE"
     AB_EXPECTED_ROOT="$AB_HOOKS_EXPECTED_BASE/$AB_LOCALE"
-    if ! leg capture bash; then
-        printf 'ab-hooks-test: the bash leg failed to record cleanly under LC_ALL=%s\n' "$AB_LOCALE" >&2
-        overall_rc=1
-        continue
-    fi
-    if ! leg verify go; then
-        printf 'ab-hooks-test: the go leg diverged from the bash leg under LC_ALL=%s\n' "$AB_LOCALE" >&2
+    if ! leg; then
+        printf 'ab-hooks-test: the go leg diverged from committed goldens under LC_ALL=%s\n' "$AB_LOCALE" >&2
         overall_rc=1
     fi
 done
 if [ "$overall_rc" -eq 0 ]; then
-    printf 'ab-hooks-test: both legs agree on every scenario under every locale (%s)\n' "$AB_LOCALES"
+    printf 'ab-hooks-test: go leg matches committed goldens across every scenario and locale (%s)\n' "$AB_LOCALES"
 else
     exit 1
 fi

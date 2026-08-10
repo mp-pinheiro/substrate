@@ -1,7 +1,7 @@
 export SUBSTRATE_VENDOR_FROM_WORKTREE := "1"
 
 gate *ARGS:
-    .substrate/gate.sh {{ARGS}}
+    go build -trimpath -buildvcs=false -ldflags "-X main.version=$(cat VERSION)" -o build/substrate-engine ./cmd/substrate-engine && PATH="{{justfile_directory()}}/build:$$PATH" substrate-engine gate {{ARGS}}
 
 battery *ARGS:
     bash test/run.sh {{ARGS}}
