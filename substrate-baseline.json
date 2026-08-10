@@ -936,7 +936,7 @@
   "comments:test/golden/receipt/records/symlink.record": 0,
   "comments:test/golden/receipt/records/tab-file.record": 0,
   "dead_code": 0,
-  "dup_pct": 2.347247827232025,
+  "dup_pct": 2.388079558305062,
   "max_file_lines": 460
 },
   "direction": {
@@ -1882,9 +1882,9 @@
   "accepted": {
   "dup_pct": {
   "at": "2026-08-10",
-  "from": 2.23537727513695,
-  "reason": "P5a test migration introduced similar stub patterns across rewritten parity tests",
-  "to": 2.366339558239522
+  "from": 2.347247827232025,
+  "reason": "Consolidation deleted 370 lines of unique in-process tracker code (sha256/fingerprint/reconcile/rebaseline) that duplicated internal/lifecycle in Go. Removing unique code raises the duplication percentage even though absolute duplicated lines decreased. Refactoring to lower the percentage would mean re-adding the deleted tracker, defeating the single-home-for-policy goal of issue #12 rc #3.",
+  "to": 2.388079558305062
 },
   "max_file_lines": {
   "at": "2026-08-08",

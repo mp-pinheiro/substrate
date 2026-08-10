@@ -1,8 +1,7 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { findGateRoot, runCommand } from "./policy";
-import { commandOutput, type WorkingSnapshot } from "./runtime";
 
 type CheckpointReceipt = {
 	commit: string;
@@ -139,7 +138,7 @@ async function spawnTransactionScript(
 
 async function runCheckpointTransaction(
 	root: string,
-	paths: string[],
+	session: string,
 	message: string,
 	acceptRegression: string[] = [],
 	reason?: string,
@@ -149,7 +148,7 @@ async function runCheckpointTransaction(
 		...resolveCheckpointCmd(root),
 		"--message",
 		message,
-		...paths.flatMap((path) => ["--path", path]),
+		...["--session", session],
 		...(acceptRegression.length > 0 ? [`--accept-regression=${acceptRegression.join(",")}`] : []),
 		...(reason ? ["--reason", reason] : []),
 		"--json",
@@ -192,67 +191,9 @@ async function runRestructureTransaction(
 	return { receipt, ok: true, summary: result.summary };
 }
 
-async function maintenanceReceiptPath(root: string): Promise<string | null> {
-	const result = await commandOutput(root, ["git", "rev-parse", "--git-common-dir"]);
-	if (result.error) return null;
-	const metadata = result.stdout.trim();
-	return metadata ? join(resolve(root, metadata), "substrate", "maintenance-receipt.json") : null;
-}
-
-async function maintenanceCheckpointReceipt(
-	root: string,
-	before: WorkingSnapshot,
-	after: WorkingSnapshot,
-): Promise<CheckpointReceipt | null> {
-	if (!before.revision || !after.revision || before.revision === after.revision) return null;
-	const validator = await commandOutput(root, [
-		...resolveMaintenanceCmd(root),
-		"repository-receipt-matches",
-	]);
-	if (validator.error) return null;
-	const path = await maintenanceReceiptPath(root);
-	if (!path) return null;
-	try {
-		const value: unknown = JSON.parse(readFileSync(path, "utf8"));
-		if (!value || typeof value !== "object") return null;
-		const receipt = value as {
-			at?: unknown;
-			noPush?: unknown;
-			operation?: unknown;
-			repository?: {
-				commit?: unknown;
-				fromRevision?: unknown;
-				status?: unknown;
-				toRevision?: unknown;
-				vcs?: unknown;
-			};
-		};
-		if (
-			!["init", "bootstrap", "update"].includes(String(receipt.operation)) ||
-			receipt.noPush !== true ||
-			receipt.repository?.status !== "committed" ||
-			receipt.repository.fromRevision !== before.revision ||
-			receipt.repository.toRevision !== after.revision ||
-			receipt.repository.commit !== after.revision ||
-			typeof receipt.repository.vcs !== "string" ||
-			typeof receipt.at !== "string"
-		) {
-			return null;
-		}
-		return {
-			commit: after.revision,
-			vcs: receipt.repository.vcs,
-			at: receipt.at,
-			status: "committed",
-		};
-	} catch {
-		return null;
-	}
-}
 
 export {
 	blockedToolResult,
-	maintenanceCheckpointReceipt,
 	registerGateTool,
 	runCheckpointTransaction,
 	runRestructureTransaction,

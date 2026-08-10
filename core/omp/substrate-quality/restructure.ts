@@ -1,6 +1,6 @@
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { writeRuntimeState } from "./identity";
-import { taskPreconditions, taskRuntimePatch, taskStates, withRootLock, workingSnapshot } from "./runtime";
+import { sessionId } from "./runtime";
 import { blockedToolResult, registerGateTool, runRestructureTransaction } from "./transactions";
 
 function registerRestructureTool(pi: ExtensionAPI): void {
@@ -50,14 +50,8 @@ function registerRestructureTool(pi: ExtensionAPI): void {
 			if (!op || !revision || !message) {
 				return blockedToolResult("restructure blocked: op, revision, and message are required");
 			}
-			const check = await withRootLock(root, () => taskPreconditions(root));
-			if (check.failure) return blockedToolResult(`restructure blocked: ${check.failure}`);
-			const state = check.state;
-			if (state.sessionChanges.size === 0) {
-				return blockedToolResult(
-					"restructure blocked: no session-authored commits to restructure; checkpoint first",
-				);
-			}
+			// The engine validates the revision against session-authored commits
+			// (read from the ledger via --session) and updates the ledger post-op.
 			const args = [
 				"--op",
 				op,
@@ -65,42 +59,26 @@ function registerRestructureTool(pi: ExtensionAPI): void {
 				revision,
 				"--message",
 				message,
+				"--session",
+				sessionId(root),
 				...(message2 ? ["--message2", message2] : []),
 				...(into ? ["--into", into] : []),
 				...paths.flatMap((path) => ["--path", path]),
-				...[...state.sessionChanges].sort().flatMap((change) => ["--allow-change", change]),
 			];
 			const result = await runRestructureTransaction(root, args, io);
 			if (!result.ok) return blockedToolResult(result.summary);
 			const receipt = result.receipt;
 			if (!receipt) return blockedToolResult("restructure failed: transaction returned no valid receipt");
-			return withRootLock(root, async () => {
-				const after = await workingSnapshot(root);
-				if (after.error) {
-					return blockedToolResult(`restructure incomplete: cannot inspect the working copy: ${after.error}`);
-				}
-				// `state` was captured before the unlocked transaction; a concurrent
-				// checkpoint may have replaced the live entry — merge onto that one.
-				const live = taskStates.get(root) ?? state;
-				live.observed = after;
-				live.initial = { ...live.initial, revision: after.revision };
-				live.checkpointed = true;
-				const newChanges = Array.isArray(receipt.newChangeIds) ? receipt.newChangeIds : [];
-				for (const change of newChanges) {
-					if (typeof change === "string" && /^[a-z0-9]+$/.test(change)) live.sessionChanges.add(change);
-				}
-				taskStates.set(root, live);
-				writeRuntimeState(root, { lastRestructure: receipt, ...taskRuntimePatch(live) });
-				return {
-					content: [
-						{
-							type: "text" as const,
-							text: `Restructure ${op} applied to ${String(receipt.changeId).slice(0, 12)}. Undo with: jj op restore ${String(receipt.fromOperation).slice(0, 12)}. No push performed.\n${result.summary}`,
-						},
-					],
-					details: receipt,
-				};
-			});
+			writeRuntimeState(root, { lastRestructure: receipt });
+			return {
+				content: [
+					{
+						type: "text" as const,
+						text: `Restructure ${op} applied to ${String(receipt.changeId).slice(0, 12)}. Undo with: jj op restore ${String(receipt.fromOperation).slice(0, 12)}. No push performed.\n${result.summary}`,
+					},
+				],
+				details: receipt,
+			};
 		},
 	);
 }

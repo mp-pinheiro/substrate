@@ -42,6 +42,23 @@ if ! grep 'changed-files-scan' "$OMP_TS" | grep -q 'substrate-engine'; then
     rc=1
 fi
 
+OMP_RUNTIME="core/omp/substrate-quality/runtime.ts"
+# The omp extension must delegate ownership tracking to the engine (issue #12 rc #3):
+# feed the ledger via observe, never reimplement the per-file sha256/fingerprint
+# tracker in-process, and never reference deleted hook script paths.
+if ! grep -qE 'engineObserve|agent-lifecycle.*observe' "$OMP_TS" "$OMP_RUNTIME" 2>/dev/null; then
+    printf 'omp extension does not feed the engine ownership ledger — engineObserve missing\n'
+    rc=1
+fi
+if [ -f "$OMP_RUNTIME" ] && grep -qE 'function workingSnapshot|fingerprint.*createHash' "$OMP_RUNTIME"; then
+    printf 'omp runtime reimplements the ownership fingerprint tracker in-process (issue #12 rc #3)\n'
+    rc=1
+fi
+if grep -q '\.substrate/hooks/protect-command' "$OMP_TS"; then
+    printf '%s still references the deleted .substrate/hooks/protect-command path\n' "$OMP_TS"
+    rc=1
+fi
+
 while IFS= read -r dcase; do
     v="${dcase#case \"}"
     v="${v%\"}"
