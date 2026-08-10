@@ -43,8 +43,7 @@ jq '.checks.disabled += ["50-gitleaks.sh"] | .checks.disabled |= unique' substra
     && mv substrate.json.tmp substrate.json
 note "sandbox: 50-gitleaks.sh disabled (no .git)"
 
-export SUBSTRATE_ENGINE=bash
-GATE=.substrate/gate.sh
+GATE="substrate-engine gate"
 
 out=$($GATE 2>&1)
 rc=$?
@@ -119,10 +118,10 @@ had_baseline=0
 echo 'garbage' > substrate-baseline.json
 $GATE >/dev/null 2>&1
 rc=$?
-if [ "$rc" -eq 2 ]; then
-    ok "corrupt baseline hard-exits (rc=2)"
+if [ "$rc" -eq 12 ]; then
+    ok "corrupt baseline hard-exits (rc=12)"
 else
-    bad "corrupt baseline rc=$rc (want 2)"
+    bad "corrupt baseline rc=$rc (want 12)"
 fi
 if [ "$had_baseline" -eq 1 ]; then mv baseline.bak substrate-baseline.json; else rm -f substrate-baseline.json; fi
 
@@ -130,10 +129,10 @@ cp .substrate/langmap.json langmap.bak
 echo 'garbage' > .substrate/langmap.json
 $GATE >/dev/null 2>&1
 rc=$?
-if [ "$rc" -eq 2 ]; then
-    ok "corrupt langmap hard-exits (rc=2)"
+if [ "$rc" -eq 12 ]; then
+    ok "corrupt langmap hard-exits (rc=12)"
 else
-    bad "corrupt langmap rc=$rc (want 2)"
+    bad "corrupt langmap rc=$rc (want 12)"
 fi
 mv langmap.bak .substrate/langmap.json
 
