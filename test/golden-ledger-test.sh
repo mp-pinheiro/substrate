@@ -30,6 +30,7 @@ trap 'rm -rf "$SCRATCH"' EXIT
 
 SUBSTRATE_ENGINE_BIN=$(engine_build ledger_fail go) || exit 1
 export SUBSTRATE_ENGINE_BIN
+export SUBSTRATE_KIT_ROOT="$KIT_ROOT"
 
 ledger_regenerate "$SCRATCH" "$SCRATCH/fresh" go || ledger_fail "regeneration failed"
 ledger_compare_vectors "$SCRATCH/fresh"

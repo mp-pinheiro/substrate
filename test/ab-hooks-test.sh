@@ -33,6 +33,7 @@ mkdir -p "$HOME" || exit 9
 fail_fn() { printf 'ab-hooks-test: %s\n' "$*" >&2; exit 9; }
 SUBSTRATE_ENGINE_BIN=$(engine_build fail_fn "ab-hooks-test") || exit 9
 export SUBSTRATE_ENGINE_BIN
+export SUBSTRATE_KIT_ROOT="$KIT_ROOT"
 
 # .substrate is vendored once here; two full per-flavour templates follow below.
 TEMPLATE="$T/template"
