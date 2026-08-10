@@ -42,13 +42,14 @@ func (e *Engine) Observe(ctx context.Context, payload []byte) Result {
 		return e.writeLedgerResult(statePath, next)
 	}
 
+	ownedBeforeReconcile := objStringArray(state, "ownedPaths")
 	next := reconcileLedger(state, current, changed)
 	if len(changed) > 0 {
 		next.Set("stopBlocked", false)
 		next.Set("completedCommit", nil)
 	}
 	next.Set("trackingError", nullable(current.Error))
-	if beforeRevision != currentRevision {
+	if beforeRevision != currentRevision && (len(changed) > 0 || len(ownedBeforeReconcile) > 0) {
 		next.Set("driftNotice", "repository revision changed outside the checkpoint transaction; ownership re-baselined")
 	}
 
