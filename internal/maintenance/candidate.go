@@ -209,15 +209,17 @@ func GateCandidate(ctx context.Context, candidateDir, output, callerHome string,
 		acceptFlags = []string{"--accept-regression=" + c.AcceptRegression, "--reason=" + c.AcceptReason}
 	}
 
-	gateScript := filepath.Join(candidateDir, ".substrate", "gate.sh")
+	bin, err := xshell.EngineBin()
+	if err != nil {
+		return fmt.Errorf("gate candidate: %w", err)
+	}
 	baselinePath := filepath.Join(candidateDir, "substrate-baseline.json")
 
 	gateEnv := []string{
 		"HOME=" + callerHome,
-		"SUBSTRATE_ENGINE=bash",
 	}
 	runGate := func(args ...string) ([]byte, error) {
-		res, err := xshell.RunInEnv(ctx, candidateDir, gateEnv, gateScript, args...)
+		res, err := xshell.RunInEnv(ctx, candidateDir, gateEnv, bin, append([]string{"gate"}, args...)...)
 		combined := append(res.Stdout, res.Stderr...)
 		if err != nil || res.Code != 0 {
 			return combined, fmt.Errorf("gate failed (code %d): %w (stderr: %s)", res.Code, err, res.Stderr)

@@ -131,11 +131,12 @@ func (e *Engine) maintenanceReconcileApplies(ctx context.Context, from, to strin
 	return e.receiptFieldsMatch(receiptPath, from, to)
 }
 
-// WHY: maintenance_repository_receipt_matches belongs to P4's
-// internal/maintenance; call the vendored bash rather than forking a copy.
 func (e *Engine) maintenanceReceiptMatches(ctx context.Context, receiptPath string) bool {
-	script := `set -uo pipefail; . "$1/maintenance-lib.sh" || exit 1; maintenance_repository_receipt_matches "$2"`
-	res, err := xshell.RunIn(ctx, e.paths.RepoRoot, "bash", "-c", script, "_", e.paths.SubstrateDir, receiptPath)
+	bin, err := xshell.EngineBin()
+	if err != nil {
+		return false
+	}
+	res, err := xshell.RunIn(ctx, e.paths.RepoRoot, bin, "maintenance", "repository-receipt-matches")
 	if err != nil || res.Code != 0 {
 		return false
 	}
