@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -30,17 +31,6 @@ type RunContext struct {
 type checkSpec struct {
 	Name string
 	Path string
-}
-
-type job struct {
-	name      string
-	cmd       *exec.Cmd
-	outPath   string
-	start     time.Time
-	native    bool
-	nativeRC  int
-	nativeOut string
-	nativeMs  int
 }
 
 func DiscoverChecks(repoRoot, subDir string) ([]checkSpec, error) {
@@ -134,9 +124,9 @@ func RunChecks(ctx *RunContext, specs []checkSpec, claimsData []byte) error {
 	}
 
 	max := maxJobs()
-	var jobs []job
-	var results []CheckResult
-	failures := 0
+	sem := make(chan struct{}, max)
+	results := make(chan CheckResult, len(specs))
+	var wg sync.WaitGroup
 	found := 0
 
 	for _, spec := range specs {
@@ -144,135 +134,111 @@ func RunChecks(ctx *RunContext, specs []checkSpec, claimsData []byte) error {
 			warn("%s: disabled in substrate.json", spec.Name)
 			continue
 		}
-		found = 1
+		found++
+		wg.Add(1)
+		go func(spec checkSpec) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
 
-		if runFn, ok := NativeRuns[spec.Name]; ok {
-			inv, _ := readInventory(ctx.Inventory)
-			envMap := make(map[string]string)
-			for _, e := range baseEnv {
-				k, v := splitEq(e)
-				envMap[k] = v
-			}
-			envMap["SUBSTRATE_CHECK_NAME"] = spec.Name
-			metricsPath := filepath.Join(runDir, spec.Name+".metrics")
-			os.WriteFile(metricsPath, nil, 0644)
-			envMap["METRICS"] = metricsPath
-
-			rc, metrics, out, runErr := runFn(context.Background(), inv, claimsData, envMap)
-			if runErr != nil {
-				rc = 3
-				out = runErr.Error()
-			}
-			if out != "" {
-				fmt.Print(out)
-			}
-			jobs = append(jobs, job{
-				name:      spec.Name,
-				native:    true,
-				nativeRC:  rc,
-				nativeOut: out,
-				nativeMs:  0,
-				start:     time.Now(),
-			})
-			var buf strings.Builder
-			for _, m := range metrics {
-				fmt.Fprintf(&buf, `{"name":"%s","value":%s,"dir":"%s"}`+"\n", m.Name, string(m.RawValue), m.Dir)
-			}
-			if buf.Len() > 0 {
-				os.WriteFile(filepath.Join(runDir, spec.Name+".metrics"), []byte(buf.String()), 0644)
-			}
-
-			if len(jobs)-len(results) >= max {
-				reportJob(jobs, &results, &failures, len(specs))
-			}
-			continue
-		}
-
-		outPath := filepath.Join(runDir, spec.Name+".out")
-		metricsPath := filepath.Join(runDir, spec.Name+".metrics")
-		os.WriteFile(metricsPath, nil, 0644)
-
-		cmd := exec.Command("bash", spec.Path)
-		cmd.Dir = ctx.RepoRoot
-		outFile, _ := os.Create(outPath)
-		cmd.Stdout = outFile
-		cmd.Stderr = outFile
-		cmd.Env = append(os.Environ(),
-			append(baseEnv,
-				"SUBSTRATE_CHECK_NAME="+spec.Name,
-				"METRICS="+metricsPath,
-			)...,
-		)
-		start := time.Now()
-		if err := cmd.Start(); err != nil {
-			outFile.Close()
-			return fmt.Errorf("start %s: %w", spec.Name, err)
-		}
-		jobs = append(jobs, job{
-			name:    spec.Name,
-			cmd:     cmd,
-			outPath: outPath,
-			start:   start,
-		})
-
-		if len(jobs)-len(results) >= max {
-			reportJob(jobs, &results, &failures, len(specs))
-		}
+			start := time.Now()
+			res := runCheck(spec, baseEnv, claimsData, ctx)
+			res.MS = int(time.Since(start).Milliseconds())
+			results <- res
+		}(spec)
 	}
 
 	if found == 0 {
 		return fmt.Errorf("no checks in checks.d — a gate with zero checks cannot pass blind")
 	}
 
-	for len(results) < len(jobs) {
-		reportJob(jobs, &results, &failures, len(specs))
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	var collected []CheckResult
+	for r := range results {
+		collected = append(collected, r)
+	}
+	sort.Slice(collected, func(i, j int) bool {
+		return collected[i].Name < collected[j].Name
+	})
+
+	total := len(specs)
+	failures := 0
+	for i, r := range collected {
+		if r.Output != "" {
+			fmt.Print(r.Output)
+		}
+		took := FormatDuration(r.MS)
+		if r.RC == 0 {
+			fmt.Printf("[ok] %s (%s) [%d/%d]\n", r.Name, took, i+1, total)
+		} else {
+			fmt.Printf("[!] FAIL %s (%s) [%d/%d]\n", r.Name, took, i+1, total)
+			failures++
+		}
 	}
 
-	ctx.Results = results
+	ctx.Results = collected
 	ctx.Failures = failures
 	return nil
 }
 
-func reportJob(jobs []job, results *[]CheckResult, failures *int, total int) {
-	j := jobs[len(*results)]
-	if j.native {
-		if j.nativeRC == 0 {
-			fmt.Printf("[ok] %s (0ms) [%d/%d]\n", j.name, len(*results)+1, total)
-		} else {
-			fmt.Printf("[!] FAIL %s (rc=%d) [%d/%d]\n", j.name, j.nativeRC, len(*results)+1, total)
-			*failures++
+// runCheck runs one check (native or bash subprocess), returning its result
+// without duration. Each call writes its own output/metrics files.
+func runCheck(spec checkSpec, baseEnv []string, claimsData []byte, ctx *RunContext) CheckResult {
+	if runFn, ok := NativeRuns[spec.Name]; ok {
+		inv, _ := readInventory(ctx.Inventory)
+		envMap := make(map[string]string)
+		for _, e := range baseEnv {
+			k, v := splitEq(e)
+			envMap[k] = v
 		}
-		*results = append(*results, CheckResult{
-			Name:   j.name,
-			RC:     j.nativeRC,
-			MS:     0,
-			Output: j.nativeOut,
-		})
-		return
+		envMap["SUBSTRATE_CHECK_NAME"] = spec.Name
+		metricsPath := filepath.Join(ctx.RunDir, spec.Name+".metrics")
+		os.WriteFile(metricsPath, nil, 0644)
+		envMap["METRICS"] = metricsPath
+
+		rc, metrics, out, runErr := runFn(context.Background(), inv, claimsData, envMap)
+		if runErr != nil {
+			rc = 3
+			out = runErr.Error()
+		}
+		var buf strings.Builder
+		for _, m := range metrics {
+			fmt.Fprintf(&buf, `{"name":"%s","value":%s,"dir":"%s"}`+"\n", m.Name, string(m.RawValue), m.Dir)
+		}
+		if buf.Len() > 0 {
+			os.WriteFile(metricsPath, []byte(buf.String()), 0644)
+		}
+		return CheckResult{Name: spec.Name, RC: rc, Output: out}
 	}
 
-	j.cmd.Wait()
-	j.cmd.Stdout.(*os.File).Close()
-	elapsed := time.Since(j.start)
-	rc := resolveRC(j.cmd)
-	outData, _ := os.ReadFile(j.outPath)
-	took := FormatDuration(int(elapsed.Milliseconds()))
+	outPath := filepath.Join(ctx.RunDir, spec.Name+".out")
+	metricsPath := filepath.Join(ctx.RunDir, spec.Name+".metrics")
+	os.WriteFile(metricsPath, nil, 0644)
 
-	if outStr := string(outData); outStr != "" {
-		fmt.Print(outStr)
+	cmd := exec.Command("bash", spec.Path)
+	cmd.Dir = ctx.RepoRoot
+	outFile, _ := os.Create(outPath)
+	cmd.Stdout = outFile
+	cmd.Stderr = outFile
+	cmd.Env = append(os.Environ(),
+		append(baseEnv,
+			"SUBSTRATE_CHECK_NAME="+spec.Name,
+			"METRICS="+metricsPath,
+		)...,
+	)
+	if startErr := cmd.Start(); startErr != nil {
+		outFile.Close()
+		return CheckResult{Name: spec.Name, RC: 3, Output: fmt.Sprintf("start %s: %v", spec.Name, startErr)}
 	}
-	if rc == 0 {
-		fmt.Printf("[ok] %s (%s) [%d/%d]\n", j.name, took, len(*results)+1, total)
-	} else {
-		fmt.Printf("[!] FAIL %s (%s) [%d/%d]\n", j.name, took, len(*results)+1, total)
-		*failures++
-	}
-	*results = append(*results, CheckResult{
-		Name:   j.name,
-		RC:     rc,
-		MS:     int(elapsed.Milliseconds()),
-		Output: string(outData),
-	})
+	cmd.Wait()
+	outFile.Close()
+	rc := resolveRC(cmd)
+	outData, _ := os.ReadFile(outPath)
+	return CheckResult{Name: spec.Name, RC: rc, Output: string(outData)}
 }
 
 func splitEq(s string) (string, string) {
