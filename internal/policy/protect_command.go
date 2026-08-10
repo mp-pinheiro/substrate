@@ -68,6 +68,9 @@ func ProtectCommand(in Input, cfg *config.Config, configPresent, configCorrupt b
 	if d, blocked := blockIfNamed(cmd, mutator, "substrate-baseline.json", "baseline — governed basename anywhere in the tree"); blocked {
 		return d
 	}
+	if d, blocked := blockIfNamed(cmd, mutator, "substrate.json", "human-approved policy config"); blocked {
+		return d
+	}
 	if d, blocked := blockIfNamed(cmd, mutator, ".substrate", "vendored engine"); blocked {
 		return d
 	}

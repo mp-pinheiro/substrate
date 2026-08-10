@@ -7,6 +7,11 @@ const HARD: Array<[RegExp, string]> = [
 		/\/substrate-baseline\.json$/,
 		"not the repo baseline, but that basename is governed anywhere in the tree — the rule is name-based so it can rule on paths whose parents do not exist yet; rename the file if it is not a substrate baseline",
 	],
+	[/^substrate\.json$/, "human-approved policy config — change it through guarded substrate maintenance"],
+	[
+		/\/substrate\.json$/,
+		"human-approved policy config — change it through guarded substrate maintenance",
+	],
 	[/(^|\/)\.substrate(\/|$)/, "vendored substrate core — change the kit and run: substrate update"],
 	[/(^|\/)CLAUDE\.md$/, "governance doc — propose the edit to the user instead"],
 ];
@@ -19,6 +24,7 @@ const SUBSTRATE_POLICY = [
 	"After direct verification, call `substrate_checkpoint`; it gates, tightens improved metrics, and commits only agent-owned paths.",
 	"Never run `jj commit` or `git commit` directly. Never push automatically; publication remains user-owned.",
 	"Do not bypass checks, edit generated or protected assets, or relax the baseline unless the user explicitly requests that policy change.",
+	"Treat substrate.json as human-approved policy: do not mutate it as an agent; only change it through guarded maintenance when the user explicitly directs the policy decision.",
 	"Before accepting a ratchet regression, cost the alternative refactor and present both options; accepting requires a written reason that is committed to substrate-baseline.json.",
 ].join("\n");
 
