@@ -83,13 +83,11 @@ vendor_core() {
     mkdir -p "$staging/checks.d" "$staging/profiles"
     cp "$KIT_ROOT"/core/engine-shim.sh \
        "$KIT_ROOT"/core/gate-lib.sh \
-       "$KIT_ROOT"/core/check-comments.sh \
        "$KIT_ROOT"/core/selftest.sh "$KIT_ROOT"/core/audit.sh \
        "$KIT_ROOT"/core/report.sh "$KIT_ROOT"/core/gated-push.sh \
        "$KIT_ROOT"/core/push-gate.sh \
        "$KIT_ROOT"/core/maintenance.sh \
        "$KIT_ROOT"/core/checkpoint.sh "$KIT_ROOT"/core/restructure.sh \
-       "$KIT_ROOT"/core/receipt-lib.sh \
        "$KIT_ROOT"/core/gitleaks-lib.sh "$KIT_ROOT"/core/gitleaks-deep.sh \
        "$KIT_ROOT"/core/install-gitleaks.sh "$KIT_ROOT"/core/install-jj.sh "$staging/" \
        || die "vendor copy failed: core scripts"
