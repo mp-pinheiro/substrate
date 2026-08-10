@@ -13,7 +13,7 @@ var RegistryDigests = map[string]string{
 	"50-gitleaks.sh": "bd7374f127abafa2d263ca5b41297289f0a6f8fb2a0ca7bd715a62725e3ef278",
 	"59-actionlint.sh": "1b29e1df61495439dda8372886a23b92a512b85688ee76fd6c06d941809a05f2",
 	"60-ruff.sh": "67930106c63f018c06d7b9d7beebdafa06961ba2039e8d29d771551e6c0f933a",
-	"60-shellcheck.sh": "f7deb610c5ccc586ffebcd416bcdcb7c712c0612213af9cad483fad8ad0afc90",
+	"60-shellcheck.sh": "1528a6b7289ff24eb7a458350058ef425dba40f1cdeeaa574b283b0ccd3b69f0",
 	"61-py-syntax.sh": "714eb025baadc808706bb0a48eff5d8812ea1130b897a26ca702dfce3505c4a9",
 	"62-import-linter.sh": "f3db39ebfd045d32d955a9ff1576fc23d010b023e458bfe3957c5baffd157e37",
 	"63-vulture.sh": "459eeafc76eb9ba194b21b1759210761a0d7d09838e4a1bdadd6afa59b12bb0b",
