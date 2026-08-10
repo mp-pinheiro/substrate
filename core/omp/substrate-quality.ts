@@ -17,6 +17,7 @@ import {
 } from "./substrate-quality/policy";
 import { registerRestructureTool } from "./substrate-quality/restructure";
 import {
+	engineBaseCmd,
 	engineEnsureStarted,
 	engineObserve,
 	engineStatus,
@@ -240,7 +241,7 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 		const root = findGateRoot(ctx.cwd);
 		if (!root) return;
 	if (!existsSync(join(root, ".substrate", "VERSION"))) return;
-	const result = await runCommand(root, ["substrate-engine", "hook", "protect-command"], {
+	const result = await runCommand(root, [...engineBaseCmd(root), "hook", "protect-command"], {
 		stdin: JSON.stringify({ tool_input: event.input }),
 	});
 		if (result.exitCode === 0) return;
@@ -319,7 +320,7 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 		const root = findGateRoot(path ? dirname(resolve(ctx.cwd, path)) : ctx.cwd);
 		if (!root) return;
 		if (!existsSync(join(root, ".substrate", "VERSION"))) return;
-		const result = await runCommand(root, ["substrate-engine", "hook", "changed-files-scan"]);
+		const result = await runCommand(root, [...engineBaseCmd(root), "hook", "changed-files-scan"]);
 		const at = new Date().toISOString();
 		if (result.exitCode === 0) {
 			writeRuntimeState(root, { lastScan: { status: "pass", at } });
