@@ -15,7 +15,7 @@ const (
 	msgMalformedPayload     = "substrate lifecycle: malformed hook payload\n"
 	msgCannotCreateStateDir = "substrate lifecycle: cannot create state directory\n"
 	msgStateWriteFailed     = "substrate lifecycle: state write failed\n"
-	msgUsage                = "usage: agent-lifecycle.sh start|observe|verify <session>|complete <session> <commit>|stop|end\n"
+	msgUsage                = "usage: agent-lifecycle.sh start|observe|verify <session>|status <session>|complete <session> <commit>|stop|end\n"
 )
 
 type Result struct {
@@ -86,6 +86,8 @@ func (e *Engine) Run(ctx context.Context, args []string, stdin io.Reader) Result
 		return e.Observe(ctx, payload)
 	case "verify":
 		return e.Verify(ctx, session)
+	case "status":
+		return e.Status(ctx, session)
 	case "complete":
 		commit := ""
 		if len(args) > 2 {

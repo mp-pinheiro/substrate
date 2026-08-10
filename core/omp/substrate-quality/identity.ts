@@ -4,7 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { engineVersion, findGateRoot, refreshReport } from "./policy";
-import { ensureTaskState, readRuntimeState, runtimeStatePath, taskRuntimePatch, withRootLock } from "./runtime";
+import { engineEnsureStarted, engineObserve, readRuntimeState, runtimeStatePath, withRootLock } from "./runtime";
 
 const IDENTITY_PATH = fileURLToPath(import.meta.url);
 const MODULE_ROOT = dirname(IDENTITY_PATH);
@@ -88,8 +88,9 @@ function initializeRuntime(pi: ExtensionAPI): boolean {
 		// core/report.sh ensure_report_ignored), so this can run unlocked.
 		const reportWarning = await refreshReport(root);
 		await withRootLock(root, async () => {
-			const state = await ensureTaskState(root);
-			writeRuntimeState(root, { loadedAt: new Date().toISOString(), ...taskRuntimePatch(state) });
+			await engineEnsureStarted(root);
+			await engineObserve(root);
+			writeRuntimeState(root, { loadedAt: new Date().toISOString() });
 		});
 		if (reportWarning) ctx.ui.notify(`Substrate ${reportWarning}`, "warning");
 		ctx.ui.notify(`Substrate active · ${EXTENSION_HASH.slice(0, 8)} · ${root}`, "info");

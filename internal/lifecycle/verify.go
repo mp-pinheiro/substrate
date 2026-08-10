@@ -11,7 +11,7 @@ import (
 func (e *Engine) Verify(ctx context.Context, session string) Result {
 	statePath := e.statePath(session)
 	if _, err := os.Stat(statePath); err != nil {
-		return Result{Stderr: []byte("checkpoint blocked: Claude ownership state is missing\n"), Code: 2}
+		return Result{Stderr: []byte("checkpoint blocked: agent ownership state is missing\n"), Code: 2}
 	}
 	state, err := readLedger(statePath)
 	if err != nil {
@@ -33,12 +33,12 @@ func (e *Engine) Verify(ctx context.Context, session string) Result {
 
 	observed := objObject(state, "observed")
 	if current.Fingerprint != objString(observed, "fingerprint") {
-		return Result{Stderr: []byte("checkpoint blocked: working copy changed outside an observed Claude tool call\n"), Code: 2}
+		return Result{Stderr: []byte("checkpoint blocked: working copy changed outside an observed agent tool call\n"), Code: 2}
 	}
 
 	pending := intersectPreserveOrder(current.Entries.Keys(), objStringArray(state, "ownedPaths"))
 	if len(pending) == 0 {
-		return Result{Stderr: []byte("checkpoint blocked: no pending Claude-owned changes\n"), Code: 2}
+		return Result{Stderr: []byte("checkpoint blocked: no pending agent-owned changes\n"), Code: 2}
 	}
 
 	doc := canonjson.NewObject().Set("paths", stringsToValues(pending)).Set("fingerprint", current.Fingerprint)

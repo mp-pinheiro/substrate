@@ -17,23 +17,15 @@ import {
 } from "./substrate-quality/policy";
 import { registerRestructureTool } from "./substrate-quality/restructure";
 import {
-	callKey,
-	changedBetween,
-	checkpointedState,
-	ensureTaskState,
+	engineEnsureStarted,
+	engineObserve,
+	engineStatus,
 	isReadOnlyTool,
-	pendingSnapshots,
-	rebaseline,
-	reconcileInitial,
-	taskPreconditions,
-	taskRuntimePatch,
-	taskStates,
+	sessionId,
 	withRootLock,
-	workingSnapshot,
 } from "./substrate-quality/runtime";
 import {
 	blockedToolResult,
-	maintenanceCheckpointReceipt,
 	registerGateTool,
 	runCheckpointTransaction,
 } from "./substrate-quality/transactions";
@@ -120,60 +112,39 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 					);
 				}
 			}
-			const check = await withRootLock(root, () => taskPreconditions(root));
-			if (check.failure) return blockedToolResult(`checkpoint blocked: ${check.failure}`);
-			const state = check.state;
-			const currentPaths = Object.keys(check.current.entries).sort();
-			const ownedPending = currentPaths.filter((path) => state.owned.has(path));
-			const leftover = currentPaths.filter((path) => !state.owned.has(path));
-			if (ownedPending.length === 0) {
+			const status = await withRootLock(root, () => engineStatus(root));
+			const pendingOwned = status?.pendingOwned ?? [];
+			const dirtyPaths = status?.dirtyPaths ?? [];
+			const leftover = dirtyPaths.filter((p) => !pendingOwned.includes(p)).sort();
+			if (pendingOwned.length === 0) {
 				return blockedToolResult(
 					leftover.length > 0
 						? `checkpoint blocked: no pending agent-owned changes; unowned pending paths stay in place: ${leftover.join(", ")}`
 						: "checkpoint blocked: no pending agent-owned changes",
 				);
 			}
-			const result = await runCheckpointTransaction(root, ownedPending, message, acceptRegression, reason, io);
+			const sid = sessionId(root);
+			const result = await runCheckpointTransaction(root, sid, message, acceptRegression, reason, io);
 			const summary = result.summary;
 			if (!result.receipt) {
 				writeRuntimeState(root, {
 					lastCheckpoint: { status: "fail", at: new Date().toISOString() },
-					...taskRuntimePatch(state),
 				});
 				return blockedToolResult(
 					result.ok ? `${summary}\ncheckpoint failed: transaction returned no valid receipt` : summary,
 				);
 			}
 			const receipt = result.receipt;
-			return withRootLock(root, async () => {
-				const after = await workingSnapshot(root);
-				if (after.error) {
-					return blockedToolResult(
-						`checkpoint incomplete: cannot inspect the working copy after commit: ${after.error}`,
-					);
-				}
-				const stillOwned = ownedPending.filter((path) => path in after.entries);
-				if (stillOwned.length > 0) {
-					return blockedToolResult(
-						`checkpoint incomplete: transaction returned success but owned paths are still pending: ${stillOwned.join(", ")}`,
-					);
-				}
-				const next = await checkpointedState(root, after, state, receipt.commit, ownedPending);
-				taskStates.set(root, next);
-				writeRuntimeState(root, {
-					lastCheckpoint: receipt,
-					...taskRuntimePatch(next),
-				});
-				return {
-					content: [
-						{
-							type: "text" as const,
-							text: `Checkpoint ${receipt.commit.slice(0, 12)} passed and committed locally. No push performed.${leftover.length > 0 ? `\nUnowned pending paths left in place: ${leftover.join(", ")}` : ""}\n${summary}`,
-						},
-					],
-					details: receipt,
-				};
-			});
+			writeRuntimeState(root, { lastCheckpoint: receipt });
+			return {
+				content: [
+					{
+						type: "text" as const,
+						text: `Checkpoint ${receipt.commit.slice(0, 12)} passed and committed locally. No push performed.${leftover.length > 0 ? `\nUnowned pending paths left in place: ${leftover.join(", ")}` : ""}\n${summary}`,
+					},
+				],
+				details: receipt,
+			};
 		},
 	);
 
@@ -182,25 +153,21 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 	pi.on("before_agent_start", async (event, ctx) => {
 		const root = findGateRoot(ctx.cwd);
 		if (!root || event.systemPrompt.some((part) => part.includes(SUBSTRATE_POLICY))) return;
-		return withRootLock(root, async () => {
-			const state = await ensureTaskState(root);
-			const current = await workingSnapshot(root);
-			if (current.error) {
-				state.trackingError = current.error;
-			} else if (state.trackingError || current.fingerprint !== state.observed.fingerprint) {
-				rebaseline(state, current);
-			}
-			writeRuntimeState(root, taskRuntimePatch(state));
-			const unowned = Object.keys(state.observed.entries)
-				.filter((path) => !state.owned.has(path))
-				.sort();
-			const ownership = state.trackingError
-				? `Automatic checkpoint disabled: ownership tracking failed (${state.trackingError}). Tracking re-baselines at the next clean tool boundary.`
-				: unowned.length > 0
-					? `The working copy carries changes the agent does not own (${unowned.join(", ")}). substrate_checkpoint commits only agent-owned paths and leaves those in place.`
-					: "Automatic local checkpoint is available after direct verification. No automatic push.";
-			return { systemPrompt: [...event.systemPrompt, `${SUBSTRATE_POLICY}\n${ownership}`] };
-		});
+	return withRootLock(root, async () => {
+		await engineEnsureStarted(root);
+		await engineObserve(root);
+		writeRuntimeState(root, { loadedAt: new Date().toISOString() });
+		const status = await engineStatus(root);
+		const dirtyPaths = status?.dirtyPaths ?? [];
+		const owned = status?.ownedPaths ?? [];
+		const unowned = dirtyPaths.filter((p) => !owned.includes(p)).sort();
+		const ownership = status?.trackingError
+			? `Automatic checkpoint disabled: ownership tracking failed (${status.trackingError}). Tracking re-baselines at the next clean tool boundary.`
+			: unowned.length > 0
+				? `The working copy carries changes the agent does not own (${unowned.join(", ")}). substrate_checkpoint commits only agent-owned paths and leaves those in place.`
+				: "Automatic local checkpoint is available after direct verification. No automatic push.";
+		return { systemPrompt: [...event.systemPrompt, `${SUBSTRATE_POLICY}\n${ownership}`] };
+	});
 	});
 
 	// mirrors: agent-lifecycle.sh
@@ -272,11 +239,10 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 		if (event.toolName !== "bash") return;
 		const root = findGateRoot(ctx.cwd);
 		if (!root) return;
-		const hook = join(root, ".substrate", "hooks", "protect-command.sh");
-		if (!existsSync(hook)) return;
-		const result = await runCommand(root, [hook], {
-			stdin: JSON.stringify({ tool_input: event.input }),
-		});
+	if (!existsSync(join(root, ".substrate", "VERSION"))) return;
+	const result = await runCommand(root, ["substrate-engine", "hook", "protect-command"], {
+		stdin: JSON.stringify({ tool_input: event.input }),
+	});
 		if (result.exitCode === 0) return;
 		return {
 			block: true,
@@ -332,76 +298,17 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 		};
 	});
 
-	pi.on("tool_call", async (event, ctx) => {
+	// mirrors: agent-lifecycle.sh observe — feed the engine ledger after each
+	// non-read-only tool call; the engine owns snapshot/fingerprint/reconcile.
+	pi.on("tool_result", async (event, ctx) => {
 		if (GATE_TOOLS[event.toolName] || isReadOnlyTool(event.toolName, event.input)) return;
 		const path = toolPath(event.input);
 		const root = findGateRoot(path ? dirname(resolve(ctx.cwd, path)) : ctx.cwd);
 		if (!root) return;
+		if (!existsSync(join(root, ".substrate", "VERSION"))) return;
 		await withRootLock(root, async () => {
-			const state = await ensureTaskState(root);
-			const before = await workingSnapshot(root);
-			if (before.error) {
-				state.trackingError = before.error;
-				writeRuntimeState(root, taskRuntimePatch(state));
-				return;
-			}
-			if (state.trackingError || before.fingerprint !== state.observed.fingerprint) {
-				rebaseline(state, before);
-				writeRuntimeState(root, taskRuntimePatch(state));
-			}
-			pendingSnapshots.set(callKey(event), { root, before });
-		});
-	});
-
-	pi.on("tool_result", async (event, ctx) => {
-		if (GATE_TOOLS[event.toolName] || isReadOnlyTool(event.toolName, event.input)) return;
-		const pending = pendingSnapshots.get(callKey(event));
-		const path = toolPath(event.input);
-		const root = pending?.root ?? findGateRoot(path ? dirname(resolve(ctx.cwd, path)) : ctx.cwd);
-		if (!root) return;
-		await withRootLock(root, async () => {
-			const state = await ensureTaskState(root);
-			if (!pending) {
-				state.trackingError ??= `missing pre-tool ownership snapshot for ${event.toolName}`;
-				writeRuntimeState(root, taskRuntimePatch(state));
-				return;
-			}
-			pendingSnapshots.delete(callKey(event));
-			const after = await workingSnapshot(root);
-			if (after.error) {
-				state.trackingError = after.error;
-			} else {
-				const maintenance =
-					pending.before.revision !== after.revision
-						? await maintenanceCheckpointReceipt(root, pending.before, after)
-						: null;
-				if (maintenance) {
-					reconcileInitial(state, after);
-					state.observed = after;
-					state.checkpointed = true;
-					state.trackingError = undefined;
-					state.driftNotice = undefined;
-					writeRuntimeState(root, {
-						lastCheckpoint: maintenance,
-						...taskRuntimePatch(state),
-					});
-					return;
-				}
-				const changedPaths = changedBetween(pending.before, after);
-				reconcileInitial(state, after);
-				for (const changed of changedPaths) {
-					if (!(changed in state.initial.entries)) state.owned.add(changed);
-				}
-				for (const ownedPath of state.owned) {
-					if (!(ownedPath in after.entries)) state.owned.delete(ownedPath);
-				}
-				if (pending.before.revision !== after.revision) {
-					state.trackingError = "repository revision changed outside the checkpoint transaction";
-				}
-				if (changedPaths.length > 0) state.checkpointed = false;
-				state.observed = after;
-			}
-			writeRuntimeState(root, taskRuntimePatch(state));
+			await engineEnsureStarted(root);
+			await engineObserve(root);
 		});
 	});
 
