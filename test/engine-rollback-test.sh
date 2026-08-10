@@ -37,7 +37,7 @@ mkdir -p "$REPO" || exit 9
     cd "$REPO" || exit 9
     git init -q --initial-branch=main
     printf 'seed\n' > README.md
-    "$KIT_ROOT/bin/substrate" init --profile base
+    "$KIT_ROOT/bin/substrate" init --profile base --from-worktree
     jj git init --colocate .
     jj commit -m 'chore: seed rollback fixture'
 ) >/dev/null 2>&1 || { printf 'engine-rollback-test: fixture init failed\n' >&2; exit 9; }

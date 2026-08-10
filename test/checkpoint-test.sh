@@ -18,7 +18,7 @@ git config user.email substrate@localhost
 printf '#!/usr/bin/env bash\nprintf "owned\\n"\n' > owned.sh
 printf '#!/usr/bin/env bash\nprintf "user\\n"\n' > user.sh
 chmod +x owned.sh user.sh
-"$KIT_ROOT/bin/substrate" init --profile shell --vcs git >/dev/null 2>&1 || fail "Git init failed"
+"$KIT_ROOT/bin/substrate" init --profile shell --vcs git --from-worktree >/dev/null 2>&1 || fail "Git init failed"
 cat > .substrate/checks.d/58-baseline-probe.sh <<'SH'
 #!/usr/bin/env bash
 set -uo pipefail

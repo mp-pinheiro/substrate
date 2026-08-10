@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { writeRuntimeState } from "./identity";
 import { findGateRoot } from "./policy";
-import { engineObserve, engineStatus, sessionId, withRootLock } from "./runtime";
+import { engineObserve, engineStatus, readRuntimeState, sessionId, withRootLock } from "./runtime";
 import { runCheckpointTransaction } from "./transactions";
 
 function registerSessionLifecycle(pi: ExtensionAPI): void {
@@ -35,11 +35,19 @@ function registerSessionLifecycle(pi: ExtensionAPI): void {
 			autoFailure = result.summary.split("\n").slice(-8).join("\n");
 		}
 		const unowned = dirtyPaths.filter((path) => !pendingOwned.includes(path)).sort();
-		const hasBlockingState =
-			pendingOwned.length > 0 ||
-			Boolean(driftNotice) ||
-			(Boolean(trackingError) && dirtyPaths.length > 0);
-		if (!hasBlockingState) return;
+		const blockingOwnership =
+			pendingOwned.length > 0 || (Boolean(trackingError) && dirtyPaths.length > 0);
+		const revision = status?.revision ?? "";
+		const priorDrift = readRuntimeState(root).driftBlocked as
+			| { notice?: string; revision?: string }
+			| undefined;
+		const driftOnly = !blockingOwnership && Boolean(driftNotice);
+		const driftAlreadySurfaced =
+			driftOnly && priorDrift?.notice === driftNotice && priorDrift?.revision === revision;
+		if (!blockingOwnership && !driftNotice) {
+			if (priorDrift) writeRuntimeState(root, { driftBlocked: null });
+			return;
+		}
 		const details = [
 			pendingOwned.length > 0 ? `Agent-owned pending paths: ${pendingOwned.join(", ")}` : "",
 			unowned.length > 0 ? `Unowned pending paths (left in place): ${unowned.join(", ")}` : "",
@@ -54,8 +62,9 @@ function registerSessionLifecycle(pi: ExtensionAPI): void {
 		].join("\n");
 		writeRuntimeState(root, {
 			lastCheckpoint: { status: "pending", at: new Date().toISOString() },
+			driftBlocked: driftOnly ? { notice: driftNotice, revision } : null,
 		});
-		if (event.stop_hook_active) {
+		if (event.stop_hook_active || driftAlreadySurfaced) {
 			ctx.ui.notify(reason, "warning");
 			return;
 		}
