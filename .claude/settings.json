@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/.substrate/hooks/protect-paths.sh\""
+            "command": "substrate-engine hook protect-paths"
           }
         ]
       },
@@ -15,19 +15,19 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/.substrate/hooks/protect-command.sh\""
+            "command": "substrate-engine hook protect-command"
           },
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/.substrate/hooks/enforce-jj.sh\""
+            "command": "substrate-engine hook enforce-jj"
           },
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/.substrate/hooks/enforce-conventional-commits.sh\""
+            "command": "substrate-engine hook enforce-conventional-commits"
           },
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/.substrate/hooks/gate-before-push.sh\""
+            "command": "substrate-engine hook gate-before-push"
           }
         ]
       }
@@ -38,11 +38,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/.substrate/hooks/agent-lifecycle.sh\" observe"
+            "command": "substrate-engine hook agent-lifecycle observe"
           },
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/.substrate/hooks/changed-files-scan.sh\""
+            "command": "substrate-engine hook changed-files-scan"
           }
         ]
       }
@@ -53,7 +53,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/.substrate/hooks/agent-lifecycle.sh\" start"
+            "command": "substrate-engine hook agent-lifecycle start"
           }
         ]
       }
@@ -64,7 +64,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/.substrate/hooks/agent-lifecycle.sh\" stop"
+            "command": "substrate-engine hook agent-lifecycle stop"
           }
         ]
       }
@@ -75,7 +75,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PROJECT_DIR:-.}/.substrate/hooks/agent-lifecycle.sh\" end"
+            "command": "substrate-engine hook agent-lifecycle end"
           }
         ]
       }
