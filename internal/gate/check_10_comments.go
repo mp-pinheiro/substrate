@@ -2,89 +2,68 @@ package gate
 
 import (
 	"context"
-	"os"
-	"os/exec"
-	"path/filepath"
+	"errors"
 	"sort"
 	"strconv"
 	"strings"
-	"encoding/json"
+
+	"github.com/mp-pinheiro/substrate/internal/comments"
+	"github.com/mp-pinheiro/substrate/internal/config"
 )
 
 func check10Comments(ctx context.Context, inv []string, claims []byte, env map[string]string) (int, []MetricRecord, string, error) {
 	subDir := env["SUBSTRATE_DIR"]
 	repoRoot := env["REPO_ROOT"]
-	baselinePath := env["BASELINE"]
 
 	var files []string
 	for _, f := range inv {
 		if !isClaimed(claims, f) {
-			continue
+			files = append(files, f)
 		}
-		files = append(files, f)
 	}
 	if len(files) == 0 {
 		return 0, nil, "", nil
 	}
 
-	script := filepath.Join(subDir, "check-comments.sh")
-	cmd := exec.CommandContext(ctx, "bash", append([]string{script}, files...)...)
-	cmd.Dir = repoRoot
-	out, err := cmd.Output()
-
-	rc := 0
-	if cmd.ProcessState != nil {
-		rc = cmd.ProcessState.ExitCode()
-	}
-
-	if err != nil && rc >= 2 {
-		return rc, nil, string(out), nil
-	}
-
-	counts := make(map[string]int)
-	for _, line := range strings.Split(string(out), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		idx := strings.Index(line, ":")
-		if idx < 0 {
-			continue
-		}
-		f := line[:idx]
-		counts[f]++
-	}
-
-	var metrics []MetricRecord
-	for f, n := range counts {
-		metrics = append(metrics, MetricRecord{
-			Name:     "comments:" + f,
-			RawValue: []byte(strconv.Itoa(n)),
-			Dir:      "lo",
-		})
-	}
-
-	baseData, err := os.ReadFile(baselinePath)
+	paths, err := config.DiscoverFromSubstrateDir(subDir)
 	if err != nil {
-		return 0, metrics, "", nil
+		return 0, nil, "", nil
+	}
+	cfg, err := config.LoadConfig(paths.ConfigPath)
+	if err != nil || cfg == nil {
+		cfg = &config.Config{}
+	}
+	lm, err := config.LoadLangMap(paths.LangMapPath)
+	if err != nil {
+		return 0, nil, "", nil
+	}
+	baseline, err := config.LoadBaseline(paths.BaselinePath)
+	if err != nil {
+		baseline = nil
 	}
 
-	var baseline struct {
-		Metrics map[string]float64 `json:"metrics"`
-	}
-	if err := json.Unmarshal(baseData, &baseline); err != nil {
-		return 0, metrics, "", nil
-	}
+	scanner := comments.NewScanner(cfg)
 
 	var findings []string
-	for f, n := range counts {
-		key := "comments:" + f
-		base, ok := baseline.Metrics[key]
-		if ok && float64(n) > base {
-			for _, line := range strings.Split(string(out), "\n") {
-				if strings.HasPrefix(line, f+":") {
-					findings = append(findings, line)
-				}
+	var metrics []MetricRecord
+
+	for _, f := range files {
+		result, ratErr := comments.Ratchet(ctx, scanner, lm, baseline, repoRoot, f)
+		if ratErr != nil {
+			var baselineErr *comments.BaselineMetricError
+			if errors.As(ratErr, &baselineErr) {
+				continue
+			}
+			return 2, nil, ratErr.Error(), nil
+		}
+		metrics = append(metrics, MetricRecord{
+			Name:     "comments:" + f,
+			RawValue: []byte(strconv.Itoa(result.Count)),
+			Dir:      "lo",
+		})
+		if result.Blocked {
+			for _, finding := range result.Findings {
+				findings = append(findings, finding.String())
 			}
 		}
 	}

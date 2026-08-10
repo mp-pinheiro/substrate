@@ -1,5 +1,5 @@
 # Plan: Go engine rewrite
-state: draft
+state: committed
 issue: https://github.com/mp-pinheiro/substrate/issues/12
 
 ## Goal
@@ -99,7 +99,7 @@ Key oracles: full suite green under both legs zero-edit; lock contention pinned;
 Workflow: one porter per state machine, contract file as spec; enemy on guard-order/error-string fidelity (agents parse these strings).
 
 ### P5 — cutover + deletion
-**SPLIT (2026-08-09):** P5a (Claude cutover + vendored bash deletion + duplication-tax retirement) is active — see `.pi/plans/go-rewrite-p5a.md` (`state: active`). P5b (A15 omp-TS shim + go:embed `asset` subcommand + transitional-parity deletion) is planned. Parent phase `P5` stays `active` until both land.
+**P5a** landed 2026-08-09 (Claude cutover + vendored bash deletion + duplication-tax retirement). **P5b** landed 2026-08-10: CI/tests repaired (justfile gate self-contained, gate CI job runs engine directly, gate-parity deleted, hook-parity/maintenance-parity/transaction-parity go-only, all bash-pinned test defaults flipped to go); core/checkpoint.sh + core/restructure.sh delegators removed + re-vendored; vendor-drift-test updated; gate-path comment check ported to Go comments.Scanner (check-comments.sh deleted); 81-engine-ts-parity made permanent; ab-hooks-test converted to committed golden vectors with [a-z]{32} change ID masking. See `.pi/plans/go-rewrite-p5a.md` (superseded).
 
 Goal: one maintenance-transaction commit per repo rewrites Claude registrations to the engine, re-renders `.substrate/` to the resolution-6 layout, deletes the vendored bash engine + 80-vendor-drift + 81-harness-parity (successor: engine attestation check), and the kit repo deletes `core/*.sh` engine sources.
 - `substrate asset` subcommand exposes embedded gate-lib.sh/checks; bin/substrate becomes a launcher; installer/doctor/report/selftest/audit port-or-retain per the cli-install contract.
@@ -164,7 +164,7 @@ Workflow: enemy-first (critique done 2026-08-09 — 3 blocking gaps found and fo
 - No auto-push changes; publication stays user-owned.
 
 ## Acceptance
-- [ ] engine binary pinned and attested :: bash -c 'grep -q "\"version\"" .substrate/engine.json && grep -q "\"binary_sha256\"" .substrate/engine.json'
-- [ ] vendored bash engine deleted :: bash -c '! test -e .substrate/gate.sh && ! test -e .substrate/checkpoint.sh && ! test -e .substrate/hooks/agent-lifecycle.sh'
-- [ ] hook registrations no longer spawn per-hook bash scripts :: bash -c '! grep -q ".substrate/hooks/" .claude/settings.json'
-- [ ] duplication-tax checks retired :: bash -c '! test -e checks.d/80-vendor-drift.sh && ! test -e checks.d/81-harness-parity.sh'
+- [x] engine binary pinned and attested :: bash -c 'grep -q "\"version\"" .substrate/engine.json && grep -q "\"binary_sha256\"" .substrate/engine.json'
+- [x] vendored bash engine deleted :: bash -c '! test -e .substrate/gate.sh && ! test -e .substrate/checkpoint.sh && ! test -e .substrate/hooks/agent-lifecycle.sh'
+- [x] hook registrations no longer spawn per-hook bash scripts :: bash -c '! grep -q ".substrate/hooks/" .claude/settings.json'
+- [x] duplication-tax checks retired :: bash -c '! test -e checks.d/80-vendor-drift.sh && ! test -e checks.d/81-harness-parity.sh'

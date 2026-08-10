@@ -1,5 +1,6 @@
 # Plan: Go engine rewrite — P5a (Claude cutover + vendored bash deletion)
-state: active
+state: committed
+superseded-by: go-rewrite.md
 Issue: https://github.com/mp-pinheiro/substrate/issues/12
 Parent plan: `.pi/plans/go-rewrite.md` (P5 section, resolutions 1–12, amendments A1–A43)
 Preceding: `.pi/plans/go-rewrite-p4b.md` (state: committed). P5 is split per the 2026-08-09 user ruling: **P5a = Claude-side cutover (this plan)**; P5b = A15 omp-TS shim + go:embed asset subcommand (separate follow-up plan).
@@ -176,15 +177,15 @@ Working directory: `~/git/substrate`, `SUBSTRATE_VENDOR_FROM_WORKTREE=1`, engine
 
 ## Acceptance
 
-- [ ] engine pinned :: bash -c 'grep -q "\"version\"" .substrate/engine.json && grep -q "\"binary_sha256\"" .substrate/engine.json'
-- [ ] vendored bash engine deleted :: bash -c '! test -e .substrate/gate.sh && ! test -e .substrate/checkpoint.sh && ! test -e .substrate/hooks/agent-lifecycle.sh'
-- [ ] hook registrations no longer spawn per-hook bash :: bash -c '! grep -q ".substrate/hooks/" .claude/settings.json'
-- [ ] duplication-tax checks retired :: bash -c '! test -e checks.d/80-vendor-drift.sh && ! test -e checks.d/81-harness-parity.sh'
-- [ ] gate green on go leg :: just engine && PATH="$PWD/build:$PATH" substrate-engine gate
-- [ ] hook parity green :: bash test/ab-hooks-test.sh
-- [ ] cutover parity CI :: grep cutover-parity .github/workflows/substrate-gate.yml
-- [ ] maintenance transaction performs cutover :: SUBSTRATE_VENDOR_FROM_WORKTREE=1 bin/substrate bootstrap --checkpoint --message 'feat(engine): P5a cutover'
-- [ ] battery green :: just battery
+- [x] engine pinned :: bash -c 'grep -q "\"version\"" .substrate/engine.json && grep -q "\"binary_sha256\"" .substrate/engine.json'
+- [x] vendored bash engine deleted :: bash -c '! test -e .substrate/gate.sh && ! test -e .substrate/checkpoint.sh && ! test -e .substrate/hooks/agent-lifecycle.sh'
+- [x] hook registrations no longer spawn per-hook bash :: bash -c '! grep -q ".substrate/hooks/" .claude/settings.json'
+- [x] duplication-tax checks retired :: bash -c '! test -e checks.d/80-vendor-drift.sh && ! test -e checks.d/81-harness-parity.sh'
+- [x] gate green on go leg :: just engine && PATH="$PWD/build:$PATH" substrate-engine gate
+- [x] hook parity green :: bash test/ab-hooks-test.sh
+- [x] cutover parity CI :: grep cutover-parity .github/workflows/substrate-gate.yml
+- [x] maintenance transaction performs cutover :: SUBSTRATE_VENDOR_FROM_WORKTREE=1 bin/substrate bootstrap --checkpoint --message 'feat(engine): P5a cutover'
+- [x] battery green :: just battery
 
 ## Assumptions & contingencies
 
