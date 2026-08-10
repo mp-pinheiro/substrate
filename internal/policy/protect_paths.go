@@ -99,6 +99,8 @@ func checkHard(name string) (Decision, bool) {
 		return block("blocked: baseline changes only via the gate (--update-baseline)\n"), true
 	case bashglob.Match("*/substrate-baseline.json", name):
 		return block("blocked: %s is not the repo baseline, but that basename is governed anywhere in the tree — the rule is name-based so it can rule on paths whose parents do not exist yet; rename the file if it is not a substrate baseline\n", name), true
+	case bashglob.Match("substrate.json", name), bashglob.Match("*/substrate.json", name):
+		return block("blocked: substrate.json contains human-approved policy — change it through guarded substrate maintenance\n"), true
 	case bashglob.Match(".substrate/*", name), bashglob.Match("*/.substrate/*", name):
 		return block("blocked: %s is vendored substrate core — change the kit and run: substrate update\n", name), true
 	case bashglob.Match("CLAUDE.md", name), bashglob.Match("*/CLAUDE.md", name):

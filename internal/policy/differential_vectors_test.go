@@ -39,6 +39,8 @@ func TestDifferentialProtectPaths(t *testing.T) {
 		},
 		{name: "baseline exact literal blocked", guard: "protect-paths", payload: filePayload("substrate-baseline.json")},
 		{name: "baseline lookalike nested blocked", guard: "protect-paths", payload: filePayload("sub/dir/substrate-baseline.json")},
+		{name: "substrate config exact blocked", guard: "protect-paths", payload: filePayload("substrate.json")},
+		{name: "substrate config nested blocked", guard: "protect-paths", payload: filePayload("sub/dir/substrate.json")},
 		{name: "dotSubstrate write blocked", guard: "protect-paths", payload: filePayload(".substrate/foo.txt")},
 		{name: "CLAUDE.md write blocked", guard: "protect-paths", payload: filePayload("CLAUDE.md")},
 		{
@@ -86,6 +88,7 @@ func TestDifferentialProtectCommand(t *testing.T) {
 			setup: func(t *testing.T, root string) { writeSubstrateJSON(t, root, "{bad") },
 		},
 		{name: "mutator basename hit blocked", guard: "protect-command", payload: cmdPayload("rm substrate-baseline.json", "")},
+		{name: "substrate config mutation blocked", guard: "protect-command", payload: cmdPayload("rm substrate.json", "")},
 		{name: "redirection governed path blocked", guard: "protect-command", payload: cmdPayload("echo x >> .substrate/foo", "")},
 		{name: "redirect argval false positive not blocked", guard: "protect-command", payload: cmdPayload(`gh issue comment 16 --body "--reason=<text> mentions substrate-baseline.json in prose"`, "")},
 		{name: "indirect write blocked", guard: "protect-command", payload: cmdPayload(`F=".substrate/x"; echo hi >> "$F"`, "")},

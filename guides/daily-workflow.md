@@ -24,9 +24,9 @@ Write-time hooks run on every Write/Edit in both harnesses (Claude Code hooks + 
 
 ```
 blocked: substrate-baseline.json changes only via .substrate/gate.sh --update-baseline
+blocked: substrate.json is human-approved policy — change it through guarded substrate maintenance
 blocked: .substrate/ is vendored — change the kit and run substrate update --apply
 blocked: <file> is a symlink to <target> — edit the target explicitly if that is intended
-```
 
 These are not suggestions — the write was rejected. If a block is wrong, the thing to change is `.substrate/hooks/protect-paths.sh` at its source (`core/hooks/` in the kit) and its omp mirror, not the workflow around it.
 
