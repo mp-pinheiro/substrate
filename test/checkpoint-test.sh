@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -uo pipefail
-export SUBSTRATE_ENGINE="${GOLDEN_ENGINE:-bash}"
+export SUBSTRATE_ENGINE="${GOLDEN_ENGINE:-go}"
 
 KIT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 T=$(mktemp -d)

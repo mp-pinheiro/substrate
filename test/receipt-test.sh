@@ -94,7 +94,7 @@ MIGRATE_REPO="$T/repo-migrate"
 seed_repo "$MIGRATE_REPO"
 REPO_ROOT=$PWD
 migrate_commit=$(git rev-parse HEAD)
-SUBSTRATE_ENGINE=bash write_gate_receipt test "$migrate_commit" git >/dev/null \
+write_gate_receipt test "$migrate_commit" git >/dev/null \
     || fail "migration: v1 receipt write failed"
 migrate_receipt=$(gate_receipt_path) || fail "migration: could not resolve receipt path"
 jq -e 'has("recipeVersion") | not' "$migrate_receipt" >/dev/null \

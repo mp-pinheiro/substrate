@@ -1,0 +1,10 @@
+conf.yaml:2: narration: # now we set the other key
+
+comment gate: remove the flagged comments or encode the fact in names/structure.
+A rare, genuinely non-obvious fact may stay: append "gate:allow-comment" to the line.
+comment ratchet: conf.yaml has 1 finding(s), grandfathered allowance is 0.
+slop.zsh:2: narration: # now we check the thing
+
+comment gate: remove the flagged comments or encode the fact in names/structure.
+A rare, genuinely non-obvious fact may stay: append "gate:allow-comment" to the line.
+comment ratchet: slop.zsh has 1 finding(s), grandfathered allowance is 0.

@@ -1,0 +1,1 @@
+{"decision":"block","reason":"[substrate — completion blocked] Agent-owned pending paths: owned.sh. Automatic checkpoint failed: gate red: 60-shellcheck.sh. Run direct verification, then: substrate checkpoint --session <SESSION> --message 'type(scope): subject'. Never push."}

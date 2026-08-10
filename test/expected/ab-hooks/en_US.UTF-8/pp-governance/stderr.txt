@@ -1,0 +1,1 @@
+blocked: CLAUDE.md is the governance doc — propose the edit to the user instead

@@ -1,0 +1,1 @@
+{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"Substrate lifecycle active. After direct verification, checkpoint with: substrate checkpoint --session <SESSION> --message 'type(scope): subject'. Never commit or push directly."}}

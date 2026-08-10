@@ -3,13 +3,7 @@ pp() { printf '{"tool_input":{"file_path":"%s"}}' "$1"; }
 pc() { printf '{"tool_input":{"command":%s},"session_id":"__SESSION__"}' "$1"; }
 ab_known_divergence_reason() {
     case "$1" in
-        pp-filepath-nul | pc-command-nul | jj-command-nul)
-            printf 'structural limit: exit, stdout and watched state are identical; only stderr differs'
-            printf ', because bash'"'"'s $(...) emits its own "ignored null byte" warning naming the'
-            printf ' bash script and line number. The Go engine has no such script to name, so matching'
-            printf ' it would mean forging bash'"'"'s diagnostic. Deliberately not forged.'
-            ;;
-        lc-stop-ledger-scalarinitial | lc-stop-ledger-truncated)
+        lc-stop-ledger-truncated)
             printf 'structural limit: write_state now refuses an empty/non-object document, so bash'
             printf ' exits 2 and leaves the ledger byte-unchanged, matching Go on exit code and state.'
             printf ' Only stderr differs: bash leaks jq'"'"'s own diagnostic (e.g. `jq: error (at'

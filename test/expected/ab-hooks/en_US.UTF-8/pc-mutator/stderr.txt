@@ -1,0 +1,1 @@
+BLOCKED: Bash command can mutate governed path .substrate (vendored engine); use the protected workflow instead

@@ -1,0 +1,1 @@
+comment gate: config missing or corrupt: <REPO>/substrate.json

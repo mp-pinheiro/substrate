@@ -1,0 +1,1 @@
+blocked: deep/substrate-baseline.json is not the repo baseline, but that basename is governed anywhere in the tree — the rule is name-based so it can rule on paths whose parents do not exist yet; rename the file if it is not a substrate baseline

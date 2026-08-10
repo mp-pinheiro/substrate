@@ -1,0 +1,1 @@
+blocked: link.md is a symlink to <REPO>/README.md — writing through it clobbers the target; edit the target explicitly if that is intended

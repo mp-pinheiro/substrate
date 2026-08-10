@@ -1,0 +1,6 @@
+comment gate: config missing or corrupt: <REPO>/substrate.json
+
+comment ratchet: detector infrastructure failed (rc=3) — fix it before editing
+comment gate: config missing or corrupt: <REPO>/substrate.json
+
+comment ratchet: detector infrastructure failed (rc=3) — fix it before editing
