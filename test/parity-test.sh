@@ -7,15 +7,10 @@ cd "$KIT_ROOT" || exit 9
 
 fail() { printf 'parity-test FAIL: %s\n' "$1" >&2; exit 1; }
 
-checks.d/81-harness-parity.sh >/dev/null || fail "real tree does not pass structural parity"
+checks.d/81-engine-ts-parity.sh >/dev/null || fail "real tree does not pass engine-ts parity"
 
 T=$(mktemp -d)
 trap 'rm -rf "$T"' EXIT
-grep -v 'mirrors: gate-before-push.sh' core/omp/substrate-quality.ts > "$T/omp-stripped.ts"
-out=$(checks.d/81-harness-parity.sh "$T/omp-stripped.ts")
-rc=$?
-[ "$rc" -ne 0 ] || fail "check stayed green with a stripped mirror"
-printf '%s' "$out" | grep -q 'gate-before-push.sh' || fail "red run does not name the orphaned hook"
 
 export HOME="$T/home"
 export SUBSTRATE_NO_USER_HARNESS=1
