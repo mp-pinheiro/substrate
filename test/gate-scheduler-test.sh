@@ -52,7 +52,7 @@ touch "$REPO/dummy"
 
 true > "$WORK/stamps-1.txt"
 SUBSTRATE_GATE_JOBS=1 SCHEDULER_STAMPS="$WORK/stamps-1.txt" \
-    bash "$REPO/.substrate/gate.sh" > "$WORK/bash-gate-1.txt" 2>&1
+    bash "$REPO/substrate-engine gate" > "$WORK/bash-gate-1.txt" 2>&1
 printf '  Test 1 (JOBS=1): rc=%d\n' "$?"
 
 nstamps=$(wc -l < "$WORK/stamps-1.txt")
@@ -72,7 +72,7 @@ fi
 
 true > "$WORK/stamps-2.txt"
 SUBSTRATE_GATE_JOBS=2 SCHEDULER_STAMPS="$WORK/stamps-2.txt" \
-    bash "$REPO/.substrate/gate.sh" > "$WORK/bash-gate-2.txt" 2>&1
+    bash "$REPO/substrate-engine gate" > "$WORK/bash-gate-2.txt" 2>&1
 printf '  Test 2 (JOBS=2): rc=%d\n' "$?"
 
 nstamps2=$(wc -l < "$WORK/stamps-2.txt")

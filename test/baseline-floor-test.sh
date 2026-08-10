@@ -33,14 +33,14 @@ git add -A
 git commit -qm 'feat: probe check'
 
 printf '{"probe_hi:cov":10,"probe_lo:count":5}\n' > .git/probe-metrics.json
-if ! .substrate/gate.sh --update-baseline >/dev/null 2>&1; then
+if ! substrate-engine gate --update-baseline >/dev/null 2>&1; then
     fail "initial baseline creation failed"
 fi
 jq -e '.metrics["probe_hi:cov"] == 10 and .direction["probe_hi:cov"] == "hi"' substrate-baseline.json >/dev/null \
     || fail "probe_hi:cov not recorded with hi direction"
 
 printf '{"probe_lo:count":3}\n' > .git/probe-metrics.json
-if ! .substrate/gate.sh --update-baseline >/dev/null 2>&1; then
+if ! substrate-engine gate --update-baseline >/dev/null 2>&1; then
     fail "bare update-baseline with unemitted hi metric failed"
 fi
 jq -e '.metrics["probe_hi:cov"] == 10 and .direction["probe_hi:cov"] == "hi"' substrate-baseline.json >/dev/null \

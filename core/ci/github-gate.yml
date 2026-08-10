@@ -31,7 +31,7 @@ jobs:
           bun install -g @ast-grep/cli@0.45.0 jscpd@5.0.14
           # substrate:profile-toolchain
       - name: Run gate
-        run: .substrate/gate.sh
+        run: substrate-engine gate
       - name: Audit plan oracles
         if: github.event_name == 'push'
         env:

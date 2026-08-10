@@ -411,9 +411,8 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 		const path = toolPath(event.input);
 		const root = findGateRoot(path ? dirname(resolve(ctx.cwd, path)) : ctx.cwd);
 		if (!root) return;
-		// pre-cutover vendored copies lack the hook — never throw ENOENT machine-wide
-		if (!existsSync(join(root, ".substrate", "hooks", "changed-files-scan.sh"))) return;
-		const result = await runCommand(root, [".substrate/hooks/changed-files-scan.sh"]);
+		if (!existsSync(join(root, ".substrate", "VERSION"))) return;
+		const result = await runCommand(root, ["substrate-engine", "hook", "changed-files-scan"]);
 		const at = new Date().toISOString();
 		if (result.exitCode === 0) {
 			writeRuntimeState(root, { lastScan: { status: "pass", at } });

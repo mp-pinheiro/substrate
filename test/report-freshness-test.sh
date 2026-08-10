@@ -20,12 +20,12 @@ git add -A
 git commit -qm 'feat: seed'
 
 [ ! -e substrate-report.md ] || fail "init unexpectedly wrote advisory state"
-out=$(env -u CI .substrate/gate.sh --update-baseline 2>&1) \
+out=$(env -u CI substrate-engine gate --update-baseline 2>&1) \
     || fail "missing report blocked the gate: $out"
 [ ! -e .substrate/checks.d/55-report-freshness.sh ] \
     || fail "blocking freshness check is still vendored"
 
-printf '{"session_id":"report-one"}\n' | .substrate/hooks/agent-lifecycle.sh start >/dev/null \
+printf '{"session_id":"report-one"}\n' | substrate-engine hook agent-lifecycle start >/dev/null \
     || fail "session-start refresh failed"
 [ -f substrate-report.md ] || fail "session start did not write the report"
 grep -qE '^generated: [0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]{8}Z$' substrate-report.md \
@@ -46,12 +46,12 @@ after=$(grep -c '^/substrate-report.md$' .git/info/exclude)
 old=$(date -u -d '30 days ago' +%Y-%m-%dT%H:%M:%SZ)
 { printf 'generated: %s\n' "$old"; tail -n +2 substrate-report.md; } > r.tmp \
     && mv r.tmp substrate-report.md
-printf '{"session_id":"report-two"}\n' | .substrate/hooks/agent-lifecycle.sh start >/dev/null \
+printf '{"session_id":"report-two"}\n' | substrate-engine hook agent-lifecycle start >/dev/null \
     || fail "stale report refresh failed"
 grep -q "^generated: $old$" substrate-report.md && fail "stale report was not refreshed"
 
 printf 'malformed advisory state\n' > substrate-report.md
-out=$(env -u CI .substrate/gate.sh 2>&1) || fail "malformed report blocked the gate: $out"
+out=$(env -u CI substrate-engine gate 2>&1) || fail "malformed report blocked the gate: $out"
 
 target="$T/report-target"
 printf 'preserve\n' > "$target"
@@ -64,9 +64,9 @@ grep -q 'is a symlink — not writing' <<< "$out" || fail "symlink refusal was n
 rm -f substrate-report.md
 
 jq '.report.max_age_days = 0' substrate.json > s.tmp && mv s.tmp substrate.json
-printf '{"session_id":"report-three"}\n' | .substrate/hooks/agent-lifecycle.sh start >/dev/null \
+printf '{"session_id":"report-three"}\n' | substrate-engine hook agent-lifecycle start >/dev/null \
     || fail "disabled refresh failed"
 [ ! -e substrate-report.md ] || fail "max_age_days: 0 did not disable local refresh"
-out=$(env -u CI .substrate/gate.sh 2>&1) || fail "disabled advisory state blocked the gate: $out"
+out=$(env -u CI substrate-engine gate 2>&1) || fail "disabled advisory state blocked the gate: $out"
 
 printf 'report-freshness-test: automatic, ignored, advisory, idempotent, symlink-safe\n'

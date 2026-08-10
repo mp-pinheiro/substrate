@@ -80,21 +80,19 @@ vendor_core() {
     repo_path_safe .substrate ".substrate vendor directory" || die "unsafe .substrate destination"
     [ ! -e .substrate ] || [ -d .substrate ] || die ".substrate exists but is not a directory"
     staging=$(mktemp -d .substrate.new.XXXXXX) || die "vendor staging failed"
-    mkdir -p "$staging/checks.d" "$staging/hooks" "$staging/profiles"
+    mkdir -p "$staging/checks.d" "$staging/profiles"
     cp "$KIT_ROOT"/core/engine-shim.sh \
-       "$KIT_ROOT"/core/gate.sh "$KIT_ROOT"/core/gate-lib.sh \
-       "$KIT_ROOT"/core/check-comments.sh "$KIT_ROOT"/core/comment-ratchet.sh \
+       "$KIT_ROOT"/core/gate-lib.sh \
+       "$KIT_ROOT"/core/check-comments.sh \
        "$KIT_ROOT"/core/selftest.sh "$KIT_ROOT"/core/audit.sh \
        "$KIT_ROOT"/core/report.sh "$KIT_ROOT"/core/gated-push.sh \
-       "$KIT_ROOT"/core/push-gate.sh "$KIT_ROOT"/core/checkpoint.sh \
-       "$KIT_ROOT"/core/maintenance.sh "$KIT_ROOT"/core/maintenance-cli.sh \
-       "$KIT_ROOT"/core/maintenance-lib.sh "$KIT_ROOT"/core/maintenance-receipt.sh \
-       "$KIT_ROOT"/core/maintenance-sync.sh "$KIT_ROOT"/core/maintenance-transaction.sh \
-       "$KIT_ROOT"/core/receipt-lib.sh "$KIT_ROOT"/core/restructure.sh \
+       "$KIT_ROOT"/core/push-gate.sh \
+       "$KIT_ROOT"/core/maintenance.sh \
+       "$KIT_ROOT"/core/checkpoint.sh "$KIT_ROOT"/core/restructure.sh \
+       "$KIT_ROOT"/core/receipt-lib.sh \
        "$KIT_ROOT"/core/gitleaks-lib.sh "$KIT_ROOT"/core/gitleaks-deep.sh \
        "$KIT_ROOT"/core/install-gitleaks.sh "$KIT_ROOT"/core/install-jj.sh "$staging/" \
        || die "vendor copy failed: core scripts"
-    cp "$KIT_ROOT"/core/hooks/*.sh "$staging/hooks/" || die "vendor copy failed: hooks"
     cp "$KIT_ROOT"/core/checks.d/*.sh "$staging/checks.d/" || die "vendor copy failed: core checks"
     cp "$KIT_ROOT"/VERSION "$staging/VERSION" || die "vendor copy failed: VERSION"
     write_vendor_provenance "$staging" || die "vendor copy failed: vendor.json"
@@ -114,7 +112,7 @@ vendor_core() {
         done
     fi
     build_langmap "$staging/langmap.json" "${profiles[@]}"
-    chmod +x "$staging"/*.sh "$staging"/hooks/*.sh "$staging"/checks.d/*.sh
+    chmod +x "$staging"/*.sh "$staging"/checks.d/*.sh
     if [ -d .substrate ]; then
         backup=$(mktemp -d .substrate.backup.XXXXXX) || die "vendor backup failed"
         rm -rf "$backup"
@@ -236,8 +234,8 @@ cmd_init_apply() {
 
 next steps (in order):
   1. substrate doctor                      # toolchain + config sanity
-  2. .substrate/gate.sh                    # first run: expect findings + pending baseline
-  3. .substrate/gate.sh --update-baseline  # grandfather current debt (green infra only)
+  2. substrate gate                    # first run: expect findings + pending baseline
+  3. substrate gate --update-baseline  # grandfather current debt (green infra only)
   4. positive control: add a slop comment to a source file, rerun, MUST go red; revert
   5. substrate selftest                    # full negative battery (includes slop injection)
 EOF
@@ -328,7 +326,7 @@ cmd_update() {
 }
 
 cmd_gate() {
-    [ -x .substrate/gate.sh ] || die "no .substrate here — run: substrate init"
+    command -v substrate-engine >/dev/null 2>&1 || die "substrate-engine not found — run: substrate doctor"
     if [ "${1:-}" = --deep ]; then
         shift
         [ "$#" -le 1 ] || usage
@@ -337,10 +335,10 @@ cmd_gate() {
             *) usage ;;
         esac
         [ -x .substrate/gitleaks-deep.sh ] || die "deep scan runtime missing — run: substrate update --apply"
-        .substrate/gate.sh || return
+        substrate-engine gate || return
         exec .substrate/gitleaks-deep.sh "$@"
     fi
-    exec .substrate/gate.sh "$@"
+    exec substrate-engine gate "$@"
 }
 
 cmd_engine() {
@@ -396,8 +394,8 @@ case "${1:-}" in
     bootstrap) shift; cmd_bootstrap "$@" ;;
     init)     shift; cmd_init "$@" ;;
     gate)     shift; cmd_gate "$@" ;;
-    checkpoint) shift; [ -x .substrate/checkpoint.sh ] || die "no checkpoint runtime here — run: substrate update --apply"; exec .substrate/checkpoint.sh "$@" ;;
-    restructure) shift; [ -x .substrate/restructure.sh ] || die "no restructure runtime here — run: substrate update --apply"; exec .substrate/restructure.sh "$@" ;;
+    checkpoint) shift; exec substrate-engine checkpoint "$@" ;;
+    restructure) shift; exec substrate-engine restructure "$@" ;;
     baseline)
         shift
         args=()
@@ -410,7 +408,7 @@ case "${1:-}" in
                 *) usage ;;
             esac
         done
-        exec .substrate/gate.sh "${args[@]}" ;;
+        exec substrate-engine gate "${args[@]}" ;;
     doctor)   shift; cmd_doctor "$@" ;;
     verify)   shift; cmd_verify "$@" ;;
     update)   shift; cmd_update "$@" ;;

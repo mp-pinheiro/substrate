@@ -43,14 +43,14 @@ prepare_receipt_hit() {
 
 prepare_lifecycle_started() {
     printf '{"session_id":"%s"}\n' "$2" \
-        | ( cd "$1" && bash .substrate/hooks/agent-lifecycle.sh start ) >/dev/null 2>&1
+        | ( cd "$1" && substrate-engine hook agent-lifecycle start ) >/dev/null 2>&1
 }
 
 prepare_lifecycle_observed() {
     prepare_lifecycle_started "$@" || return 1
     printf 'printf "edited\\n"\n' >> "$1/owned.sh"
     printf '{"session_id":"%s"}\n' "$2" \
-        | ( cd "$1" && bash .substrate/hooks/agent-lifecycle.sh observe ) >/dev/null 2>&1
+        | ( cd "$1" && substrate-engine hook agent-lifecycle observe ) >/dev/null 2>&1
 }
 
 prepare_lifecycle_pending() {
@@ -58,30 +58,26 @@ prepare_lifecycle_pending() {
     stub_checkpoint "$1"
 }
 
-# The stub must be committed BEFORE the observe baseline (varied by env only) —
-# committing after dirties the working copy, forcing AttemptCheckpoint false (internal/lifecycle/stop.go:52).
+# The stub must be active BEFORE the observe baseline (varied by env only) — gate:allow-comment
+# the wrapper is outside the repo so the working copy stays clean, keeping
+# AttemptCheckpoint true (internal/lifecycle/stop.go:52).
 STUB_COMMIT='{"commit":"fedcba9876543210fedcba9876543210fedcba98","status":"passed"}'
 
 seed_autockpt_stub() {
-    cat > "$1/.substrate/checkpoint.sh" <<'SH'
+    local real="${SUBSTRATE_ENGINE_BIN:-$(command -v substrate-engine)}"
+    local wrapper="$AB_SCENARIO_DIR/engine-wrapper"
+    cat > "$wrapper" <<EOF
 #!/usr/bin/env bash
-set -uo pipefail
-if [ -n "${AB_STUB_ARGV:-}" ]; then
-    mkdir -p "$(dirname "$AB_STUB_ARGV")"
-    printf '%s\n' "$@" >> "$AB_STUB_ARGV"
+if [ "\${1:-}" = checkpoint ] && [ -n "\${AB_STUB_ARGV:-}" ]; then
+    mkdir -p "\$(dirname "\$AB_STUB_ARGV")"
+    printf '%s\n' "\$@" >> "\$AB_STUB_ARGV"
+    printf '%s\n' "\${AB_STUB_LINE:-}"
+    exit "\${AB_STUB_EXIT:-0}"
 fi
-printf '%s\n' "${AB_STUB_LINE:-}"
-exit "${AB_STUB_EXIT:-0}"
-SH
-    chmod +x "$1/.substrate/checkpoint.sh" || return 1
-    (
-        cd "$1" || exit 9
-        if [ -d .jj ]; then
-            jj commit -m 'chore: seed checkpoint stub'
-        else
-            git add -A && git commit -qm 'chore: seed checkpoint stub'
-        fi
-    ) >/dev/null 2>&1
+exec '$real' "\$@"
+EOF
+    chmod +x "$wrapper" || return 1
+    ab_env "SUBSTRATE_ENGINE_BIN=$wrapper"
 }
 
 # argv lands under .git/substrate so the frozen checkpoint grammar is compared

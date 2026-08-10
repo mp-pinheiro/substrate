@@ -69,7 +69,7 @@ printf "PYTHON: %s\n" "$(profile_files python | LC_ALL=C sort | tr "\n" " ")"
     [ "$expected_max" -gt 3 ] || fail "$ENGINE fixture lost its line-mode workflow claims (expected_max=$expected_max)"
 
     export SUBSTRATE_CLAIMS_OUT="$WORK/claims.tsv"
-    .substrate/gate.sh --update-baseline >/dev/null 2>&1 || fail "$ENGINE gate --update-baseline failed"
+    substrate-engine gate --update-baseline >/dev/null 2>&1 || fail "$ENGINE gate --update-baseline failed"
     [ -s "$WORK/claims.tsv" ] || fail "$ENGINE runner did not produce a claims table"
 
     grep -q "workflows/substrate-gate.yml" "$WORK/claims.tsv" \

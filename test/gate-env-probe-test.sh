@@ -47,7 +47,7 @@ chmod +x "$REPO/.substrate/checks.d/99-env-probe.sh"
 touch "$REPO/dummy"
 ( cd "$REPO" && git add dummy && git -C "$REPO" commit -m init ) 2>/dev/null || true
 
-ENV_PROBE_OUT="$WORK/bash-env.txt" bash "$REPO/.substrate/gate.sh" > "$WORK/bash-gate.txt" 2>&1
+ENV_PROBE_OUT="$WORK/bash-env.txt" bash "$REPO/substrate-engine gate" > "$WORK/bash-gate.txt" 2>&1
 bash_rc=$?
 
 ENV_PROBE_OUT="$WORK/go-env.txt" "$engine" gate > "$WORK/go-gate.txt" 2>&1

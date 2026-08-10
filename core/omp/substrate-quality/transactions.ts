@@ -97,27 +97,18 @@ function resolveEngineBin(): string | null {
 }
 
 function resolveCheckpointCmd(root: string): string[] {
-	if (process.env.SUBSTRATE_ENGINE !== "bash") {
-		const bin = resolveEngineBin();
-		if (bin) return [bin, "checkpoint"];
-	}
-	return [join(root, ".substrate", "checkpoint.sh")];
+	const bin = resolveEngineBin();
+	return bin ? [bin, "checkpoint"] : ["substrate-engine", "checkpoint"];
 }
 
 function resolveRestructureCmd(root: string): string[] {
-	if (process.env.SUBSTRATE_ENGINE !== "bash") {
-		const bin = resolveEngineBin();
-		if (bin) return [bin, "restructure"];
-	}
-	return [join(root, ".substrate", "restructure.sh")];
+	const bin = resolveEngineBin();
+	return bin ? [bin, "restructure"] : ["substrate-engine", "restructure"];
 }
 
 function resolveMaintenanceCmd(root: string): string[] {
-	if (process.env.SUBSTRATE_ENGINE !== "bash") {
-		const bin = resolveEngineBin();
-		if (bin) return [bin, "maintenance"];
-	}
-	return [join(root, ".substrate", "maintenance-lib.sh")];
+	const bin = resolveEngineBin();
+	return bin ? [bin, "maintenance"] : ["substrate-engine", "maintenance"];
 }
 
 async function spawnTransactionScript(

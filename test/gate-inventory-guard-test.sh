@@ -20,7 +20,7 @@ printf '#!/usr/bin/env bash\necho ok\n' > ok.sh
 chmod +x ok.sh
 
 export SUBSTRATE_FILE_LIST=/dev/null
-out=$(.substrate/gate.sh 2>&1)
+out=$(substrate-engine gate 2>&1)
 rc=$?
 if [ "$rc" -ne 3 ]; then
     fail "expected exit 3 for empty scoped inventory, got $rc"

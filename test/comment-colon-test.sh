@@ -30,7 +30,7 @@ git commit -qm 'feat: fixture'
 export SUBSTRATE_FILE_LIST="$T/repo/.filelist"
 printf 'src/foo.sh\n' > "$SUBSTRATE_FILE_LIST"
 
-if ! .substrate/gate.sh --update-baseline > "$T/out" 2>&1; then
+if ! substrate-engine gate --update-baseline > "$T/out" 2>&1; then
     cat "$T/out" >&2
     fail "gate --update-baseline failed"
 fi

@@ -57,7 +57,7 @@ ledger_new_template() {
 ledger_lifecycle() {
     local repo="$1" session="$2" action="$3" payload="${4:-}" engine="${5:-bash}"
     printf '%s' "$payload" \
-        | ( cd "$repo" && env SUBSTRATE_ENGINE="$engine" bash .substrate/hooks/agent-lifecycle.sh "$action" )
+        | ( cd "$repo" && env SUBSTRATE_ENGINE="$engine" substrate-engine hook agent-lifecycle "$action" )
 }
 
 # jj leg: non-ASCII paths through the hook's default vcs. jj renders them raw.

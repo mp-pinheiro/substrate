@@ -2,7 +2,7 @@
 
 This repo is a **colocated [Jujutsu](https://jj-vcs.github.io/jj/) + git** repository: `jj` is
 the primary interface and a real `.git/` directory sits alongside `.jj/`. Plain `git` still
-works for **reading** (`log`/`status`/`diff`/`show`), but a hook (`.substrate/hooks/enforce-jj.sh`)
+works for **reading** (`log`/`status`/`diff`/`show`), but the engine's enforce-jj hook
 blocks mutating git — every VCS change goes through jj.
 
 > Git's `HEAD` is left **detached** on purpose — jj drives the working copy, so there is no

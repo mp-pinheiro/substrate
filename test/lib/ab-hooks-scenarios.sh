@@ -26,7 +26,7 @@ matrix() {
     hook_scenario pp-benign        hooks/protect-paths.sh "$(pp 'README.md')"                 jj prepare_none
     hook_scenario pp-baseline      hooks/protect-paths.sh "$(pp 'substrate-baseline.json')"   jj prepare_none
     hook_scenario pp-nested        hooks/protect-paths.sh "$(pp 'deep/substrate-baseline.json')" jj prepare_none
-    hook_scenario pp-vendored      hooks/protect-paths.sh "$(pp '.substrate/gate.sh')"        jj prepare_none
+    hook_scenario pp-vendored      hooks/protect-paths.sh "$(pp 'substrate-engine gate')"        jj prepare_none
     hook_scenario pp-governance    hooks/protect-paths.sh "$(pp 'CLAUDE.md')"                 jj prepare_none
     hook_scenario pp-protected     hooks/protect-paths.sh "$(pp 'secrets/token.txt')"         jj prepare_none
     hook_scenario pp-symlink       hooks/protect-paths.sh "$(pp 'link.md')"                   jj prepare_symlink
@@ -36,14 +36,14 @@ matrix() {
     hook_scenario pc-benign        hooks/protect-command.sh "$(pc '"ls -la"')"                        jj prepare_none
     hook_scenario pc-commit        hooks/protect-command.sh "$(pc '"jj commit -m x"')"                jj prepare_none
     hook_scenario pc-gitcommit     hooks/protect-command.sh "$(pc '"git commit -m x"')"               jj prepare_none
-    hook_scenario pc-vendored-ckpt hooks/protect-command.sh "$(pc '".substrate/checkpoint.sh --x"')"  jj prepare_none
+    hook_scenario pc-vendored-ckpt hooks/protect-command.sh "$(pc '"substrate-engine checkpoint --x"')"  jj prepare_none
     hook_scenario pc-ckpt-nosess   hooks/protect-command.sh '{"tool_input":{"command":"substrate checkpoint --message x"}}' jj prepare_none
     hook_scenario pc-ckpt-badsess  hooks/protect-command.sh "$(pc '"substrate checkpoint --session other --message x"')" jj prepare_none
     hook_scenario pc-ckpt-ok       hooks/protect-command.sh "$(pc '"substrate checkpoint --session __SESSION__ --message x"')" jj prepare_none
     hook_scenario pc-baseline      hooks/protect-command.sh "$(pc '"echo x --update-baseline"')"      jj prepare_none
     hook_scenario pc-baseline-keyed hooks/protect-command.sh "$(pc '"substrate update --accept-regression=dup_pct"')" jj prepare_none
     hook_scenario pc-ckpt-accept     hooks/protect-command.sh "$(pc '"substrate checkpoint --session __SESSION__ --accept-regression=probe:alpha"')" jj prepare_none
-    hook_scenario pc-ckpt-accept-chain hooks/protect-command.sh "$(pc '"substrate checkpoint --session __SESSION__ --accept-regression=a && .substrate/gate.sh --accept-regression=b"')" jj prepare_none
+    hook_scenario pc-ckpt-accept-chain hooks/protect-command.sh "$(pc '"substrate checkpoint --session __SESSION__ --accept-regression=a && substrate-engine gate --accept-regression=b"')" jj prepare_none
     hook_scenario pc-ckpt-procsub    hooks/protect-command.sh "$(pc '"substrate checkpoint --session __SESSION__ --accept-regression=a < <(substrate baseline --accept-regression)"')" jj prepare_none
     hook_scenario pc-ckpt-tighten    hooks/protect-command.sh "$(pc '"substrate checkpoint --session __SESSION__ --tighten"')" jj prepare_none
     hook_scenario pc-ckpt-trailingnl hooks/protect-command.sh "$(pc '"substrate checkpoint --session __SESSION__ --accept-regression=a\n"')" jj prepare_none

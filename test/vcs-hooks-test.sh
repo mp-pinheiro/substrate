@@ -30,7 +30,7 @@ mkdir -p "$T/git-repo"
     grep -q '^# substrate-managed$' .git/hooks/pre-commit || fail "git: pre-commit lacks marker"
     git add -A
     git commit -qm 'feat: seed' || fail "git: seed commit blocked by its own hook"
-    out=$(env -u CI .substrate/gate.sh --update-baseline 2>&1) || fail "git: baseline not green: $out"
+    out=$(env -u CI substrate-engine gate --update-baseline 2>&1) || fail "git: baseline not green: $out"
     git add -A
     git commit -qm 'chore: baseline' || fail "git: baseline commit blocked"
 
@@ -114,7 +114,7 @@ mkdir -p "$T/jj-repo"
     chmod +x components/x.sh
     env -u CI "$KIT_ROOT/bin/substrate" init --profile shell >/dev/null 2>&1 || fail "jj: init failed"
     jj config get aliases.push >/dev/null 2>&1 || fail "jj: push alias not configured"
-    out=$(env -u CI .substrate/gate.sh --update-baseline 2>&1) || fail "jj: baseline not green: $out"
+    out=$(env -u CI substrate-engine gate --update-baseline 2>&1) || fail "jj: baseline not green: $out"
     jj commit -m 'feat: seed' >/dev/null 2>&1
     jj bookmark create main -r @- >/dev/null 2>&1
 
