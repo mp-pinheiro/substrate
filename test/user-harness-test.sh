@@ -166,7 +166,7 @@ rc=$?
 [ -z "$out" ] || fail "launcher noisy outside substrate repos: $out"
 
 # cross-repo: the target repo's own project wiring is inert (Claude never loaded it) — must dispatch
-grep -q 'protect-paths.sh' "$T/repo/.claude/settings.json" || fail "fixture drift: repo project wiring missing"
+grep -q 'substrate-engine hook protect-paths' "$T/repo/.claude/settings.json" || fail "fixture drift: repo project wiring missing"
 probe_abs=$(printf '{"tool_input": {"file_path": "%s"}}' "$T/repo/substrate-baseline.json")
 out=$(cd "$T/nowhere" && printf '%s' "$probe_abs" | CLAUDE_PROJECT_DIR="$T/nowhere" bash "$LAUNCH" protect-paths.sh 2>&1)
 rc=$?
@@ -196,7 +196,7 @@ rc=$?
 
 # per-hook scope: wiring for OTHER hooks must not suppress one the project does not register
 tmp=$(mktemp)
-jq '.note = ".substrate/hooks/changed-files-scan.sh"
+jq '.note = "substrate-engine hook changed-files-scan"
     | .hooks.PostToolUse = [{"matcher": "Write|Edit", "hooks": [{"type": "command", "command": "bash something-else.sh"}]}]' \
     "$T/repo/.claude/settings.json" > "$tmp" && mv "$tmp" "$T/repo/.claude/settings.json"
 printf '#!/usr/bin/env bash\nls\n# now we check the thing\nls\n' > "$T/repo/components/gapfill.sh"
@@ -204,7 +204,7 @@ out=$(cd "$T/repo" && printf '{"tool_input": {"command": "true"}}' | CLAUDE_PROJ
 rc=$?
 [ "$rc" -eq 2 ] || fail "gap-fill dispatch not observable (rc=$rc: $out)"
 printf '%s' "$out" | grep -q 'components/gapfill.sh' || fail "gap-fill scan verdict lost: $out"
-jq -e --arg command 'bash "${CLAUDE_PROJECT_DIR:-.}/.substrate/hooks/changed-files-scan.sh"' '
+jq -e --arg command 'substrate-engine hook changed-files-scan' '
     [(.hooks.PreToolUse // [])[], (.hooks.PostToolUse // [])[]]
     | any(.[] | .hooks[]?; .command == $command)
 ' "$T/repo/.claude/settings.json" >/dev/null \

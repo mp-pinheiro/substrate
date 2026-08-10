@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# A17 verbs dual-leg exit-code comparison (A.S3).
-# verify-transition, repository-receipt-matches, receipt-matches.
-# Re-seeds per leg via mf_seeded_rc_diff to isolate bootstrap commits.
 set -uo pipefail
 
 TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -28,199 +25,121 @@ fail_fn() {
 
 BIN=$(mf_engine_build fail_fn "maintenance-receipt-ab") || exit 2
 
-# Runners for A17 verbs: both write nothing to stdout, compare exit codes only (A32).
-run_verb_bash() {
-    local out="$1" err="$2"; shift 2
-    bash .substrate/maintenance-lib.sh "$@" > "$out" 2> "$err"
-}
-
-run_verb_go() {
+run_verb() {
     local out="$1" err="$2"; shift 2
     "$BIN" maintenance "$@" > "$out" 2> "$err"
 }
 
-# mf_seeded_rc_diff: seed, setup, bootstrap, then run A17 verb on both legs; compare exit codes only (A32). gate:allow-comment
-mf_seeded_rc_diff() {
-    local label="$1" fixture_fn="$2" setup_fn="$3" verb="$4"
-    shift 4
-
-
-    # bash leg
-    local bash_dir="$WORK/$label-bash"
-    "$fixture_fn" "$bash_dir" || { fail_fn "$label: bash seed failed"; return 1; }
-    cd "$bash_dir" || return 1
-    if declare -F "$setup_fn" >/dev/null 2>&1; then
-        "$setup_fn" "$bash_dir" || { fail_fn "$label: bash setup failed"; return 1; }
-    fi
-    SUBSTRATE_ENGINE=bash SUBSTRATE_KIT_ROOT="$KIT_ROOT" \
-        bash "$KIT_ROOT/bin/substrate" bootstrap --repo-only --accept-baseline \
-        > "$WORK/$label-bash-bootstrap.out" 2> "$WORK/$label-bash-bootstrap.err"
-    run_verb_bash "$WORK/$label-bash-verb.out" "$WORK/$label-bash-verb.err" "$verb" "$@"
-    local bash_rc=$?
-
-    # go leg
-    local go_dir="$WORK/$label-go"
-    "$fixture_fn" "$go_dir" || { fail_fn "$label: go seed failed"; return 1; }
-    cd "$go_dir" || return 1
-    if declare -F "$setup_fn" >/dev/null 2>&1; then
-        "$setup_fn" "$go_dir" || { fail_fn "$label: go setup failed"; return 1; }
-    fi
-    SUBSTRATE_ENGINE=go SUBSTRATE_ENGINE_BIN="$BIN" SUBSTRATE_KIT_ROOT="$KIT_ROOT" \
-        bash "$KIT_ROOT/bin/substrate" bootstrap --repo-only --accept-baseline \
-        > "$WORK/$label-go-bootstrap.out" 2> "$WORK/$label-go-bootstrap.err"
-    run_verb_go "$WORK/$label-go-verb.out" "$WORK/$label-go-verb.err" "$verb" "$@"
-    local go_rc=$?
-
-    if [ "$bash_rc" -ne "$go_rc" ]; then
-        fail_fn "$label: exit code mismatch: bash=$bash_rc go=$go_rc"
-    else
-        printf '  [ok] %s: exit %d matches (A17 verb; stderr divergence per A32)\n' "$label" "$bash_rc"
+expect_rc() {
+    local label="$1" rc="$2" want="$3"
+    if { [ "$want" -eq 0 ] && [ "$rc" -eq 0 ]; } || { [ "$want" -ne 0 ] && [ "$rc" -ne 0 ]; }; then
+        printf '  [ok] %s: exit %d\n' "$label" "$rc"
         pass=$((pass + 1))
+    else
+        fail_fn "$label: expected $want, got $rc"
     fi
+}
+
+mf_run_verb() {
+    local label="$1" fixture_fn="$2" setup_fn="$3" expect="$4" verb="$5"
+    shift 5
+
+    local dir="$WORK/$label"
+    "$fixture_fn" "$dir" || { fail_fn "$label: seed failed"; return 1; }
+    cd "$dir" || return 1
+    if declare -F "$setup_fn" >/dev/null 2>&1; then
+        "$setup_fn" "$dir" || { fail_fn "$label: setup failed"; return 1; }
+    fi
+    SUBSTRATE_ENGINE_BIN="$BIN" SUBSTRATE_KIT_ROOT="$KIT_ROOT" \
+        bash "$KIT_ROOT/bin/substrate" bootstrap --checkpoint --repo-only --accept-baseline \
+        > "$WORK/$label-bootstrap.out" 2> "$WORK/$label-bootstrap.err"
+    run_verb "$WORK/$label-verb.out" "$WORK/$label-verb.err" "$verb" "$@"
+    local rc=$?
+    expect_rc "$label" "$rc" "$expect"
+
     mkdir -p "$WORK/$label-receipt"
-    local bash_receipt="$bash_dir/.git/substrate/maintenance-receipt.json"
-    local go_receipt="$go_dir/.git/substrate/maintenance-receipt.json"
-    [ -f "$bash_receipt" ] && cp "$bash_receipt" "$WORK/$label-receipt/bash-receipt.json"
-    [ -f "$go_receipt" ] && cp "$go_receipt" "$WORK/$label-receipt/go-receipt.json"
+    local receipt="$dir/.git/substrate/maintenance-receipt.json"
+    [ -f "$receipt" ] && cp "$receipt" "$WORK/$label-receipt/receipt.json"
 }
 
 _noop() { :; }
 
-printf 'maintenance-receipt-ab: A17 verbs dual-leg exit-code comparison\n'
+printf 'maintenance-receipt-ab: go-only A17 verb verification\n'
 
-# ── Scenario 1: verify-transition match ──────────────────────
-printf '\n[1/10] verify-transition match\n'
-mf_seeded_rc_diff "verify-match" mf_setup_git _noop \
+printf '\n[1/9] verify-transition match\n'
+mf_run_verb "verify-match" mf_setup_git _noop 1 \
     verify-transition __FROM__ __TO__ __FP__
-# Fill in real values from receipt
-receipt="$WORK/verify-match-receipt/bash-receipt.json"
+receipt="$WORK/verify-match-receipt/receipt.json"
 from=$(jq -r '.repository.fromRevision' "$receipt")
-to=$(jq -r '.repository.commit' "$receipt")
-fp=$(jq -r '.preservedDirtyFingerprint' "$receipt")
-# Re-run with real values (both legs re-seeded again)
-mf_seeded_rc_diff "verify-match-real" mf_setup_git _noop \
+to=$(jq -r '.repository.toRevision' "$receipt")
+fp=$(jq -r '.repository.preservedDirtyFingerprint' "$receipt")
+cd "$WORK/verify-match" || exit 1
+run_verb "$WORK/verify-match-real.out" "$WORK/verify-match-real.err" \
     verify-transition "$from" "$to" "$fp"
+expect_rc "verify-match-real" "$?" 0
 
-# ── Scenario 2: verify-transition stale revision ─────────────
-printf '\n[2/10] verify-transition stale revision\n'
-mf_seeded_rc_diff "verify-stale" mf_setup_git _noop \
+printf '\n[2/9] verify-transition stale revision\n'
+mf_run_verb "verify-stale" mf_setup_git _noop 1 \
     verify-transition deadbeefdeadbeefdeadbeefdeadbeefdeadbeef "$to" "$fp"
 
-# ── Scenario 3: verify-transition changed-path mismatch ──────
-printf '\n[3/10] verify-transition path mismatch\n'
-mf_seeded_rc_diff "verify-path-mismatch" mf_setup_git _noop \
+printf '\n[3/9] verify-transition path mismatch\n'
+mf_run_verb "verify-path-mismatch" mf_setup_git _noop 1 \
     verify-transition "$from" "$to" badfingerprintbadfingerprintbadfingerprintbad
 
-# ── Scenario 4: verify-transition missing receipt ────────────
-printf '\n[4/10] verify-transition missing receipt\n'
+printf '\n[4/9] verify-transition missing receipt\n'
 d="$WORK/verify-missing"
 mf_setup_git "$d" && cd "$d" || exit 1
-run_verb_bash "$WORK/verify-missing-bash.out" "$WORK/verify-missing-bash.err" \
+run_verb "$WORK/verify-missing.out" "$WORK/verify-missing.err" \
     verify-transition a b c
-bash_rc=$?
-d2="$WORK/verify-missing-go"
-mf_setup_git "$d2" && cd "$d2" || exit 1
-run_verb_go "$WORK/verify-missing-go.out" "$WORK/verify-missing-go.err" \
-    verify-transition a b c
-go_rc=$?
-if [ "$bash_rc" -eq "$go_rc" ]; then
-    printf '  [ok] verify-transition missing: exit %d matches (A17 verb; stderr divergence per A32)\n' "$bash_rc"
-    pass=$((pass + 1))
-else
-    fail_fn "verify-transition missing: exit code mismatch: bash=$bash_rc go=$go_rc"
-fi
+expect_rc "verify-missing" "$?" 1
 
-# ── Scenario 5: verify-transition bad argc ───────────────────
-printf '\n[5/10] verify-transition bad argc\n'
+printf '\n[5/9] verify-transition bad argc\n'
 d="$WORK/verify-bad-argc"
 mf_setup_git "$d" && cd "$d" || exit 1
-run_verb_bash "$WORK/verify-bad-argc-bash.out" "$WORK/verify-bad-argc-bash.err" \
+run_verb "$WORK/verify-bad-argc.out" "$WORK/verify-bad-argc.err" \
     verify-transition a b
-bash_rc=$?
-d2="$WORK/verify-bad-argc-go"
-mf_setup_git "$d2" && cd "$d2" || exit 1
-run_verb_go "$WORK/verify-bad-argc-go.out" "$WORK/verify-bad-argc-go.err" \
-    verify-transition a b
-go_rc=$?
-if [ "$bash_rc" -eq "$go_rc" ]; then
-    printf '  [ok] verify-transition bad argc: exit %d matches (A17 verb; stderr divergence per A32)\n' "$bash_rc"
+rc=$?
+if [ "$rc" -eq 2 ]; then
+    printf '  [ok] verify-bad-argc: rc=2 (usage error)\n'
     pass=$((pass + 1))
 else
-    fail_fn "verify-transition bad argc: exit code mismatch: bash=$bash_rc go=$go_rc"
+    fail_fn "verify-bad-argc: expected rc=2, got $rc"
 fi
 
-# ── Scenario 6: repository-receipt-matches match ─────────────
-printf '\n[6/10] repository-receipt-matches match\n'
-mf_seeded_rc_diff "repo-matches" mf_setup_git _noop \
+printf '\n[6/9] repository-receipt-matches match\n'
+mf_run_verb "repo-matches" mf_setup_git _noop 0 \
     repository-receipt-matches __PLACEHOLDER__
 
-# ── Scenario 7: repository-receipt-matches stale ─────────────
-printf '\n[7/10] repository-receipt-matches stale\n'
-repo_stale_setup() {
-    local dir="$1"
-    cd "$dir" || return 1
-    printf '#!/usr/bin/env bash\nexit 0\n' > checks.d/86-stale.sh
-    chmod +x checks.d/86-stale.sh
-}
-mf_seeded_rc_diff "repo-stale" mf_setup_git repo_stale_setup \
+printf '\n[7/9] repository-receipt-matches stale\n'
+d="$WORK/repo-stale"
+mf_setup_git "$d" || { fail_fn "repo-stale: seed failed"; exit 1; }
+cd "$d" || exit 1
+SUBSTRATE_ENGINE_BIN="$BIN" SUBSTRATE_KIT_ROOT="$KIT_ROOT" \
+    bash "$KIT_ROOT/bin/substrate" bootstrap --checkpoint --repo-only --accept-baseline \
+    > "$WORK/repo-stale-bootstrap.out" 2> "$WORK/repo-stale-bootstrap.err"
+printf '#!/usr/bin/env bash\nexit 0\n' > checks.d/86-stale.sh
+chmod +x checks.d/86-stale.sh
+run_verb "$WORK/repo-stale.out" "$WORK/repo-stale.err" \
     repository-receipt-matches __PLACEHOLDER__
+expect_rc "repo-stale" "$?" 1
 
-# ── Scenario 8: receipt-matches match ────────────────────────
-printf '\n[8/10] receipt-matches match (clean repo)\n'
-mf_seeded_rc_diff "receipt-matches" mf_setup_git _noop \
+printf '\n[8/9] receipt-matches match\n'
+mf_run_verb "receipt-matches" mf_setup_git _noop 0 \
     receipt-matches __PLACEHOLDER__
 
-# ── Scenario 9: receipt-matches repoRuntime failed ───────────
-printf '\n[9/10] receipt-matches repoRuntime not-passed\n'
-runtime_fail_setup() {
-    local dir="$1"
-    cd "$dir" || return 1
-    # Bootstrap first to get a receipt, then corrupt it
-    SUBSTRATE_ENGINE=bash SUBSTRATE_KIT_ROOT="$KIT_ROOT" \
-        bash "$KIT_ROOT/bin/substrate" bootstrap --repo-only --accept-baseline \
-        > /dev/null 2>&1
-    local receipt="$dir/.git/substrate/maintenance-receipt.json"
-    jq '.repoRuntime.status = "failed"' "$receipt" > "$receipt.tmp"
-    mv "$receipt.tmp" "$receipt"
-}
-# Special handling: setup_fn does the bootstrap+corruption, then we only run the verb
-for leg in bash go; do
-    d="$WORK/receipt-runtime-$leg"
-    mf_setup_git "$d" || { fail_fn "receipt-runtime $leg: seed failed"; exit 1; }
-    cd "$d" || exit 1
-    runtime_fail_setup "$d"
-done
-# bash verb
-d="$WORK/receipt-runtime-bash"
+printf '\n[9/9] receipt-matches repoRuntime not-passed\n'
+d="$WORK/receipt-runtime"
+mf_setup_git "$d" || { fail_fn "receipt-runtime: seed failed"; exit 1; }
 cd "$d" || exit 1
-run_verb_bash "$WORK/runtime-bash.out" "$WORK/runtime-bash.err" receipt-matches __PLACEHOLDER__
-bash_rc=$?
-# go verb
-d="$WORK/receipt-runtime-go"
-cd "$d" || exit 1
-run_verb_go "$WORK/runtime-go.out" "$WORK/runtime-go.err" receipt-matches __PLACEHOLDER__
-go_rc=$?
-if [ "$bash_rc" -eq "$go_rc" ]; then
-    printf '  [ok] receipt-matches runtime-fail: exit %d matches (A17 verb; stderr divergence per A32)\n' "$bash_rc"
-    pass=$((pass + 1))
-else
-    fail_fn "receipt-matches runtime-fail: exit code mismatch: bash=$bash_rc go=$go_rc"
-fi
-
-# ── Scenario 10: receipt-matches bad argc (bash-only) ────────
-printf '\n[10/10] receipt-matches bad argc (bash-only)\n'
-d="$WORK/receipt-bad-argc"
-mf_setup_git "$d" && cd "$d" || exit 1
-# Bash leg: maintenance-lib.sh checks [ $# -eq 1 ]; passing extra arg → rc 2
-bash .substrate/maintenance-lib.sh receipt-matches extra-arg \
-    > "$WORK/receipt-bad-argc-bash.out" 2> "$WORK/receipt-bad-argc-bash.err"
-bash_rc=$?
-if [ "$bash_rc" -eq 2 ]; then
-    printf '  [ok] receipt-matches bad argc: bash rc=2 (go unreachable by design — structural argv diff)\n'
-    pass=$((pass + 1))
-else
-    fail_fn "receipt-matches bad argc: bash rc=$bash_rc expected 2"
-fi
+SUBSTRATE_ENGINE_BIN="$BIN" SUBSTRATE_KIT_ROOT="$KIT_ROOT" \
+    bash "$KIT_ROOT/bin/substrate" bootstrap --checkpoint --repo-only --accept-baseline \
+    > /dev/null 2>&1
+receipt="$d/.git/substrate/maintenance-receipt.json"
+jq '.repoRuntime.status = "failed"' "$receipt" > "$receipt.tmp"
+mv "$receipt.tmp" "$receipt"
+run_verb "$WORK/runtime.out" "$WORK/runtime.err" \
+    receipt-matches __PLACEHOLDER__
+expect_rc "receipt-runtime" "$?" 1
 
 if [ "$fail" -gt 0 ]; then
     printf '\nmaintenance-receipt-ab: %d scenarios green, %d failed\n' "$pass" "$fail"
