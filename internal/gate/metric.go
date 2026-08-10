@@ -70,7 +70,9 @@ func ParseNumber(raw json.RawMessage) (Number, error) {
 		}
 		exp -= fracLen
 	}
+	trimmedLen := len(digits)
 	digits = strings.TrimRight(digits, "0")
+	exp += trimmedLen - len(digits)
 	if digits == "" {
 		digits = "0"
 	}
