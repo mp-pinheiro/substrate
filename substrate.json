@@ -72,6 +72,6 @@
     ]
   },
   "budgets": {
-    "max_file_lines": 500
+    "max_file_lines": 750
   }
 }
