@@ -30,8 +30,15 @@ jobs:
         run: |
           bun install -g @ast-grep/cli@0.45.0 jscpd@5.0.14
           # substrate:profile-toolchain
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build engine
+        run: go build -trimpath -buildvcs=false -o build/substrate-engine ./cmd/substrate-engine
       - name: Run gate
-        run: substrate-engine gate
+        run: |
+          export PATH="$PWD/build:$PATH"
+          substrate-engine gate
       - name: Audit plan oracles
         if: github.event_name == 'push'
         env:
