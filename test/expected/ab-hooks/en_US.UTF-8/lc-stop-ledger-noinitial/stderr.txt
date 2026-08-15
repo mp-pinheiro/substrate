@@ -1,0 +1,1 @@
+{"decision":"block","reason":"[substrate — completion blocked] Agent-owned pending paths: owned.sh. Repository revision changed without a checkpoint receipt. Automatic checkpoint failed: checkpoint blocked: gate or baseline tightening failed. Run direct verification, then: substrate checkpoint --session <SESSION> --message 'type(scope): subject'. Never push."}

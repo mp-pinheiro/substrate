@@ -140,8 +140,7 @@ matrix() {
     hook_scenario pc-command-nul hooks/protect-command.sh "$(pc '"echo\u0000hi"')" jj prepare_none
     hook_scenario jj-command-nul hooks/enforce-jj.sh      "$(pc '"git\u0000push"')" jj prepare_none
 
-    # The stop hook reads `.initial.revision` directly off the session ledger, unguarded —
-    # a missing, null, or scalar `.initial`, or a truncated ledger file, each break that read differently.
+    # Missing/null `.initial` follows jq null semantics; scalar and truncated ledgers fail closed.
     hook_scenario lc-stop-ledger-noinitial    hooks/agent-lifecycle.sh '{"session_id":"__SESSION__","stop_hook_active":false}' jj prepare_ledger_initial_missing stop
     hook_scenario lc-stop-ledger-nullinitial  hooks/agent-lifecycle.sh '{"session_id":"__SESSION__","stop_hook_active":false}' jj prepare_ledger_initial_null    stop
     hook_scenario lc-stop-ledger-scalarinitial hooks/agent-lifecycle.sh '{"session_id":"__SESSION__","stop_hook_active":false}' jj prepare_ledger_initial_scalar stop
