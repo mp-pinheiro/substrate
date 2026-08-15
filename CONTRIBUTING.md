@@ -14,6 +14,9 @@ bin/substrate bootstrap
 just gate
 ```
 
+The canonical remote is `https://forgejo.yfrit.com/mpp/substrate`; this GitHub repository is a
+read-only mirror of `main`.
+
 ## Make a change
 
 - Keep each change focused on one problem.

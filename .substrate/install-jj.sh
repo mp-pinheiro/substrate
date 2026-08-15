@@ -2,16 +2,22 @@
 set -euo pipefail
 
 case "$(uname -s):$(uname -m)" in
-    Linux:x86_64) ;;
+    Linux:x86_64)
+        jj_arch=x86_64-unknown-linux-musl
+        sha256=59e5588583ac82b623239929368c65b90735931c0f26b5a16c1f04d5bb97643d
+        ;;
+    Linux:aarch64)
+        jj_arch=aarch64-unknown-linux-musl
+        sha256=289197b6bec60b4e57d47260624b617716f737eb02cdfd9155791b2576aa5862
+        ;;
     *) printf 'install-jj: unsupported platform: %s:%s\n' "$(uname -s)" "$(uname -m)" >&2; exit 1 ;;
 esac
 
 version=0.43.0
-sha256=59e5588583ac82b623239929368c65b90735931c0f26b5a16c1f04d5bb97643d
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 archive="$tmp/jj.tar.gz"
-url="https://github.com/jj-vcs/jj/releases/download/v${version}/jj-v${version}-x86_64-unknown-linux-musl.tar.gz"
+url="https://github.com/jj-vcs/jj/releases/download/v${version}/jj-v${version}-${jj_arch}.tar.gz"
 
 curl -sSfL -o "$archive" "$url"
 printf '%s  %s\n' "$sha256" "$archive" | sha256sum -c -
