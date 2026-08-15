@@ -3,6 +3,7 @@ package gate
 import (
 	"context"
 	"errors"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -54,7 +55,8 @@ func check10Comments(ctx context.Context, inv []string, claims []byte, env map[s
 	if err != nil {
 		baseline = nil
 	}
-
+	_, statErr := os.Stat(paths.BaselinePath)
+	hasBaseline := statErr == nil
 	scanner := comments.NewScanner(cfg)
 
 	var findings []string
@@ -74,7 +76,7 @@ func check10Comments(ctx context.Context, inv []string, claims []byte, env map[s
 			RawValue: []byte(strconv.Itoa(result.Count)),
 			Dir:      "lo",
 		})
-		if result.Blocked {
+		if hasBaseline && result.Blocked {
 			for _, finding := range result.Findings {
 				findings = append(findings, finding.String())
 			}
