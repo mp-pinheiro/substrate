@@ -1,11 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Single supported target today; gitleaks ships linux_x64 release tarballs.
+# gitleaks ships linux_x64 and linux_arm64 release tarballs.
 arch=$(uname -m)
-file_arch=x86-64
 case "$(uname -s):$arch" in
-    Linux:x86_64) ;;
+    Linux:x86_64)
+        asset_arch=x64
+        file_arch=x86-64
+        sha256=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        ;;
+    Linux:aarch64)
+        asset_arch=arm64
+        file_arch=aarch64
+        sha256=e4a487ee7ccd7d3a7f7ec08657610aa3606637dab924210b3aee62570fb4b080
+        ;;
     *) printf 'install-gitleaks: unsupported platform: %s:%s\n' "$(uname -s)" "$arch" >&2; exit 1 ;;
 esac
 
@@ -15,11 +23,10 @@ if ! command -v file >/dev/null 2>&1; then
 fi
 
 version=8.30.1
-sha256=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 archive="$tmp/gitleaks.tar.gz"
-url="https://github.com/gitleaks/gitleaks/releases/download/v${version}/gitleaks_${version}_linux_x64.tar.gz"
+url="https://github.com/gitleaks/gitleaks/releases/download/v${version}/gitleaks_${version}_linux_${asset_arch}.tar.gz"
 
 curl -sSfL -o "$archive" "$url"
 printf '%s  %s\n' "$sha256" "$archive" | sha256sum -c -

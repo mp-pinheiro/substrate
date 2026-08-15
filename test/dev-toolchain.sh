@@ -40,7 +40,7 @@ dev_install_cmd() {
         ruff|vulture|import-linter|lint-imports)
             printf '  pipx install %s\n' "$bin" ;;
         actionlint)
-            printf '  curl -sSfL -o /tmp/actionlint.tar.gz https://github.com/rhysd/actionlint/releases/download/v%s/actionlint_%s_linux_amd64.tar.gz && sudo tar -xzf /tmp/actionlint.tar.gz -C /usr/local/bin actionlint\n' "$ci_version" "$ci_version" ;;
+            printf '  curl -sSfL -o /tmp/actionlint.tar.gz https://github.com/rhysd/actionlint/releases/download/v%s/actionlint_%s_linux_$([ "$(uname -m)" = aarch64 ] && echo arm64 || echo amd64).tar.gz && sudo tar -xzf /tmp/actionlint.tar.gz -C /usr/local/bin actionlint\n' "$ci_version" "$ci_version" ;;
         *)
             printf '  # no dev install recipe for %s — see CI profile\n' "$bin" ;;
     esac

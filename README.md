@@ -1,5 +1,4 @@
 # substrate
-[![substrate gate](https://github.com/mp-pinheiro/substrate/actions/workflows/substrate-gate.yml/badge.svg)](https://github.com/mp-pinheiro/substrate/actions/workflows/substrate-gate.yml)
 
 Deterministic quality gates for agentic development, installable in any repo. Rules live in tools that reject bad changes — at write time (harness hooks), commit/push time, and merge time (gate + CI) — because prompt instructions decay and models imitate whatever the tree already contains.
 
@@ -13,6 +12,9 @@ This project is not affiliated with Parity Technologies or its Substrate blockch
 git clone https://github.com/mp-pinheiro/substrate.git ~/git/substrate
 export PATH="$HOME/git/substrate/bin:$PATH"
 ```
+
+The canonical remote is `https://forgejo.yfrit.com/mpp/substrate`; this GitHub repository is a
+read-only mirror of `main`.
 
 ## Requirements
 

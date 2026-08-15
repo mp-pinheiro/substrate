@@ -12,8 +12,20 @@ KIT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # gojq, or 1.8 — the pin below is the only jq those oracles are allowed to use.
 # sha256 from https://github.com/jqlang/jq/releases/download/jq-1.7.1/sha256sum.txt
 JQ_PIN_VERSION=jq-1.7.1
-JQ_PIN_ASSET=jq-linux-amd64
-JQ_PIN_SHA256=5942c9b0934e510ee61eb3e30273f1b3fe2590df93933a93d7c58b81d19c8ff5
+case "$(uname -m)" in
+    x86_64)
+        JQ_PIN_ASSET=jq-linux-amd64
+        JQ_PIN_SHA256=5942c9b0934e510ee61eb3e30273f1b3fe2590df93933a93d7c58b81d19c8ff5
+        ;;
+    aarch64)
+        JQ_PIN_ASSET=jq-linux-arm64
+        JQ_PIN_SHA256=4dd2d8a0661df0b22f1bb9a1f9830f06b6f3b8f7d91211a1ef5d7c4f06a8b4a5
+        ;;
+    *)
+        printf '[ci-toolchain] unsupported architecture: %s\n' "$(uname -m)" >&2
+        exit 1
+        ;;
+esac
 JQ_PIN_BIN="$KIT_ROOT/test/.toolchain/bin/jq"
 
 file_sha256() {
@@ -59,8 +71,8 @@ ensure_jq() {
     chmod +x "$staged" || { rm -f "$staged"; return 1; }
     mv -f "$staged" "$JQ_PIN_BIN" || { rm -f "$staged"; return 1; }
     if ! jq_pin_ok; then
-        printf '[ci-toolchain] %s does not run as %s — %s is amd64 only\n' \
-            "$JQ_PIN_BIN" "$JQ_PIN_VERSION" "$JQ_PIN_ASSET" >&2
+        printf '[ci-toolchain] %s does not run as %s\n' \
+            "$JQ_PIN_BIN" "$JQ_PIN_VERSION" >&2
         return 1
     fi
     printf '[ci-toolchain] %s installed: %s\n' "$JQ_PIN_VERSION" "$JQ_PIN_BIN"
