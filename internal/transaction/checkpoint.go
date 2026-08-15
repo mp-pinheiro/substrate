@@ -404,10 +404,14 @@ func runGate(ctx context.Context, repoRoot string, args ...string) (string, erro
 		return "", fmt.Errorf("gate: %w", err)
 	}
 	res, err := xshell.RunIn(ctx, repoRoot, bin, append([]string{"gate"}, args...)...)
+	output := string(res.Stdout) + string(res.Stderr)
 	if err != nil {
-		return "", fmt.Errorf("gate: %w", err)
+		return output, fmt.Errorf("gate: %w", err)
 	}
-	return string(res.Stdout) + string(res.Stderr), nil
+	if res.Code != 0 {
+		return output, fmt.Errorf("gate failed with code %d", res.Code)
+	}
+	return output, nil
 }
 
 func commitPathsFn(ctx context.Context, repo *vcs.Repo, repoRoot, message string, paths []string) (string, string, error) {
