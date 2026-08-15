@@ -175,7 +175,11 @@ func RunChecks(ctx *RunContext, specs []checkSpec, claimsData []byte) error {
 		if r.RC == 0 {
 			fmt.Printf("[ok] %s (%s) [%d/%d]\n", r.Name, took, i+1, total)
 		} else {
-			fmt.Printf("[!] FAIL %s (%s) [%d/%d]\n", r.Name, took, i+1, total)
+			if r.RC >= 2 {
+				fmt.Printf("[!] FAIL %s: infrastructure failure (rc=%d) — the gate cannot pass blind (%s) [%d/%d]\n", r.Name, r.RC, took, i+1, total)
+			} else {
+				fmt.Printf("[!] FAIL %s (%s) [%d/%d]\n", r.Name, took, i+1, total)
+			}
 			failures++
 		}
 	}
