@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 permissions:
   contents: read
-  actions: read
+  actions: write
   issues: read
 env:
   SUBSTRATE_VENDOR_FROM_WORKTREE: '1'
