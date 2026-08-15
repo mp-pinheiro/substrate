@@ -27,9 +27,8 @@ fail_fn() {
     fail=$((fail + 1))
 }
 
-# Runners: maintenance bootstrap via bin/substrate. Post-P5a: both legs use
-# the engine (no in-tree bash hook leg for maintenance). Only the go leg
-# exists; the bash-named wrapper is a go-leg alias for the A/B harness.
+# Runners: maintenance bootstrap via bin/substrate; the bash-named runner is a
+# go-leg alias post-P5a (no in-tree bash hook leg for maintenance).
 run_maint_bash() {
     local out="$1" err="$2"; shift 2
     SUBSTRATE_ENGINE_BIN="$BIN" SUBSTRATE_KIT_ROOT="$KIT_ROOT" \
@@ -64,7 +63,7 @@ git_dirty_setup() {
     cd "$dir" || return 1
     printf 'dirty-user-work\n' >> user.sh
     # Record pre-run hash for post-condition (both legs)
-    sha256sum user.sh > "$WORK/$1-before.sha"
+    sha256sum user.sh > "$1-before.sha"
 }
 mf_run_diff "git-dirty" mf_setup_git git_dirty_setup run_maint \
     --checkpoint --repo-only
@@ -74,7 +73,7 @@ for leg in bash go; do
     receipt="$d/.git/substrate/maintenance-receipt.json"
     if [ -f "$receipt" ]; then
         # sha256sum of user.sh should match pre-run
-        pre=$(head -c64 "$WORK/$d-before.sha" 2>/dev/null)
+        pre=$(head -c64 "$d-before.sha" 2>/dev/null)
         post=$(cd "$d" && sha256sum user.sh | head -c64)
         if [ -n "$pre" ] && [ "$pre" = "$post" ]; then
             printf '  [ok] git-dirty %s: user file preserved (sha match)\n' "$leg"
