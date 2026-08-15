@@ -26,7 +26,7 @@ cfg_json() {
 }
 
 metric() {
-    jq -cn --arg n "$1" --arg v "$2" '{name: $n, value: ($v | tonumber)}' >> "$METRICS" \
+    jq -cn --arg n "$1" --arg v "$2" '{name: $n, value: ($v | tonumber), dir: "lo"}' >> "$METRICS" \
         || die_infra "metric emission failed for $1=$2"
 }
 

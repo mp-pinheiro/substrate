@@ -27,6 +27,10 @@ else
         || die_infra "comment count aggregation failed"
 fi
 
+zeros=$(printf '%s\n' "${files[@]}" | jq -Rs 'split("\n") | map(select(length > 0)) | map({(.): 0}) | add // {}') \
+    || die_infra "zero-fill construction failed"
+counts=$(jq -n --argjson z "$zeros" --argjson c "$counts" '$z + $c') || die_infra "count merge failed"
+
 while IFS=$'\t' read -r f n; do
     [ -n "$f" ] && metric "comments:$f" "$n"
 done < <(jq -r 'to_entries[] | "\(.key)\t\(.value)"' <<< "$counts")
