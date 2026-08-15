@@ -7,11 +7,8 @@ import (
 	"github.com/mp-pinheiro/substrate/internal/canonjson"
 )
 
-// Status is the read-only ownership query backing the omp extension's shim over
-// the engine: it returns the ledger's ownership view plus a fresh snapshot so a
-// non-Claude harness can decide whether to checkpoint without spawning a full
-// gate. Unlike Verify it never gates — a tracking error or fingerprint drift is
-// reported as data, not an exit-2 refusal.
+// Status returns the ledger ownership view plus a fresh snapshot so a non-Claude
+// harness can decide whether to checkpoint without gating. Errors are data, not refusals.
 func (e *Engine) Status(ctx context.Context, session string) Result {
 	statePath := e.statePath(session)
 	if _, err := os.Stat(statePath); err != nil {

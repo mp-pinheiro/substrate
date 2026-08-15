@@ -85,8 +85,7 @@ canonical_ext() {
 }
 
 # populate AST_SET["path|line"] for all ast-mode files, one ast-grep pass per grammar.
-# ast-grep selects files by extension, so extensionless (shebang-claimed) files are
-# scanned through a canonical-extension tmp copy and mapped back.
+# extensionless shebang-claimed files scan via a canonical-extension tmp copy, mapped back.
 extract_ast() {
     local -A by_lang=()
     local f entry lang
@@ -147,10 +146,8 @@ rule: {kind: comment}"
     rm -rf "$tmpdir"
 }
 
-# ---- line-mode extraction ------------------------------------------------
-# Globals set per file by lm_setup: LM_MARKERS (array), LM_BO/LM_BC (block pair), LM_HEREDOC (0/1)
-# Globals set per line by lm_scan: LC_TEXT (comment substring, "" when none),
-# LC_FROM_BLOCK, and state LM_IN_BLOCK / LM_HD_TAG carried across lines.
+# lm_setup sets per-file state (markers, block pair, heredoc flag); lm_scan sets
+# per-line LC_TEXT/LC_FROM_BLOCK and carries LM_IN_BLOCK/LM_HD_TAG across lines.
 LM_MARKERS=()
 LM_BO=""
 LM_BC=""

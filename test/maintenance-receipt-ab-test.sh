@@ -117,6 +117,7 @@ cd "$d" || exit 1
 SUBSTRATE_ENGINE_BIN="$BIN" SUBSTRATE_KIT_ROOT="$KIT_ROOT" \
     bash "$KIT_ROOT/bin/substrate" bootstrap --checkpoint --repo-only --accept-baseline \
     > "$WORK/repo-stale-bootstrap.out" 2> "$WORK/repo-stale-bootstrap.err"
+mkdir -p checks.d
 printf '#!/usr/bin/env bash\nexit 0\n' > checks.d/86-stale.sh
 chmod +x checks.d/86-stale.sh
 run_verb "$WORK/repo-stale.out" "$WORK/repo-stale.err" \

@@ -18,8 +18,9 @@ func check10Comments(ctx context.Context, inv []string, claims []byte, env map[s
 	var files []string
 	for _, f := range inv {
 		if !isClaimed(claims, f) {
-			files = append(files, f)
+			continue
 		}
+		files = append(files, f)
 	}
 	if len(files) == 0 {
 		return 0, nil, "", nil
@@ -29,6 +30,18 @@ func check10Comments(ctx context.Context, inv []string, claims []byte, env map[s
 	if err != nil {
 		return 0, nil, "", nil
 	}
+	unscanned := loadUnscanned2(paths.ConfigPath)
+	scanFiles := files[:0]
+	for _, f := range files {
+		if isUnscanned2(f, unscanned) {
+			continue
+		}
+		scanFiles = append(scanFiles, f)
+	}
+	if len(scanFiles) == 0 {
+		return 0, nil, "", nil
+	}
+
 	cfg, err := config.LoadConfig(paths.ConfigPath)
 	if err != nil || cfg == nil {
 		cfg = &config.Config{}
@@ -47,7 +60,7 @@ func check10Comments(ctx context.Context, inv []string, claims []byte, env map[s
 	var findings []string
 	var metrics []MetricRecord
 
-	for _, f := range files {
+	for _, f := range scanFiles {
 		result, ratErr := comments.Ratchet(ctx, scanner, lm, baseline, repoRoot, f)
 		if ratErr != nil {
 			var baselineErr *comments.BaselineMetricError

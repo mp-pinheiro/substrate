@@ -86,8 +86,7 @@ async function engineEnsureStarted(root: string): Promise<void> {
 }
 
 // Feed the engine ledger after a tool call; the engine computes the snapshot,
-// reconciles observed/initial, recomputes ownedPaths, and detects maintenance
-// transitions — all ownership policy stays in Go.
+// reconciles observed/initial, recomputes ownedPaths, detects maintenance transitions.
 async function engineObserve(root: string): Promise<void> {
 	const sid = sessionId(root);
 	await runCommand(root, [...engineBaseCmd(root), "hook", "agent-lifecycle", "observe"], {

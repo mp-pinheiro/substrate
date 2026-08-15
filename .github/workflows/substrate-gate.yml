@@ -86,7 +86,8 @@ jobs:
       - *checkout_shallow
       - *setup_bun
       - *install_core
-      - name: Install Jujutsu
+      - &install_jj
+        name: Install Jujutsu
         run: .substrate/install-jj.sh
       - *install_go
       - *build_engine
@@ -102,8 +103,9 @@ jobs:
     timeout-minutes: 30
     steps:
       - *checkout_shallow
-      - name: Install Jujutsu
-        run: .substrate/install-jj.sh
+      - *setup_bun
+      - *install_core
+      - *install_jj
       - *install_go
       - *build_engine
       - name: Checkpoint rollback switch
@@ -114,8 +116,9 @@ jobs:
     timeout-minutes: 30
     steps:
       - *checkout_shallow
-      - name: Install Jujutsu
-        run: .substrate/install-jj.sh
+      - *setup_bun
+      - *install_core
+      - *install_jj
       - *install_go
       - *build_engine
       - name: Maintenance rollback switch
@@ -129,13 +132,15 @@ jobs:
     runs-on: ubuntu-latest
     needs: [gate, profile-matrix, engine, hook-parity, maintenance-parity, transaction-parity]
     steps:
+      - *checkout_shallow
       - *setup_bun
-      - name: Install Jujutsu
-        run: .substrate/install-jj.sh
+      - *install_jj
       - name: Install core + all profile toolchains
         run: |
           bun install -g @ast-grep/cli@0.45.0 jscpd@5.0.14
           test/ci-toolchain.sh
+      - *install_go
+      - *build_engine
       - name: Audit plan oracles
         env:
           GH_TOKEN: ${{ github.token }}
