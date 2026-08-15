@@ -31,9 +31,11 @@ jobs:
         run: bun install -g @ast-grep/cli@0.45.0 jscpd@5.0.14
       - name: Install active profile toolchains
         run: test/ci-toolchain.sh --active
-      - name: Install Go toolchain
+      - &install_go
+        name: Install Go toolchain
         run: test/ci-toolchain.sh go
-      - name: Build engine
+      - &build_engine
+        name: Build engine
         run: |
           go build -trimpath -buildvcs=false -o build/substrate-engine ./cmd/substrate-engine
           echo "$PWD/build" >> "$GITHUB_PATH"
@@ -58,6 +60,8 @@ jobs:
           persist-credentials: false
       - *setup_bun
       - *install_core
+      - *install_go
+      - *build_engine
       - name: Install profile toolchain
         run: test/ci-toolchain.sh ${{ matrix.profile }}
       - name: Hostile-HOME oracle
@@ -67,8 +71,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - *checkout_shallow
-      - name: Install Go toolchain
-        run: test/ci-toolchain.sh go
+      - *install_go
       - name: Provision pinned jq
         run: test/ci-toolchain.sh --ensure-jq
       - name: Build, vet, and internal tests
@@ -85,8 +88,8 @@ jobs:
       - *install_core
       - name: Install Jujutsu
         run: .substrate/install-jj.sh
-      - name: Install Go toolchain
-        run: test/ci-toolchain.sh go
+      - *install_go
+      - *build_engine
       - name: Go-only hook parity
         run: bash test/ab-hooks-test.sh
       - name: Session-ledger golden vectors (go-only)
@@ -101,10 +104,8 @@ jobs:
       - *checkout_shallow
       - name: Install Jujutsu
         run: .substrate/install-jj.sh
-      - name: Install Go toolchain
-        run: test/ci-toolchain.sh go
-      - name: Build engine
-        run: go build -trimpath -buildvcs=false -o build/substrate-engine ./cmd/substrate-engine
+      - *install_go
+      - *build_engine
       - name: Checkpoint rollback switch
         run: bash test/transaction-rollback-test.sh
 
@@ -115,10 +116,8 @@ jobs:
       - *checkout_shallow
       - name: Install Jujutsu
         run: .substrate/install-jj.sh
-      - name: Install Go toolchain
-        run: test/ci-toolchain.sh go
-      - name: Build engine
-        run: go build -trimpath -buildvcs=false -o build/substrate-engine ./cmd/substrate-engine
+      - *install_go
+      - *build_engine
       - name: Maintenance rollback switch
         run: bash test/maintenance-rollback-test.sh
       - name: Maintenance A/B diff

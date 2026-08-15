@@ -1,1 +1,1 @@
-checkpoint blocked: no pending Claude-owned changes
+checkpoint blocked: no pending agent-owned changes

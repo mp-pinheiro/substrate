@@ -936,7 +936,7 @@
   "comments:test/golden/receipt/records/symlink.record": 0,
   "comments:test/golden/receipt/records/tab-file.record": 0,
   "dead_code": 0,
-  "dup_pct": 2.310450139423715,
+  "dup_pct": 2.303887395013777,
   "max_file_lines": 460
 },
   "direction": {
