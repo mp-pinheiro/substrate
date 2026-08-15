@@ -1,1 +1,1 @@
-checkpoint blocked: Claude ownership state is missing
+checkpoint blocked: agent ownership state is missing
