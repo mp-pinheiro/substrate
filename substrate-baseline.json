@@ -16,7 +16,6 @@
   "comments:cmd/substrate-engine/main.go": 0,
   "comments:core/audit.sh": 0,
   "comments:core/check-comments.sh": 0,
-  "comments:core/checkpoint.sh": 0,
   "comments:core/checks.d/05-unclaimed-source.sh": 0,
   "comments:core/checks.d/10-comments.sh": 0,
   "comments:core/checks.d/15-tracking.sh": 0,
@@ -51,7 +50,6 @@
   "comments:core/push-gate.sh": 0,
   "comments:core/receipt-lib.sh": 0,
   "comments:core/report.sh": 0,
-  "comments:core/restructure.sh": 0,
   "comments:core/selftest.sh": 0,
   "comments:core/substrate-launch.sh": 0,
   "comments:core/user-harness.sh": 0,
@@ -292,7 +290,7 @@
   "comments:test/vendor-drift-test.sh": 0,
   "comments:test/vendor-source-test.sh": 0,
   "dead_code": 0,
-  "dup_pct": 2.320223794635511,
+  "dup_pct": 2.318736305065899,
   "max_file_lines": 460
 },
   "direction": {
@@ -312,7 +310,6 @@
   "comments:cmd/substrate-engine/main.go": "lo",
   "comments:core/audit.sh": "lo",
   "comments:core/check-comments.sh": "lo",
-  "comments:core/checkpoint.sh": "lo",
   "comments:core/checks.d/05-unclaimed-source.sh": "lo",
   "comments:core/checks.d/10-comments.sh": "lo",
   "comments:core/checks.d/15-tracking.sh": "lo",
@@ -347,7 +344,6 @@
   "comments:core/push-gate.sh": "lo",
   "comments:core/receipt-lib.sh": "lo",
   "comments:core/report.sh": "lo",
-  "comments:core/restructure.sh": "lo",
   "comments:core/selftest.sh": "lo",
   "comments:core/substrate-launch.sh": "lo",
   "comments:core/user-harness.sh": "lo",
@@ -592,12 +588,6 @@
   "max_file_lines": "lo"
 },
   "accepted": {
-  "dup_pct": {
-  "at": "2026-08-15",
-  "from": 2.322572082683566,
-  "reason": "Gate now mirrors core/ci/github-gate.yml's gitleaks-binary/cache steps verbatim by design, same steps shipped to consumers, plus one new aliased step in the pre-existing transaction-parity/maintenance-parity duplicate job pair. Delta is +0.001pp, from 2.3226 to 2.3236 percent. Alternative is a shared composite GitHub Action, which needs new .github/actions vendoring plumbing (manifest.go fixedPaths, vendor_core) mid-migration and risks the bootstrap dirty-path-wipe behavior just found in overlap.go, not worth it for a 0.001pp ratchet.",
-  "to": 2.323591363875724
-},
   "max_file_lines": {
   "at": "2026-08-08",
   "from": 418,
