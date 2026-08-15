@@ -33,7 +33,7 @@ jobs:
           [ "$(id -u)" -eq 0 ] || exit 0
           apt-get update -qq
           apt-get install -y -qq --no-install-recommends sudo jq unzip file locales
-          locale-gen en_US.UTF-8
+          localedef -i en_US -f UTF-8 en_US.UTF-8
       - &setup_bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
