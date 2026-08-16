@@ -10,7 +10,7 @@ How to add checks and hooks without weakening the system, and how the kit lands 
 4. **Escape hatches are line-scoped and visible in diffs** (`gate:allow-*` markers, the `unscanned` ledger). Never add a config-wide off switch.
 5. **Negative tests are mandatory.** A check ships with its oracle: `check_fixtures` pairs a bad file with the check that must reject it; `test/matrix.sh` proves the pairing in a scratch repo; `substrate selftest` proves slop injection, broken-tool, and corrupt-baseline all go red. A gate verified only on the green path is decoration.
 6. **Both harnesses, always.** Any write-time policy lands in `core/hooks/*.sh` (Claude Code, via `core/claude-hooks.json`) AND `core/omp/substrate-quality.ts` (omp). One without the other is a hole.
-7. **Determinism.** No user-global tool config may influence verdicts — pin configs explicitly. No sed/awk; bash + jq + coreutils; config is JSON only.
+7. **Determinism.** No user-global tool config may influence verdicts — pin configs explicitly. The gate engine is a single Go binary; external linters, `jj`/`git`, and user `checks.d` scripts stay subprocesses; no sed/awk in `checks.d`.
 
 ## Adding a check
 

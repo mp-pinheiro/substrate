@@ -11,7 +11,7 @@ The interfaces every component implements. Change these deliberately — everyth
 5. Negative tests ship with the gate (`substrate selftest`).
 6. Both harnesses or it doesn't ship: Claude Code hooks and the omp extension read the same config.
 7. Never write through symlinks; protect governance docs, baselines, and `.substrate/` at the hook layer.
-8. No `sed`/`awk`; bash + jq + coreutils. Config is JSON, parsed only with jq (bash) or JSON.parse (Bun) — trivial parsers, no YAML.
+8. The gate engine is a single Go binary (`substrate-engine`); no bash/jq reimplementation of its checks or policy. External linters, `jj`/`git`, and user `checks.d` scripts stay subprocesses. `jq` remains a pinned runtime dependency for `checks.d` authors, not the engine itself.
 
 ## substrate.json (repo root, tracked; created by `substrate bootstrap`)
 

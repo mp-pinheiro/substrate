@@ -30,7 +30,7 @@ Non-negotiables (gate- or matrix-enforced):
 - **Fail closed**: `require_bin_ci` for optional-locally tools; `die_infra` on any tool malfunction.
 - **File selection from the inventory**, never by globbing the tree — submodules and unclaimed files are excluded by contract.
 - **Comment discipline applies to your check itself**: max 2 consecutive comment lines; no narration.
-- **shellcheck -S warning clean**; bash + jq + coreutils only, no sed/awk.
+- **shellcheck -S warning clean**; bash + jq + coreutils only, no sed/awk (this rule is for `checks.d` scripts — the gate engine itself is Go).
 
 ## Testing it
 
