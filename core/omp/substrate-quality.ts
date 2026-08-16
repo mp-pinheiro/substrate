@@ -1,16 +1,13 @@
 // User-scoped OMP enforcement installed by `substrate bootstrap`. Repository
 // behavior comes from the target repo's vendored scripts and substrate.json.
-import { existsSync, lstatSync, realpathSync } from "node:fs";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { existsSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { initializeRuntime, writeRuntimeState } from "./substrate-quality/identity";
 import { registerSessionLifecycle } from "./substrate-quality/lifecycle";
 import {
 	findGateRoot,
 	findJjRoot,
-	HARD,
-	loadConfig,
-	resolveThroughExistingParent,
 	runCommand,
 	SUBSTRATE_POLICY,
 	toolPath,
@@ -183,56 +180,15 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 		const abs = resolve(ctx.cwd, path);
 		const root = findGateRoot(dirname(abs));
 		if (!root) return;
-		const cfg = loadConfig(root);
-		if (!cfg.ok) {
-			return { block: true, reason: "blocked: substrate.json is corrupt — fix it before writing anything else" };
-		}
-		if (cfg.contractsInvalid) {
-			return {
-				block: true,
-				reason: "blocked: substrate.json contracts entries need name/regen/paths — fix the config",
-			};
-		}
-		try {
-			if (lstatSync(abs).isSymbolicLink()) {
-				let target = "unknown";
-				try {
-					target = realpathSync(abs);
-				} catch {}
-				return {
-					block: true,
-					reason: `blocked: ${path} is a symlink to ${target} — writing through it clobbers the target; edit the target explicitly if that is intended`,
-				};
-			}
-		} catch {}
-
-		const rel = relative(root, abs);
-		const real = relative(root, resolveThroughExistingParent(abs));
-		if (real.startsWith("..") || isAbsolute(real)) {
-			return {
-				block: true,
-				reason: `blocked: ${path} resolves outside the repo (${real}) — a parent directory is a symlink`,
-			};
-		}
-
-		for (const [re, why] of HARD) {
-			if (re.test(rel) || re.test(real)) {
-				return { block: true, reason: `blocked: ${rel} — ${why}` };
-			}
-		}
-		for (const re of cfg.protectedGlobs) {
-			if (re.test(rel) || re.test(real)) {
-				return { block: true, reason: `blocked: ${rel} is protected by substrate.json protected_paths` };
-			}
-		}
-		for (const p of cfg.contractPaths) {
-			if (rel === p || rel.startsWith(`${p}/`) || real === p || real.startsWith(`${p}/`)) {
-				return {
-					block: true,
-					reason: `blocked: ${rel} is generated from a contract — edit the contract source; the gate regenerates (substrate.json contracts)`,
-				};
-			}
-		}
+		if (!existsSync(join(root, ".substrate", "VERSION"))) return;
+		const result = await runCommand(root, [...engineBaseCmd(root), "hook", "protect-paths"], {
+			stdin: JSON.stringify({ tool_input: { file_path: abs } }),
+		});
+		if (result.exitCode === 0) return;
+		return {
+			block: true,
+			reason: result.stderr.trim() || `blocked: protected-path guard failed with exit ${result.exitCode}`,
+		};
 	});
 
 	// mirrors: protect-command.sh — shared Bash governance policy backs Claude PreToolUse.
