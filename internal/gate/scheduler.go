@@ -118,6 +118,12 @@ func RunChecks(ctx *RunContext, specs []checkSpec, claimsData []byte) error {
 	}
 	ctx.RunDir = runDir
 
+	nativeNames := make([]string, 0, len(NativeRuns))
+	for name := range NativeRuns {
+		nativeNames = append(nativeNames, name)
+	}
+	sort.Strings(nativeNames)
+
 	baseEnv := []string{
 		"SUBSTRATE_DIR=" + ctx.SubDir,
 		"REPO_ROOT=" + ctx.RepoRoot,
@@ -126,6 +132,7 @@ func RunChecks(ctx *RunContext, specs []checkSpec, claimsData []byte) error {
 		"BASELINE=" + ctx.Baseline,
 		"INVENTORY=" + ctx.Inventory,
 		"CLAIMS=" + ctx.Claims,
+		"SUBSTRATE_NATIVE_CHECKS=" + strings.Join(nativeNames, " "),
 		"LC_ALL=C",
 	}
 

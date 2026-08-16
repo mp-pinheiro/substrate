@@ -294,11 +294,6 @@ cmd_update_direct() {
     fi
 
     vendor_core "${profiles[@]}"
-    if [ -f internal/gate/registry_gen.go ] && [ -d cmd/generate-registry ]; then
-        go run ./cmd/generate-registry > internal/gate/registry_gen.go.new \
-            && mv internal/gate/registry_gen.go.new internal/gate/registry_gen.go \
-            || { rm -f internal/gate/registry_gen.go.new; die "registry regeneration failed"; }
-    fi
     migrate_repo_omp_extension \
         || die "repo-local omp extension migration failed — resolve the warning and rerun"
     if [ "${SUBSTRATE_MAINTENANCE_RENDER:-}" != 1 ]; then
