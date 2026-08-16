@@ -15,13 +15,7 @@
   "comments:cmd/generate-registry/main.go": 0,
   "comments:cmd/substrate-engine/main.go": 0,
   "comments:core/audit.sh": 0,
-  "comments:core/check-comments.sh": 0,
-  "comments:core/checks.d/05-unclaimed-source.sh": 0,
-  "comments:core/checks.d/10-comments.sh": 0,
-  "comments:core/checks.d/15-tracking.sh": 0,
   "comments:core/checks.d/20-duplication.sh": 0,
-  "comments:core/checks.d/30-budgets.sh": 0,
-  "comments:core/checks.d/40-data-validity.sh": 0,
   "comments:core/checks.d/45-contract-drift.sh": 0,
   "comments:core/checks.d/50-gitleaks.sh": 0,
   "comments:core/ci/github-gate.yml": 0,
@@ -290,7 +284,7 @@
   "comments:test/vendor-drift-test.sh": 0,
   "comments:test/vendor-source-test.sh": 0,
   "dead_code": 0,
-  "dup_pct": 2.2953928653173334,
+  "dup_pct": 2.319140416444207,
   "max_file_lines": 460
 },
   "direction": {
@@ -309,13 +303,7 @@
   "comments:cmd/generate-registry/main.go": "lo",
   "comments:cmd/substrate-engine/main.go": "lo",
   "comments:core/audit.sh": "lo",
-  "comments:core/check-comments.sh": "lo",
-  "comments:core/checks.d/05-unclaimed-source.sh": "lo",
-  "comments:core/checks.d/10-comments.sh": "lo",
-  "comments:core/checks.d/15-tracking.sh": "lo",
   "comments:core/checks.d/20-duplication.sh": "lo",
-  "comments:core/checks.d/30-budgets.sh": "lo",
-  "comments:core/checks.d/40-data-validity.sh": "lo",
   "comments:core/checks.d/45-contract-drift.sh": "lo",
   "comments:core/checks.d/50-gitleaks.sh": "lo",
   "comments:core/ci/github-gate.yml": "lo",
@@ -588,6 +576,12 @@
   "max_file_lines": "lo"
 },
   "accepted": {
+  "dup_pct": {
+  "at": "2026-08-16",
+  "from": 2.2953928653173334,
+  "reason": "Deleting check-comments.sh removes 410 lines of dead bash superseded by the Go comments package, shrinking the jscpd denominator and raising dup_pct from 2.2953 to 2.3191. Keeping the dead file to hold the ratio down defeats the goal of removing it, so this is accepted.",
+  "to": 2.319140416444207
+},
   "max_file_lines": {
   "at": "2026-08-08",
   "from": 418,

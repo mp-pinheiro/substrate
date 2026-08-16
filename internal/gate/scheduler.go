@@ -36,6 +36,11 @@ type checkSpec struct {
 func DiscoverChecks(repoRoot, subDir string) ([]checkSpec, error) {
 	seen := make(map[string]bool)
 	var specs []checkSpec
+	for name := range NativeRuns {
+		seen[name] = true
+		specs = append(specs, checkSpec{Name: name})
+	}
+	fileBacked := 0
 	for _, d := range []string{
 		filepath.Join(repoRoot, "core", "checks.d"),
 		filepath.Join(subDir, "checks.d"),
@@ -56,9 +61,10 @@ func DiscoverChecks(repoRoot, subDir string) ([]checkSpec, error) {
 				Name: e.Name(),
 				Path: filepath.Join(d, e.Name()),
 			})
+			fileBacked++
 		}
 	}
-	if len(specs) == 0 {
+	if fileBacked == 0 {
 		return nil, fmt.Errorf("no checks in checks.d — a gate with zero checks cannot pass blind")
 	}
 	sort.Slice(specs, func(i, j int) bool {
