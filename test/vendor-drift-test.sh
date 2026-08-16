@@ -16,8 +16,19 @@ done
 
 for f in gate.sh checkpoint.sh restructure.sh comment-ratchet.sh \
          maintenance-lib.sh maintenance-cli.sh maintenance-receipt.sh \
-         maintenance-sync.sh maintenance-transaction.sh; do
+         maintenance-sync.sh maintenance-transaction.sh check-comments.sh; do
     [ ! -e ".substrate/$f" ] || fail "deleted file .substrate/$f still vendored"
+done
+
+for f in 05-unclaimed-source.sh 10-comments.sh 15-tracking.sh \
+         30-budgets.sh 40-data-validity.sh; do
+    [ ! -e ".substrate/checks.d/$f" ] \
+        || fail "native-only check .substrate/checks.d/$f still vendored"
+done
+
+for f in 20-duplication.sh 45-contract-drift.sh 50-gitleaks.sh; do
+    [ -f ".substrate/checks.d/$f" ] \
+        || fail "retained linter-wrapper check .substrate/checks.d/$f is missing"
 done
 [ ! -e ".substrate/hooks" ] || fail ".substrate/hooks still vendored"
 

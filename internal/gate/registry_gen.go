@@ -3,12 +3,7 @@
 package gate
 
 var RegistryDigests = map[string]string{
-	"05-unclaimed-source.sh": "475d7a62c46c32f2b73b9c31e8dbe7748ceab3c418c9dc7a98c12803c343f09f",
-	"10-comments.sh": "a067e279aaca49e135badf49e34528542e4b77b96b5881fb9af154ac9186b51e",
-	"15-tracking.sh": "951fb89c47d24aa9e6528a327783bda81ed4e17487c754b994577ae229f47b84",
 	"20-duplication.sh": "fb6487d0bc40c4302007d337781fee989310e39b1027527f6f3aef9c17d426cb",
-	"30-budgets.sh": "cc8c09b3a1ff1cf89ee15852ec21f51fa1ffc3a14af89924b19fa870b4bf6f3d",
-	"40-data-validity.sh": "aefaca5b882bb0049027e57fe67b1fd7c89380a3e883c1f3f79759f1db94679b",
 	"45-contract-drift.sh": "82a0c222b1980d3068c99ac816c1cfb2e65313cb5a990fb695ac9f9e534b9425",
 	"50-gitleaks.sh": "bd7374f127abafa2d263ca5b41297289f0a6f8fb2a0ca7bd715a62725e3ef278",
 	"59-actionlint.sh": "1b29e1df61495439dda8372886a23b92a512b85688ee76fd6c06d941809a05f2",
@@ -21,6 +16,6 @@ var RegistryDigests = map[string]string{
 	"71-kit-tsc.sh": "cabbb616bc9ae844428dcb9e5e792765d7bcf35e419156ebd6e788238e4a0acb",
 	"75-go-build.sh": "3b9f0570148fc3c191016319bf6f33289c7f26314fd61c2ba3817319d1ae9eb8",
 	"76-golangci.sh": "cc5db7898c660f2abc9d3264a1ffc1b3aec83adbc50bd5e038c647e170b68b57",
-	"81-engine-ts-parity.sh": "22a5855b40be4eed552b3a8275208c6a09352412ec06653721bb6e3b529f6f5b",
-	"82-check-registry.sh": "400224b0ab565d936666a9b3d18d4228810c3f6d245958ac48edc5dcc92332fa",
+	"81-engine-ts-parity.sh": "24a22e2f63cda591f0af68ce86741f2d3037fe7b97cf32da6e9e89cc21a681bb",
+	"82-check-registry.sh": "4081a1aec3519e2200ce4320f53f98c94eb3f29e7c597c9b1554ce68564c0b5f",
 }
