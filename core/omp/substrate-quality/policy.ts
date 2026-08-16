@@ -1,16 +1,5 @@
-import { existsSync, readFileSync, realpathSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
-
-const HARD: Array<[RegExp, string]> = [
-	[/^substrate-baseline\.json$/, "baseline changes only via the gate (--update-baseline)"],
-	[
-		/\/substrate-baseline\.json$/,
-		"not the repo baseline, but that basename is governed anywhere in the tree — the rule is name-based so it can rule on paths whose parents do not exist yet; rename the file if it is not a substrate baseline",
-	],
-	[/^substrate\.json$/, "human-approved policy config — change it through guarded substrate maintenance"],
-	[/(^|\/)\.substrate(\/|$)/, "vendored substrate core — change the kit and run: substrate update"],
-	[/(^|\/)CLAUDE\.md$/, "governance doc — propose the edit to the user instead"],
-];
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 
 const SUBSTRATE_POLICY = [
 	"This repository is governed by Substrate's deterministic quality gate.",
@@ -53,86 +42,11 @@ function findJjRoot(cwd: string): string | null {
 	}
 }
 
-function globToRegExp(glob: string): RegExp {
-	let out = "";
-	for (let i = 0; i < glob.length; i++) {
-		const c = glob[i];
-		if (c === "*") {
-			if (glob[i + 1] === "*") {
-				out += ".*";
-				i++;
-			} else {
-				out += "[^/]*";
-			}
-		} else if (c === "?") {
-			out += "[^/]";
-		} else if ("\\^$.|+()[]{}".includes(c)) {
-			out += `\\${c}`;
-		} else {
-			out += c;
-		}
-	}
-	return new RegExp(`^${out}$`);
-}
-
-type Config = {
-	ok: boolean;
-	missing: boolean;
-	protectedGlobs: RegExp[];
-	contractPaths: string[];
-	contractsInvalid: boolean;
-};
-
-function loadConfig(cwd: string): Config {
-	let raw: string;
-	try {
-		raw = readFileSync(resolve(cwd, "substrate.json"), "utf8");
-	} catch {
-		return { ok: true, missing: true, protectedGlobs: [], contractPaths: [], contractsInvalid: false };
-	}
-	try {
-		const cfg = JSON.parse(raw);
-		const globs = Array.isArray(cfg.protected_paths) ? cfg.protected_paths : [];
-		const contracts = Array.isArray(cfg.contracts) ? cfg.contracts : [];
-		const contractsInvalid = contracts.some(
-			(c: { name?: unknown; regen?: unknown; paths?: unknown }) =>
-				!c || typeof c.name !== "string" || typeof c.regen !== "string" || !Array.isArray(c.paths),
-		);
-		const contractPaths: string[] = contracts.flatMap((c: { paths?: string[] }) =>
-			Array.isArray(c.paths) ? c.paths : [],
-		);
-		return {
-			ok: true,
-			missing: false,
-			protectedGlobs: globs.map(globToRegExp),
-			contractPaths,
-			contractsInvalid,
-		};
-	} catch {
-		return { ok: false, missing: false, protectedGlobs: [], contractPaths: [], contractsInvalid: false };
-	}
-}
-
 function toolPath(input: object): string {
 	if ("path" in input && typeof input.path === "string") return input.path;
 	if ("file_path" in input && typeof input.file_path === "string") return input.file_path;
 	if ("file" in input && typeof input.file === "string") return input.file;
 	return "";
-}
-function resolveThroughExistingParent(path: string): string {
-	let current = path;
-	const missing: string[] = [];
-	while (!existsSync(current)) {
-		const parent = dirname(current);
-		if (parent === current) return path;
-		missing.unshift(basename(current));
-		current = parent;
-	}
-	try {
-		return join(realpathSync(current), ...missing);
-	} catch {
-		return path;
-	}
 }
 
 type CommandResult = { exitCode: number; stdout: string; stderr: string };
@@ -215,10 +129,7 @@ export {
 	engineVersion,
 	findGateRoot,
 	findJjRoot,
-	HARD,
-	loadConfig,
 	refreshReport,
-	resolveThroughExistingParent,
 	runCommand,
 	SUBSTRATE_POLICY,
 	toolPath,
