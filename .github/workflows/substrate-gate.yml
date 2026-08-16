@@ -169,6 +169,8 @@ jobs:
       - *install_prereqs
       - *setup_bun
       - *install_jj
+      - name: Install Gitleaks
+        run: .substrate/install-gitleaks.sh
       - name: Install core + all profile toolchains
         run: |
           bun install -g @ast-grep/cli@0.45.0 jscpd@5.0.14
