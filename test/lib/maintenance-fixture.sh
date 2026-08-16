@@ -19,6 +19,9 @@ mf_engine_build() {
 # Seed a git repo identical to transaction-ab-test.sh:89-114.
 mf_setup_git() {
     local dir="$1"
+    unset SUBSTRATE_MAINTENANCE_TESTING SUBSTRATE_MAINTENANCE_TEST_HOOK \
+        SUBSTRATE_MAINTENANCE_FAIL_PHASE SUBSTRATE_MAINTENANCE_FAIL_AFTER \
+        SUBSTRATE_MAINTENANCE_FAIL_COMMIT
     mkdir -p "$dir" || return 1
     cd "$dir" || return 1
     git init -q --initial-branch=main
@@ -40,6 +43,9 @@ mf_setup_git() {
 # Seed a jj repo identical to transaction-ab-test.sh:117-132.
 mf_setup_jj() {
     local dir="$1"
+    unset SUBSTRATE_MAINTENANCE_TESTING SUBSTRATE_MAINTENANCE_TEST_HOOK \
+        SUBSTRATE_MAINTENANCE_FAIL_PHASE SUBSTRATE_MAINTENANCE_FAIL_AFTER \
+        SUBSTRATE_MAINTENANCE_FAIL_COMMIT
     mkdir -p "$dir" || return 1
     cd "$dir" || return 1
     jj config set --user user.name substrate >/dev/null 2>&1
@@ -53,11 +59,9 @@ mf_setup_jj() {
     printf '#!/usr/bin/env bash\nprintf "user\\n"\n' > user.sh
     chmod +x user.sh
     "$KIT_ROOT/bin/substrate" init --from-worktree --profile shell --vcs jj >/dev/null 2>&1 || return 1
-    git add -A
-    git commit -qm 'chore: initialize'
+    jj commit -m 'chore: initialize' >/dev/null 2>&1 || return 1
     cp "$KIT_ROOT/test/golden/maintenance-baseline.json" substrate-baseline.json
-    git add substrate-baseline.json
-    git commit -qm 'chore: establish baseline'
+    jj commit -m 'chore: establish baseline' >/dev/null 2>&1 || return 1
     [ -z "$(git status --porcelain=v1 --untracked-files=all)" ] || return 1
 }
 
