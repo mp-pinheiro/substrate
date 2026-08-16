@@ -284,7 +284,7 @@
   "comments:test/vendor-drift-test.sh": 0,
   "comments:test/vendor-source-test.sh": 0,
   "dead_code": 0,
-  "dup_pct": 2.3273725805371375,
+  "dup_pct": 2.3269050488817467,
   "max_file_lines": 460
 },
   "direction": {
@@ -580,7 +580,7 @@
   "at": "2026-08-16",
   "from": 2.2953928653173334,
   "reason": "Deleting the TS protected-path duplication (HARD table, globToRegExp, loadConfig, resolveThroughExistingParent, ~140 LOC) from policy.ts shrinks the jscpd denominator again, moving dup_pct from 2.319140 to 2.328464. Same class of move as the prior check-comments.sh deletion: removing unique non-duplicated code raises the ratio, not new duplication. Keeping the dead TS to hold the ratio down defeats the Phase 3 consolidation goal.",
-  "to": 2.3273725805371375
+  "to": 2.3269050488817467
 },
   "max_file_lines": {
   "at": "2026-08-08",

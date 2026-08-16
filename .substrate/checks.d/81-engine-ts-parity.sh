@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Parity gate for the omp harness's Go delegation: every dispatched hook has a
+# claude-hooks.json entry and a dispatch.go case, and the write/bash-command
+# guards call substrate-engine rather than reimplementing policy in TypeScript.
 set -uo pipefail
 
 HOOKS_JSON="core/claude-hooks.json"
@@ -39,6 +42,16 @@ if grep -q '\.substrate/hooks/changed-files-scan' "$OMP_TS"; then
 fi
 if ! grep 'changed-files-scan' "$OMP_TS" | grep -qE 'substrate-engine|engineBaseCmd'; then
     printf '%s does not invoke changed-files-scan via substrate-engine\n' "$OMP_TS"
+    rc=1
+fi
+
+OMP_POLICY="core/omp/substrate-quality/policy.ts"
+if [ -f "$OMP_POLICY" ] && grep -qE 'const HARD|function globToRegExp|function loadConfig' "$OMP_POLICY"; then
+    printf '%s reimplements the protected-path policy in TypeScript (issue #12 consolidation)\n' "$OMP_POLICY"
+    rc=1
+fi
+if ! grep 'protect-paths' "$OMP_TS" | grep -qE 'substrate-engine|engineBaseCmd'; then
+    printf '%s does not invoke protect-paths via substrate-engine\n' "$OMP_TS"
     rc=1
 fi
 
