@@ -32,11 +32,20 @@ for chk in "$SUBSTRATE_DIR"/checks.d/*.sh; do
     fi
 done
 
+declare -A native=()
+read -ra native_list <<< "${SUBSTRATE_NATIVE_CHECKS:-}"
+for n in ${native_list[@]+"${native_list[@]}"}; do native["$n"]=1; done
+
 for name in "${!expected[@]}"; do
-    [ -f "$SUBSTRATE_DIR/checks.d/$name" ] || {
-        printf '%s in registry but missing from disk — remove, or run: just generate-registry\n' "$name"
-        rc=1
-    }
+    [ -f "$SUBSTRATE_DIR/checks.d/$name" ] && continue
+    # A native check has no bash body by design and the runner dispatches it
+    # from the embedded registry, so a stale entry drops no coverage.
+    if [ -n "${native[$name]:-}" ]; then
+        printf '%s is native-only — stale registry entry; run: just generate-registry\n' "$name"
+        continue
+    fi
+    printf '%s in registry but missing from disk — remove, or run: just generate-registry\n' "$name"
+    rc=1
 done
 
 exit "$rc"
