@@ -290,7 +290,7 @@
   "comments:test/vendor-drift-test.sh": 0,
   "comments:test/vendor-source-test.sh": 0,
   "dead_code": 0,
-  "dup_pct": 2.3185846495961284,
+  "dup_pct": 2.2953928653173334,
   "max_file_lines": 460
 },
   "direction": {

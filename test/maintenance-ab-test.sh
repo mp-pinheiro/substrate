@@ -144,14 +144,14 @@ drift_setup() {
     chmod +x checks.d/86-concurrent.sh
     git add checks.d/86-concurrent.sh
     git commit -q --no-verify -m 'chore: add concurrent check'
+    export SUBSTRATE_MAINTENANCE_TESTING=1
+    export SUBSTRATE_MAINTENANCE_TEST_HOOK="$WORK/drift.sh"
 }
 cat > "$WORK/drift.sh" <<'EOF'
 #!/usr/bin/env bash
 printf 'concurrent-drift\n' >> "$1/user.sh"
 EOF
 chmod +x "$WORK/drift.sh"
-export SUBSTRATE_MAINTENANCE_TESTING=1
-export SUBSTRATE_MAINTENANCE_TEST_HOOK="$WORK/drift.sh"
 mf_run_diff "concurrent-drift" mf_setup_git drift_setup run_maint \
     --checkpoint --repo-only
 unset SUBSTRATE_MAINTENANCE_TEST_HOOK SUBSTRATE_MAINTENANCE_TESTING
