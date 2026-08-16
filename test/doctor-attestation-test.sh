@@ -38,7 +38,7 @@ chmod +x "$FIXTURE_BIN_DEV/substrate-engine"
 BASE_PATH=""
 IFS=: read -r -a base_path_parts <<< "$PATH"
 for base_path_dir in "${base_path_parts[@]}"; do
-    [ "$base_path_dir" = "$KIT_ROOT/build" ] && continue
+    [ -x "$base_path_dir/substrate-engine" ] && continue
     BASE_PATH="${BASE_PATH:+$BASE_PATH:}$base_path_dir"
 done
 
