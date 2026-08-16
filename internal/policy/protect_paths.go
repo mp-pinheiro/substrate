@@ -94,6 +94,12 @@ func ProtectPaths(in Input, cfg *config.Config, repoRoot string) Decision {
 	return Decision{}
 }
 
+// CheckHard is checkHard exported for callers outside the hook path (e.g. the
+// checkpoint transaction) that need to refuse a governed path by name alone.
+func CheckHard(name string) (Decision, bool) {
+	return checkHard(name)
+}
+
 func checkHard(name string) (Decision, bool) {
 	switch {
 	case bashglob.Match("substrate-baseline.json", name):

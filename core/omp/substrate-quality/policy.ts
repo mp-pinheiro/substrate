@@ -173,7 +173,7 @@ async function runCommand(
 		stdout: "pipe",
 		stderr: "pipe",
 		signal: options.signal,
-		// checkpoint.sh's grandchild workers inherit its stdout/stderr pipes; killing
+		// the engine's grandchild workers inherit its stdout/stderr pipes; killing
 		// only `proc` leaves them open. detached makes proc the process-group leader.
 		detached: true,
 	});

@@ -113,41 +113,78 @@ func parseRestructureArgs(args []string) (restructureOpts, int) {
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--op":
-			i++; if i >= len(args) { rsUsage(); return opts, ExitPreflight }
+			i++
+			if i >= len(args) {
+				rsUsage()
+				return opts, ExitPreflight
+			}
 			opts.op = args[i]
 		case "--revision":
-			i++; if i >= len(args) { rsUsage(); return opts, ExitPreflight }
+			i++
+			if i >= len(args) {
+				rsUsage()
+				return opts, ExitPreflight
+			}
 			opts.revision = args[i]
 		case "--into":
-			i++; if i >= len(args) { rsUsage(); return opts, ExitPreflight }
+			i++
+			if i >= len(args) {
+				rsUsage()
+				return opts, ExitPreflight
+			}
 			opts.into = args[i]
 		case "--message":
-			i++; if i >= len(args) { rsUsage(); return opts, ExitPreflight }
+			i++
+			if i >= len(args) {
+				rsUsage()
+				return opts, ExitPreflight
+			}
 			opts.message = args[i]
 		case "--message2":
-			i++; if i >= len(args) { rsUsage(); return opts, ExitPreflight }
+			i++
+			if i >= len(args) {
+				rsUsage()
+				return opts, ExitPreflight
+			}
 			opts.message2 = args[i]
 		case "--path":
-			i++; if i >= len(args) { rsUsage(); return opts, ExitPreflight }
+			i++
+			if i >= len(args) {
+				rsUsage()
+				return opts, ExitPreflight
+			}
 			opts.paths = append(opts.paths, args[i])
 		case "--session":
-			i++; if i >= len(args) { rsUsage(); return opts, ExitPreflight }
+			i++
+			if i >= len(args) {
+				rsUsage()
+				return opts, ExitPreflight
+			}
 			opts.session = args[i]
 		case "--allow-change":
-			i++; if i >= len(args) { rsUsage(); return opts, ExitPreflight }
+			i++
+			if i >= len(args) {
+				rsUsage()
+				return opts, ExitPreflight
+			}
 			opts.allowChanges = append(opts.allowChanges, args[i])
 		case "--json":
 			opts.json = true
 		default:
-			rsUsage(); return opts, ExitPreflight
+			rsUsage()
+			return opts, ExitPreflight
 		}
 	}
 	switch opts.op {
 	case "split", "describe", "squash":
 	default:
-		rsUsage(); return opts, ExitPreflight
+		rsUsage()
+		return opts, ExitPreflight
 	}
-	if opts.revision == "" { rsUsage(); return opts, ExitPreflight }
+	if opts.revision == "" {
+		rsUsage()
+		return opts, ExitPreflight
+	}
 	if opts.message != "" && !convCommitRe.MatchString(opts.message) {
 		logx.Err().Line("restructure blocked: message must follow Conventional Commits — type(scope): subject")
 		return opts, ExitPreflight
@@ -178,7 +215,7 @@ func executeRestructure(ctx context.Context, repo *vcs.Repo, repoRoot, metadataD
 			return fmt.Errorf("jj split rejected the transaction")
 		}
 		childrenAfter, _ := childrenChanges(ctx, repo, targetChange)
-		remainder := setDifferenceSorted(childrenAfter, childrenBefore)
+		remainder := setDifferenceSorted(childrenBefore, childrenAfter)
 		if len(remainder) != 1 {
 			rollback(ctx, repo, opBefore)
 			return fmt.Errorf("could not identify the remainder commit")
@@ -231,7 +268,7 @@ func executeRestructure(ctx context.Context, repo *vcs.Repo, repoRoot, metadataD
 		return fmt.Errorf("the working-copy tree changed")
 	}
 
-	newRevision := jjTip(ctx, repo)
+	newRevision := jjParentTip(ctx, repo)
 	targetCommit := resolveCommitID(ctx, repo, targetChange)
 	if targetCommit == "" {
 		targetCommit = "abandoned"
@@ -306,6 +343,14 @@ func sortedDiffNames(ctx context.Context, repo *vcs.Repo) string {
 
 func jjTip(ctx context.Context, repo *vcs.Repo) string {
 	res, err := xshell.RunIn(ctx, repo.Root, "jj", "log", "-r", "@", "--no-graph", "-T", "commit_id")
+	if err != nil || res.Code != 0 {
+		return ""
+	}
+	return strings.TrimSpace(string(res.Stdout))
+}
+
+func jjParentTip(ctx context.Context, repo *vcs.Repo) string {
+	res, err := xshell.RunIn(ctx, repo.Root, "jj", "log", "-r", "@-", "--no-graph", "-T", "commit_id")
 	if err != nil || res.Code != 0 {
 		return ""
 	}

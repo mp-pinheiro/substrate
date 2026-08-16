@@ -81,6 +81,7 @@ for plan in "${plans[@]}"; do
     rc_files=()
     wds=()
     running=0
+    unset SUBSTRATE_VENDOR_FROM_WORKTREE
     for ((i = 0; i < n; i++)); do
         rest="${active[$i]:6}"
         cmd="${rest#* :: }"

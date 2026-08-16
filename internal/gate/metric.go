@@ -131,8 +131,8 @@ func (n Number) Cmp(other Number) int {
 	if len(digO) > maxLen {
 		maxLen = len(digO)
 	}
-	digN = strings.Repeat("0", maxLen-len(digN)) + digN
-	digO = strings.Repeat("0", maxLen-len(digO)) + digO
+	digN = digN + strings.Repeat("0", maxLen-len(digN))
+	digO = digO + strings.Repeat("0", maxLen-len(digO))
 	for i := range maxLen {
 		if digN[i] != digO[i] {
 			diff := int(digN[i]) - int(digO[i])

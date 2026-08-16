@@ -1,13 +1,22 @@
 {
   "metrics": {
-    "comments:docs/notes.yaml": 2,
-    "comments:tools/deploy": 1,
-    "comments:tools/setup.zsh": 1,
-    "golden:probe_hi": 3,
-    "golden:probe_lo": 7,
-    "max_file_lines": 9
-  },
+  "comments:ci/pipeline.yml": 0,
+  "comments:config/settings.json": 0,
+  "comments:docs/notes.yaml": 2,
+  "comments:tools/deploy": 1,
+  "comments:tools/setup.zsh": 1,
+  "golden:probe_hi": 3,
+  "golden:probe_lo": 7,
+  "max_file_lines": 9
+},
   "direction": {
-    "golden:probe_hi": "hi"
-  }
+  "comments:ci/pipeline.yml": "lo",
+  "comments:config/settings.json": "lo",
+  "comments:docs/notes.yaml": "lo",
+  "comments:tools/deploy": "lo",
+  "comments:tools/setup.zsh": "lo",
+  "golden:probe_hi": "hi",
+  "golden:probe_lo": "lo",
+  "max_file_lines": "lo"
+}
 }

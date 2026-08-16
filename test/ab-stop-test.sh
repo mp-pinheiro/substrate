@@ -50,6 +50,7 @@ chmod +x "$AB_ENGINE_WRAPPER"
 
 seed_repo() {
     local repo="$1"
+    mkdir -p "$repo" || return 1
     printf 'printf "owned\\n"\n' > "$repo/owned.sh"
     printf 'printf "user\\n"\n' > "$repo/user.sh"
     (
@@ -154,7 +155,7 @@ SH
 
 assert_checkpoint_argv() {
     local want="$AB_SCENARIO_DIR/checkpoint-argv.want"
-    printf '%s\0' --session "$2" --message "$CHECKPOINT_MESSAGE" --json > "$want"
+    printf '%s\0' checkpoint --session "$2" --message "$CHECKPOINT_MESSAGE" --json > "$want"
     cmp -s "$AB_SCENARIO_DIR/checkpoint-argv" "$want" \
         || ab_fail 'auto-checkpoint argv drifted from the frozen grammar'
 }

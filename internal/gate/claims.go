@@ -2,6 +2,7 @@ package gate
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -10,9 +11,10 @@ import (
 )
 
 type langmapEntry struct {
-	Profile string `json:"profile"`
-	AstLang string `json:"ast_lang"`
-	Mode    string `json:"mode"`
+	Profile string          `json:"profile"`
+	AstLang string          `json:"ast_lang"`
+	Mode    string          `json:"mode"`
+	Raw     json.RawMessage `json:"-"`
 }
 
 type langmapFile struct {
@@ -38,6 +40,7 @@ func BuildClaims(repoRoot, langmapPath, configPath, inventoryPath, claimsOut str
 		if err := json.Unmarshal(raw, &e); err != nil {
 			continue
 		}
+		e.Raw = compactJSON(raw)
 		extMap[ext] = e
 	}
 
@@ -89,6 +92,7 @@ func BuildClaims(repoRoot, langmapPath, configPath, inventoryPath, claimsOut str
 						for _, m := range sb.Interps {
 							if m == interp {
 								json.Unmarshal(sb.Entry, &entry)
+								entry.Raw = compactJSON(sb.Entry)
 								ok = true
 								break
 							}
@@ -106,8 +110,8 @@ func BuildClaims(repoRoot, langmapPath, configPath, inventoryPath, claimsOut str
 		if scopesActive && !scopeAllows(path, entry.Profile, repoRoot, configPath) {
 			continue
 		}
-		entryJSON, err := json.Marshal(entry)
-		if err != nil {
+		entryJSON := entry.Raw
+		if entryJSON == nil {
 			continue
 		}
 		if _, err := fmt.Fprintf(w, "%s\t%s\n", path, string(entryJSON)); err != nil {
@@ -196,6 +200,16 @@ func loadLangmap(path string) (*langmapFile, error) {
 		delete(lf.Raw, "__shebang__")
 	}
 	return lf, nil
+}
+
+// compactJSON strips whitespace so a pretty-printed langmap entry fits the
+// newline-delimited CLAIMS row format.
+func compactJSON(raw json.RawMessage) json.RawMessage {
+	var buf bytes.Buffer
+	if err := json.Compact(&buf, raw); err != nil {
+		return raw
+	}
+	return json.RawMessage(buf.Bytes())
 }
 
 func shebangInterp(path string) string {

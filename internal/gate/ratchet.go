@@ -181,20 +181,20 @@ func RunRatchet(metricsOut, baselinePath, configPath string, flags PreflightFlag
 					result.AcceptedNow = append(result.AcceptedNow, key)
 				}
 			}
-			if len(rejected) > 0 {
-				for _, r := range rejected {
-					fmt.Println(r)
-				}
-				warn("FAIL ratchet: non-accepted metrics regressed")
-				result.Worse = worse
-				return result, 1
-			}
 			if len(neverAccepted) > 0 {
 				for _, n := range neverAccepted {
 					fmt.Println(n)
 					key := func() string { k, _, _ := strings.Cut(n, ": "); return k }()
 					warn("FAIL ratchet: %s is never-acceptable (ratchet.never_accept in substrate.json) — fix the regression or change that policy in a separate reviewed commit", strings.TrimSpace(key))
 				}
+				result.Worse = worse
+				return result, 1
+			}
+			if len(rejected) > 0 {
+				for _, r := range rejected {
+					fmt.Println(r)
+				}
+				warn("FAIL ratchet: non-accepted metrics regressed")
 				result.Worse = worse
 				return result, 1
 			}

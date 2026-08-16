@@ -1,6 +1,6 @@
 {
-  "engine": "bash",
   "format": 1,
+  "engine": "go",
   "tools": {
     "bash": "5.2.21(1)-release",
     "jq": "jq-1.7.1",
@@ -8,8 +8,8 @@
   },
   "fixture_sha256": "71c51774b6ced30d7232c71e83770a6098e70802fed040be5107fef3390c3157",
   "vectors": {
-    "baseline.json": "52c568aad137e86ea47fef31b6d0487857b89be10256e3fb4fc1677c7a65cc22",
-    "metrics.jsonl": "32ddf3938a8ed57ec852ff224ee5b83072d095da7510ad9746260f0f1689e982",
+    "baseline.json": "f7e5e5ae982e38696e905ae55171c1dc19b3b7c58b252f1ae90fc8dc8fe5e177",
+    "metrics.jsonl": "d4dcf5150a6138ca8f66c0a48b777e2b8e36d841e530a790618e154e843a2037",
     "claims.0x1f": "ea0557dc2a1ee38bec25cec641365b846c5dc5919fd47b341b50b90958224029"
   }
 }

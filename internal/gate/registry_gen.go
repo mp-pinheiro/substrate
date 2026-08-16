@@ -4,7 +4,7 @@ package gate
 
 var RegistryDigests = map[string]string{
 	"05-unclaimed-source.sh": "475d7a62c46c32f2b73b9c31e8dbe7748ceab3c418c9dc7a98c12803c343f09f",
-	"10-comments.sh": "bb87f42e68210d8b42708f1d1d2dff1da9d654f53aa5a520d070bb952be2b5e0",
+	"10-comments.sh": "a067e279aaca49e135badf49e34528542e4b77b96b5881fb9af154ac9186b51e",
 	"15-tracking.sh": "951fb89c47d24aa9e6528a327783bda81ed4e17487c754b994577ae229f47b84",
 	"20-duplication.sh": "fb6487d0bc40c4302007d337781fee989310e39b1027527f6f3aef9c17d426cb",
 	"30-budgets.sh": "cc8c09b3a1ff1cf89ee15852ec21f51fa1ffc3a14af89924b19fa870b4bf6f3d",

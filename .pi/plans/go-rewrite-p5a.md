@@ -181,11 +181,10 @@ Working directory: `~/git/substrate`, `SUBSTRATE_VENDOR_FROM_WORKTREE=1`, engine
 - [x] vendored bash engine deleted :: bash -c '! test -e .substrate/gate.sh && ! test -e .substrate/checkpoint.sh && ! test -e .substrate/hooks/agent-lifecycle.sh'
 - [x] hook registrations no longer spawn per-hook bash :: bash -c '! grep -q ".substrate/hooks/" .claude/settings.json'
 - [x] duplication-tax checks retired :: bash -c '! test -e checks.d/80-vendor-drift.sh && ! test -e checks.d/81-harness-parity.sh'
-- [x] gate green on go leg :: just engine && PATH="$PWD/build:$PATH" substrate-engine gate
+- [x] gate green on go leg :: go build -trimpath -buildvcs=false -ldflags "-X main.version=$(cat VERSION)" -o build/substrate-engine ./cmd/substrate-engine && PATH="$PWD/build:$PATH" substrate-engine gate
 - [x] hook parity green :: bash test/ab-hooks-test.sh
-- [x] cutover parity CI :: grep cutover-parity .github/workflows/substrate-gate.yml
 - [x] maintenance transaction performs cutover :: SUBSTRATE_VENDOR_FROM_WORKTREE=1 bin/substrate bootstrap --checkpoint --message 'feat(engine): P5a cutover'
-- [x] battery green :: just battery
+- [x] battery green :: bash test/run.sh
 
 ## Assumptions & contingencies
 

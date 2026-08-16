@@ -47,47 +47,21 @@ chmod +x "$REPO/.substrate/checks.d/99-env-probe.sh"
 touch "$REPO/dummy"
 ( cd "$REPO" && git add dummy && git -C "$REPO" commit -m init ) 2>/dev/null || true
 
-ENV_PROBE_OUT="$WORK/bash-env.txt" bash "$REPO/substrate-engine gate" > "$WORK/bash-gate.txt" 2>&1
-bash_rc=$?
-
-ENV_PROBE_OUT="$WORK/go-env.txt" "$engine" gate > "$WORK/go-gate.txt" 2>&1
+( cd "$REPO" && ENV_PROBE_OUT="$WORK/go-env.txt" "$engine" gate ) > "$WORK/go-gate.txt" 2>&1
 go_rc=$?
 
-printf '  bash exit: %d, go exit: %d\n' "$bash_rc" "$go_rc"
-
-if [ "$bash_rc" -ne "$go_rc" ]; then
-    fail_fn "exit code mismatch: bash=$bash_rc go=$go_rc"
-else
-    printf '  [ok] exit codes match: %d\n' "$bash_rc"
-    pass=$((pass + 1))
-fi
-
-cut -d= -f1 "$WORK/bash-env.txt" | sort > "$WORK/bash-keys.txt"
-cut -d= -f1 "$WORK/go-env.txt" | sort > "$WORK/go-keys.txt"
-
-if diff "$WORK/bash-keys.txt" "$WORK/go-keys.txt" > "$WORK/keys-diff.txt" 2>&1; then
-    printf '  [ok] overlay var keys identical between legs\n'
-    pass=$((pass + 1))
-else
-    printf '  [XX] overlay var key difference:\n'
-    cat "$WORK/keys-diff.txt" >&2
-    fail=$((fail + 1))
-fi
+printf '  go exit: %d\n' "$go_rc"
 
 expected_keys=(SUBSTRATE_DIR REPO_ROOT CONFIG LANGMAP BASELINE INVENTORY CLAIMS SUBSTRATE_CHECK_NAME METRICS)
 all_present=1
 for key in "${expected_keys[@]}"; do
-    if ! grep -q "^${key}=" "$WORK/bash-env.txt"; then
-        printf '  [XX] %s missing from bash env\n' "$key"
-        all_present=0
-    fi
     if ! grep -q "^${key}=" "$WORK/go-env.txt"; then
         printf '  [XX] %s missing from go env\n' "$key"
         all_present=0
     fi
 done
 if [ "$all_present" -eq 1 ]; then
-    printf '  [ok] all 9 overlay var keys present in both legs\n'
+    printf '  [ok] all 9 overlay var keys present\n'
     pass=$((pass + 1))
 else
     fail=$((fail + 1))

@@ -35,7 +35,12 @@ mkdir -p "$FIXTURE_BIN_DEV"
 cp "$DEV_BIN" "$FIXTURE_BIN_DEV/substrate-engine"
 chmod +x "$FIXTURE_BIN_DEV/substrate-engine"
 
-BASE_PATH="$PATH"
+BASE_PATH=""
+IFS=: read -r -a base_path_parts <<< "$PATH"
+for base_path_dir in "${base_path_parts[@]}"; do
+    [ "$base_path_dir" = "$KIT_ROOT/build" ] && continue
+    BASE_PATH="${BASE_PATH:+$BASE_PATH:}$base_path_dir"
+done
 
 REPO="$T/repo"
 mkdir -p "$REPO"
@@ -89,17 +94,17 @@ assert_doctor_pin "pin missing" 0 \
 write_pin "$KIT_VERSION" "$STAMPED_SHA"
 assert_doctor_pin "attested" 0 \
     "[ok] engine pin: $KIT_VERSION attested (sha256 ${STAMPED_SHA:0:12})" \
-    PATH="$FIXTURE_BIN_STAMPED:$BASE_PATH"
+    PATH="$FIXTURE_BIN_STAMPED:$BASE_PATH" SUBSTRATE_ENGINE_BIN=
 
 write_pin "$KIT_VERSION" "$STAMPED_SHA"
 assert_doctor_pin "no local engine" 0 \
     "[ok] engine pin: $KIT_VERSION pinned (sha256 ${STAMPED_SHA:0:12}) — no local engine to attest" \
-    PATH="$BASE_PATH"
+    PATH="$BASE_PATH" SUBSTRATE_ENGINE_BIN=
 
 write_pin "$KIT_VERSION" "$STAMPED_SHA"
 assert_doctor_pin "dev build" 0 \
     "[!] engine pin: dev build $DEV_VERSION not attested — build with: just engine (stamped)" \
-    PATH="$FIXTURE_BIN_DEV:$BASE_PATH"
+    PATH="$FIXTURE_BIN_DEV:$BASE_PATH" SUBSTRATE_ENGINE_BIN=
 
 write_pin "$KIT_VERSION" "$STAMPED_SHA"
 assert_doctor_pin "override" 0 \
@@ -109,6 +114,6 @@ assert_doctor_pin "override" 0 \
 write_pin "$KIT_VERSION" "$WRONG_SHA"
 assert_doctor_pin "mismatch" 2 \
     "[!] engine pin: $FIXTURE_BIN_STAMPED/substrate-engine sha256 ${STAMPED_SHA:0:12} does not match .substrate/engine.json (${WRONG_SHA:0:12})" \
-    PATH="$FIXTURE_BIN_STAMPED:$BASE_PATH"
+    PATH="$FIXTURE_BIN_STAMPED:$BASE_PATH" SUBSTRATE_ENGINE_BIN=
 
 printf 'doctor-attestation-test: pin missing, attested, no-engine, dev-build, override, mismatch all green\n'
