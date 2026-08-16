@@ -18,7 +18,7 @@ read-only mirror of `main`.
 
 ## Requirements
 
-Substrate currently supports Linux. It expects Bash, Git, `jq`, `yq`, Bun, and gitleaks; profile-specific tools vary. Run `substrate doctor` for the exact dependencies required by the selected profiles. Jujutsu is optional.
+Substrate currently supports Linux. It expects Go (to build `substrate-engine`), Bash, Git, `jq`, `yq`, Bun, and gitleaks; profile-specific tools vary. Run `substrate doctor` for the exact dependencies required by the selected profiles. Jujutsu is optional.
 
 ## Scaffold a repo
 

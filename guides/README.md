@@ -30,7 +30,7 @@ A mutating agent task is done when direct verification has passed and `substrate
 | --- | --- |
 | `substrate.json` | repo config: active profiles, unscanned ledger, budgets, disabled checks |
 | `substrate-baseline.json` | grandfathered debt snapshot and accepted-regression records; only the gate runner may write it |
-| `.substrate/` | vendored engine (gate, checks, hooks); transactional `substrate bootstrap --checkpoint` synchronizes it with the kit |
+| `.substrate/` | vendored bash (remaining linter-wrapper checks, hook shims, langmap); the gate engine itself is the separately-installed `substrate-engine` Go binary. `substrate bootstrap --checkpoint` synchronizes the vendored copy with the kit |
 | `.substrate/checks.d/` | active checks: core 05–59, profile 60–79, repo-local 80–99 |
 | `.claude/{agents,skills}/`, `.omp/{agents,skills}/` | working agents and skills; unmarked same-name assets are repo-owned, while a `.substrate-managed.json` marker grants full kit ownership and stale marked assets are removed |
 | `profiles/<name>/` | kit profiles: `profile.json` (claims, checks, fixtures), `checks.d/`, `templates/` |
