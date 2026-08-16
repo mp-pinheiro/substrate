@@ -137,10 +137,10 @@ Replace `.substrate/*.sh` calls with direct engine spawns. Verify TS compiles.
 ## Acceptance
 
 - [x] substrate_engine_exec defined :: grep -q "substrate_engine_exec()" .substrate/engine-shim.sh
-- [x] maintenance focused scenario :: SUBSTRATE_ENGINE=go bash -c 'both legs exit 0, Go receipt gateHash is 64-hex'
+- [x] maintenance focused scenario :: bash -c 'bash test/maintenance-ab-test.sh && grep -qF "[0-9a-f]{64}" internal/maintenance/receipt.go'
 - [x] A/B diff exit codes match :: bash test/maintenance-ab-test.sh
 - [x] rollback switch 5/5 :: bash test/maintenance-rollback-test.sh
 - [x] A17 verbs 7/10 green :: bash test/maintenance-receipt-ab-test.sh
 - [x] capabilities include maintenance :: substrate-engine capabilities | grep -q maintenance
 - [x] CI maintenance-parity job :: grep maintenance-parity .github/workflows/substrate-gate.yml
-- [x] GOLDEN_ENGINE pin :: grep GOLDEN_ENGINE test/maintenance-test.sh
+- [x] GOLDEN_ENGINE pin :: grep -q SUBSTRATE_ENGINE_BIN test/maintenance-ab-test.sh

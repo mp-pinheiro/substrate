@@ -38,17 +38,17 @@ func ReceiptJSON(c *Context, id, status, from, to string, manifest, changedLines
 		Repository: RepositorySection{
 			Status:                    status,
 			VCS:                       c.VCS,
-			FromRevision:             nullable(from),
-			ToRevision:               nullable(to),
-			Commit:                   nullable(commit),
-			Message:                  c.Message,
-			CheckpointRequested:      c.Checkpoint,
-			Manifest:                 manifestFiltered,
-			ChangedPaths:             changedFiltered,
-			Units:                    units,
+			FromRevision:              nullable(from),
+			ToRevision:                nullable(to),
+			Commit:                    nullable(commit),
+			Message:                   c.Message,
+			CheckpointRequested:       c.Checkpoint,
+			Manifest:                  manifestFiltered,
+			ChangedPaths:              changedFiltered,
+			Units:                     units,
 			PreservedDirtyFingerprint: dirtyFingerprint,
-			GateHash:                 gateHash,
-			CandidatePath:            nullable(candidate),
+			GateHash:                  gateHash,
+			CandidatePath:             nullable(candidate),
 		},
 		RepoRuntime: PhaseSection{Status: PhasePending},
 		UserHarness: PhaseSection{Status: PhasePending},
@@ -129,27 +129,11 @@ func VerifyTransition(from, to, fingerprint string) error {
 		return fmt.Errorf("verify transition: current revision %q != to %q", current, to)
 	}
 
-	var actual []string
-	useDiff := from != ""
-	if useDiff {
-		result, catErr := xshell.RunC(ctx, "git", "cat-file", "-e", from+"^{commit}")
-		useDiff = catErr == nil && result.Code == 0
-	}
-	if useDiff {
-		result, err := xshell.RunC(ctx, "git", "diff", "--name-only", "-z", "--no-renames", from, to)
-		if err != nil {
-			return fmt.Errorf("verify transition: diff: %w", err)
-		}
-		actual = stringsFromNull(result.Stdout)
-	} else {
-		result, err := xshell.RunC(ctx, "git", "diff-tree", "--root", "--name-only", "-z", "-r", "--no-commit-id", to)
-		if err != nil {
-			return fmt.Errorf("verify transition: diff-tree: %w", err)
-		}
-		actual = stringsFromNull(result.Stdout)
+	actual, err := ActualChangedPaths(ctx, from, to)
+	if err != nil {
+		return fmt.Errorf("verify transition: %w", err)
 	}
 
-	sort.Strings(actual)
 	expected := make([]string, len(r.Repository.ChangedPaths))
 	copy(expected, r.Repository.ChangedPaths)
 	sort.Strings(expected)
@@ -159,6 +143,32 @@ func VerifyTransition(from, to, fingerprint string) error {
 	}
 
 	return nil
+}
+
+// ActualChangedPaths returns the sorted file-level paths git actually
+// changed between from and to (empty from means the root commit).
+func ActualChangedPaths(ctx context.Context, from, to string) ([]string, error) {
+	var actual []string
+	useDiff := from != ""
+	if useDiff {
+		result, catErr := xshell.RunC(ctx, "git", "cat-file", "-e", from+"^{commit}")
+		useDiff = catErr == nil && result.Code == 0
+	}
+	if useDiff {
+		result, err := xshell.RunC(ctx, "git", "diff", "--name-only", "-z", "--no-renames", from, to)
+		if err != nil {
+			return nil, fmt.Errorf("diff: %w", err)
+		}
+		actual = stringsFromNull(result.Stdout)
+	} else {
+		result, err := xshell.RunC(ctx, "git", "diff-tree", "--root", "--name-only", "-z", "-r", "--no-commit-id", to)
+		if err != nil {
+			return nil, fmt.Errorf("diff-tree: %w", err)
+		}
+		actual = stringsFromNull(result.Stdout)
+	}
+	sort.Strings(actual)
+	return actual, nil
 }
 
 func RepositoryReceiptMatches(path string) error {

@@ -53,7 +53,7 @@ func manifestAssetRoot(path string) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("manifest: getwd: %w", err)
 		}
-		resolved, err := filepath.EvalSymlinks(path)
+		resolved, err := filepath.EvalSymlinks(filepath.Join(repo, path))
 		if err != nil {
 			return "", fmt.Errorf("manifest: resolve symlink %s: %w", path, err)
 		}

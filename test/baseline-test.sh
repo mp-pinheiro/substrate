@@ -97,13 +97,17 @@ jq -e '.metrics["hi:cov"] == 90 and .direction["hi:cov"] == "hi"' substrate-base
 
 printf '{"probe:alpha":2,"probe:gamma":0}\n' > .git/probe-metrics.json
 before=$(sha256sum substrate-baseline.json)
-chmod a-w "$PWD"
-if substrate-engine gate --tighten > "$T/atomic.out" 2>&1; then
-    fail "baseline write succeeded with read-only parent directory"
+if [ "$(id -u)" -ne 0 ]; then
+    chmod a-w "$PWD"
+    if substrate-engine gate --tighten > "$T/atomic.out" 2>&1; then
+        fail "baseline write succeeded with read-only parent directory"
+    fi
+    grep -Fq 'not writing' "$T/atomic.out" || fail "atomic write failure was not actionable"
+    [ "$before" = "$(sha256sum substrate-baseline.json)" ] || fail "atomic write failure changed the original baseline"
+    chmod u+w "$PWD"
+else
+    ok "read-only parent directory check skipped (running as root, DAC bypassed)"
 fi
-grep -Fq 'not writing' "$T/atomic.out" || fail "atomic write failure was not actionable"
-[ "$before" = "$(sha256sum substrate-baseline.json)" ] || fail "atomic write failure changed the original baseline"
-chmod u+w "$PWD"
 
 printf 'baseline-test: monotonic, explicit loosening, reported orphan prune, hi-floor retention, atomic rollback green\n'
 

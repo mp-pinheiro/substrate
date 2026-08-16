@@ -12,17 +12,24 @@ import (
 )
 
 func SyncExternalUnits(ctx context.Context, txReceiptPath, stablePath string, repoOnly bool) error {
+	testing := os.Getenv("SUBSTRATE_MAINTENANCE_TESTING") == "1"
+	failPhase := os.Getenv("SUBSTRATE_MAINTENANCE_FAIL_PHASE")
+
 	runtimeStatus := PhasePassed
 	harnessStatus := PhaseSkipped
 
-	if err := syncRepoRuntime(ctx); err != nil {
+	if testing && failPhase == "runtime" {
+		runtimeStatus = PhaseFailed
+	} else if err := syncRepoRuntime(ctx); err != nil {
 		runtimeStatus = PhaseFailed
 	}
 	_ = updatePhaseStatus(txReceiptPath, stablePath, ".repoRuntime.status", runtimeStatus)
 
 	if !repoOnly && os.Getenv("SUBSTRATE_NO_USER_HARNESS") != "1" {
 		harnessStatus = PhasePassed
-		if err := SyncUserLocked(ctx); err != nil {
+		if testing && failPhase == "harness" {
+			harnessStatus = PhaseFailed
+		} else if err := SyncUserLocked(ctx); err != nil {
 			harnessStatus = PhaseFailed
 		}
 	}
@@ -116,7 +123,11 @@ func SyncUserLocked(ctx context.Context) error {
 }
 
 func syncUserHarness(ctx context.Context) error {
-	_, err := xshell.Run(ctx, filepath.Join(".substrate", "install-user-harness.sh"))
+	script := filepath.Join(".substrate", "install-user-harness.sh")
+	if _, err := os.Stat(script); os.IsNotExist(err) {
+		return nil
+	}
+	_, err := xshell.Run(ctx, script)
 	if err != nil {
 		return fmt.Errorf("sync_user_harness: %w", err)
 	}
@@ -159,7 +170,6 @@ func FinishOutput(ctx context.Context) error {
 	}
 	return nil
 }
-
 
 func shortSHA(sha string) string {
 	if len(sha) > 12 {

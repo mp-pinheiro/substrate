@@ -12,6 +12,7 @@ import (
 	"github.com/mp-pinheiro/substrate/internal/config"
 	"github.com/mp-pinheiro/substrate/internal/lifecycle"
 	"github.com/mp-pinheiro/substrate/internal/logx"
+	"github.com/mp-pinheiro/substrate/internal/policy"
 	"github.com/mp-pinheiro/substrate/internal/receipt"
 	"github.com/mp-pinheiro/substrate/internal/vcs"
 	"github.com/mp-pinheiro/substrate/internal/xshell"
@@ -90,6 +91,12 @@ func RunCheckpoint(ctx context.Context, args []string) int {
 		logx.Err().Line("checkpoint blocked: %v", err)
 		return ExitPreflight
 	}
+	for _, p := range normalized {
+		if d, blocked := policy.CheckHard(p); blocked {
+			logx.Err().Line("checkpoint %s", strings.TrimSuffix(d.Stderr, "\n"))
+			return ExitPreflight
+		}
+	}
 
 	current, err := ChangedPaths(ctx, repo)
 	if err != nil {
@@ -106,7 +113,7 @@ func RunCheckpoint(ctx context.Context, args []string) int {
 		return ExitPreflight
 	}
 
-	leftover := SetDifference(current, normalized)
+	leftover := SetDifference(normalized, current)
 	if len(leftover) == 0 {
 		return runCheckpointFull(ctx, repo, repoRoot, metadataDir, normalized, opts, baselinePath)
 	}

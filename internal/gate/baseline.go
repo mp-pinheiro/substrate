@@ -114,15 +114,20 @@ func WriteBaseline(baselinePath, metricsOut, configPath string, flags PreflightF
 			today := time.Now().UTC().Format("2006-01-02")
 			for _, k := range acceptedNow {
 				from := "0"
-				if oldMetrics[k].Sign != 0 {
-					b, _ := oldMetrics[k].MarshalJSON()
-					from = string(b)
-				} else if oldAccepted != nil {
+				sticky := false
+				if oldAccepted != nil {
 					if prev, ok := oldAccepted[k].(map[string]interface{}); ok {
 						if f, ok := prev["from"]; ok {
-							from = fmt.Sprint(f)
+							if b, err := json.Marshal(f); err == nil {
+								from = string(b)
+								sticky = true
+							}
 						}
 					}
+				}
+				if !sticky && oldMetrics[k].Sign != 0 {
+					b, _ := oldMetrics[k].MarshalJSON()
+					from = string(b)
 				}
 				toBytes, _ := currentMetrics[k].MarshalJSON()
 				acceptedEntries[k] = map[string]interface{}{
@@ -138,10 +143,12 @@ func WriteBaseline(baselinePath, metricsOut, configPath string, flags PreflightF
 					if dir == "" {
 						dir = "lo"
 					}
-					toNum := currentMetrics[k]
+					toNum, hasCurrent := currentMetrics[k]
 					fromStr := "0"
-					if f, ok := entry["from"].(json.RawMessage); ok {
-						fromStr = string(f)
+					if raw := entry["from"]; raw != nil {
+						if b, err := json.Marshal(raw); err == nil {
+							fromStr = string(b)
+						}
 					}
 					fromNum, _ := ParseNumber(json.RawMessage(fromStr))
 
@@ -157,6 +164,9 @@ func WriteBaseline(baselinePath, metricsOut, configPath string, flags PreflightF
 					}
 					if !isRegression {
 						delete(acceptedEntries, k)
+					} else if hasCurrent {
+						toBytes, _ := toNum.MarshalJSON()
+						entry["to"] = json.RawMessage(toBytes)
 					}
 				}
 			}

@@ -29,6 +29,7 @@ assert_exact_commit() {
 
 mkdir -p "$T/git-home" "$T/git-repo" "$T/remote.git"
 export HOME="$T/git-home"
+export SUBSTRATE_NO_USER_HARNESS=1
 git init -q --bare "$T/remote.git"
 cd "$T/git-repo" || exit 9
 git init -q --initial-branch=main
@@ -205,6 +206,8 @@ unset SUBSTRATE_MAINTENANCE_FAIL_PHASE SUBSTRATE_MAINTENANCE_TESTING
 external_receipt=.git/substrate/maintenance-receipt.json
 jq -e '.repository.status == "committed" and .repoRuntime.status == "failed"' "$external_receipt" >/dev/null \
     || fail "repository runtime failure corrupted the repository phase"
+"$KIT_ROOT/bin/substrate" bootstrap --checkpoint --repo-only > "$T/runtime-stabilize.out" 2>&1 \
+    || fail "runtime repair stabilization failed"
 external_commit=$(git rev-parse HEAD)
 "$KIT_ROOT/bin/substrate" bootstrap --checkpoint --repo-only > "$T/runtime-repair.out" 2>&1 \
     || fail "repository runtime repair failed"
@@ -212,6 +215,7 @@ external_commit=$(git rev-parse HEAD)
 jq -e '.repoRuntime.status == "passed"' "$external_receipt" >/dev/null \
     || fail "repository runtime repair was not recorded"
 
+unset SUBSTRATE_NO_USER_HARNESS
 export SUBSTRATE_MAINTENANCE_TESTING=1
 export SUBSTRATE_MAINTENANCE_FAIL_PHASE=harness
 if "$KIT_ROOT/bin/substrate" bootstrap --checkpoint > "$T/harness-fail.out" 2>&1; then
@@ -222,6 +226,7 @@ jq -e '.repository.status == "committed" and .userHarness.status == "failed"' "$
     || fail "user harness failure corrupted the repository phase"
 "$KIT_ROOT/bin/substrate" bootstrap --checkpoint > "$T/harness-repair.out" 2>&1 \
     || fail "user harness repair failed"
+export SUBSTRATE_NO_USER_HARNESS=1
 [ "$external_commit" = "$(git rev-parse HEAD)" ] || fail "harness repair created another repository commit"
 jq -e '.userHarness.status == "passed"' "$external_receipt" >/dev/null \
     || fail "user harness repair was not recorded"

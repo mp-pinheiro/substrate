@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -112,7 +113,7 @@ func RunMaintenance(ctx context.Context, args []string) int {
 		for path := range dirtyInside {
 			if AppliedPathAuthorized(ctx, c.StablePath, base, path) {
 				appliedOverlap = true
-			} else if !c.Checkpoint && DirtyPathSeedable(ctx, base, path, c.Profiles) {
+			} else if DirtyPathSeedable(ctx, base, path, c.Profiles) {
 			} else if DirtyPathRepairable(ctx, base, path) {
 				repairOverlap = true
 			} else {
@@ -186,7 +187,11 @@ func RunMaintenance(ctx context.Context, args []string) int {
 		logx.Err().Line("maintenance: gate candidate: %v", err)
 		return ExitPreflight
 	}
-
+	if os.Getenv("SUBSTRATE_MAINTENANCE_TESTING") == "1" {
+		if hook := os.Getenv("SUBSTRATE_MAINTENANCE_TEST_HOOK"); hook != "" {
+			_ = exec.Command(hook, c.RepoRoot).Run()
+		}
+	}
 	gateData, err := os.ReadFile(gateOutput)
 	if err != nil {
 		logx.Err().Line("maintenance: read gate output: %v", err)
@@ -204,7 +209,7 @@ func RunMaintenance(ctx context.Context, args []string) int {
 	changedUnitPaths := ChangedUnits(manifest, changedLines)
 
 	var repairUnitPaths []string
-	if repairOverlap {
+	if repairOverlap || appliedOverlap {
 		for path := range dirtyInside {
 			repairUnitPaths = append(repairUnitPaths, path)
 		}
@@ -219,6 +224,11 @@ func RunMaintenance(ctx context.Context, args []string) int {
 			unitsPaths = append(unitsPaths, p)
 		}
 	}
+
+	// The receipt's ChangedPaths is verified against git diff --name-only (files,
+	// not manifest units), so it uses dirtyInside's file keys, not unitsPaths.
+	receiptChangedPaths := append([]string{}, changedLines...)
+	receiptChangedPaths = append(receiptChangedPaths, repairUnitPaths...)
 
 	unitsFile := filepath.Join(c.TxDir, "units.paths")
 	if err := os.WriteFile(unitsFile, []byte(strings.Join(unitsPaths, "\n")+"\n"), 0644); err != nil {
@@ -263,7 +273,7 @@ func RunMaintenance(ctx context.Context, args []string) int {
 		return externalRC
 	}
 
-	receiptData, err := ReceiptJSON(c, id, StatusPrepared, base, "", manifest, changedLines, string(unitsJSON), dirtyFingerprint, gateHash, c.CandidateDir, "")
+	receiptData, err := ReceiptJSON(c, id, StatusPrepared, base, "", manifest, receiptChangedPaths, string(unitsJSON), dirtyFingerprint, gateHash, c.CandidateDir, "")
 	if err != nil {
 		logx.Err().Line("maintenance: receipt json: %v", err)
 		return ExitPreflight
@@ -317,10 +327,11 @@ func RunMaintenance(ctx context.Context, args []string) int {
 
 		var commit string
 		var to string
-		if len(changedUnitPaths) > 0 {
+		actualChanged := []string{}
+		if len(unitsPaths) > 0 {
 			var err error
 			commitUnitsFile := filepath.Join(c.TxDir, "commit-units.paths")
-			if err := os.WriteFile(commitUnitsFile, []byte(strings.Join(changedUnitPaths, "\n")+"\n"), 0644); err != nil {
+			if err := os.WriteFile(commitUnitsFile, []byte(strings.Join(unitsPaths, "\n")+"\n"), 0644); err != nil {
 				logx.Err().Line("maintenance: write commit units: %v", err)
 				return ExitPreflight
 			}
@@ -336,6 +347,12 @@ func RunMaintenance(ctx context.Context, args []string) int {
 				logx.Err().Line("maintenance: revision after commit: %v", err)
 				return ExitPreflight
 			}
+			actualChanged, err = ActualChangedPaths(ctx, base, to)
+			if err != nil {
+				_ = UpdateReceipt(txReceiptPath, c.StablePath, `.repository.status="incomplete"`)
+				logx.Err().Line("maintenance: actual changed paths: %v", err)
+				return ExitPreflight
+			}
 		} else {
 			if base == "" {
 				logx.Err().Line("maintenance: no base revision for empty commit")
@@ -345,14 +362,19 @@ func RunMaintenance(ctx context.Context, args []string) int {
 			to = base
 		}
 
-		filter := fmt.Sprintf(`.repository.status="committed" | .repository.toRevision="%s" | .repository.commit="%s" | .repository.candidatePath=null`, to, commit)
+		changedPathsJSON, err := json.Marshal(actualChanged)
+		if err != nil {
+			logx.Err().Line("maintenance: marshal changed paths: %v", err)
+			return ExitPreflight
+		}
+		filter := fmt.Sprintf(`.repository.status="committed" | .repository.toRevision="%s" | .repository.commit="%s" | .repository.candidatePath=null | .repository.changedPaths=%s`, to, commit, string(changedPathsJSON))
 		if err := UpdateReceipt(txReceiptPath, c.StablePath, filter); err != nil {
 			logx.Err().Line("maintenance: update receipt transition: %v", err)
 			return ExitPreflight
 		}
 
 		if err := VerifyTransition(base, to, dirtyFingerprint); err != nil {
-			logx.Err().Line("maintenance: maintenance commit exists but its exact-state receipt failed verification")
+			logx.Err().Line("maintenance: maintenance commit exists but its exact-state receipt failed verification: %v", err)
 			return ExitPreflight
 		}
 	}

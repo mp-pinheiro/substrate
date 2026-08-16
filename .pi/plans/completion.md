@@ -32,7 +32,7 @@ Mechanism: `## Acceptance` items are `- [ ] claim :: verify-command`. A checked 
 
 ### Contracts pillar (complaint #2 — SSOT, drift-gated)
 - [x] contract drift check ships with negative oracle :: test/contract-drift-test.sh
-- [x] generated paths write-blocked in both harnesses :: grep -q 'contracts' core/hooks/protect-paths.sh && grep -q 'contracts' core/omp/substrate-quality.ts
+- [x] generated paths write-blocked in both harnesses :: grep -q 'contracts' internal/policy/protect_paths.go && grep -q 'contracts' core/omp/substrate-quality.ts
 - [x] contracts schema documented :: grep -q '"contracts"' docs/contracts.md
 
 ### Boundaries (L0 as code)

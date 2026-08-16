@@ -1,6 +1,8 @@
-{"name":"comments:docs/notes.yaml","value":2}
-{"name":"comments:tools/deploy","value":1}
-{"name":"comments:tools/setup.zsh","value":1}
-{"name":"max_file_lines","value":9}
-{"name":"golden:probe_lo","value":7}
+{"name":"comments:ci/pipeline.yml","value":0,"dir":"lo"}
+{"name":"comments:config/settings.json","value":0,"dir":"lo"}
+{"name":"comments:docs/notes.yaml","value":2,"dir":"lo"}
+{"name":"comments:tools/deploy","value":1,"dir":"lo"}
+{"name":"comments:tools/setup.zsh","value":1,"dir":"lo"}
+{"name":"max_file_lines","value":9,"dir":"lo"}
+{"name":"golden:probe_lo","value":7,"dir":"lo"}
 {"name":"golden:probe_hi","value":3,"dir":"hi"}

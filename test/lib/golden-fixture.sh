@@ -245,19 +245,50 @@ golden_replay_metrics() {
     [ -s "$out" ] || golden_fail "no metrics emitted — the fixture lost its metric-producing checks"
 }
 
-# Rebuilds the baseline from the replayed JSONL with gate.sh's own jq programs:
-# equal bytes prove the replay carries the same metrics the runner ratcheted.
+# Rebuilds the baseline from the replayed JSONL and byte-matches
+# internal/gate/baseline.go's marshalBaseline (flat 2-space indent, no compounding).
+golden_render_go_baseline() {
+    local metrics_json="$1" direction_json="$2" out="$3"
+    {
+        printf '{\n'
+        printf '  "metrics": {\n'
+        local -a mlines=()
+        mapfile -t mlines < <(jq -r 'to_entries[] | "\(.key)\t\(.value)"' <<< "$metrics_json")
+        local i n=${#mlines[@]} k v
+        for ((i = 0; i < n; i++)); do
+            IFS=$'\t' read -r k v <<< "${mlines[$i]}"
+            if [ "$i" -lt $((n - 1)) ]; then
+                printf '  "%s": %s,\n' "$k" "$v"
+            else
+                printf '  "%s": %s\n' "$k" "$v"
+            fi
+        done
+        printf '},\n'
+        printf '  "direction": {\n'
+        local -a dlines=()
+        mapfile -t dlines < <(jq -r 'to_entries[] | "\(.key)\t\(.value)"' <<< "$direction_json")
+        n=${#dlines[@]}
+        for ((i = 0; i < n; i++)); do
+            IFS=$'\t' read -r k v <<< "${dlines[$i]}"
+            if [ "$i" -lt $((n - 1)) ]; then
+                printf '  "%s": "%s",\n' "$k" "$v"
+            else
+                printf '  "%s": "%s"\n' "$k" "$v"
+            fi
+        done
+        printf '}\n'
+        printf '}\n'
+    } > "$out"
+}
+
 golden_assert_baseline_reproducible() {
-    local metrics="$1" baseline="$2" current direction rebuilt tmp
-    current=$(jq -sc 'map({(.name): .value}) | add // {}' "$metrics") \
+    local metrics="$1" baseline="$2" current direction tmp
+    current=$(jq -sc 'map({(.name): .value}) | add // {} | to_entries | sort_by(.key) | from_entries' "$metrics") \
         || golden_fail "metrics aggregation failed"
-    direction=$(jq -sc '[.[] | select(.dir == "hi") | {(.name): "hi"}] | add // {}' "$metrics") \
+    direction=$(jq -sc 'map({(.name): (.dir // "lo")}) | add // {} | to_entries | sort_by(.key) | from_entries' "$metrics") \
         || golden_fail "direction aggregation failed"
-    rebuilt=$(jq -n --argjson m "$current" --argjson dir "$direction" \
-        '{metrics: ($m | to_entries | sort_by(.key) | from_entries), direction: $dir}') \
-        || golden_fail "baseline rebuild failed"
     tmp=$(mktemp) || golden_fail "mktemp failed"
-    printf '%s\n' "$rebuilt" > "$tmp" || golden_fail "cannot stage the rebuilt baseline"
+    golden_render_go_baseline "$current" "$direction" "$tmp" || golden_fail "baseline rebuild failed"
     if ! cmp -s "$tmp" "$baseline"; then
         diff -u "$baseline" "$tmp" >&2
         rm -f "$tmp"

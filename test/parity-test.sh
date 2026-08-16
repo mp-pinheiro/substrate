@@ -215,9 +215,9 @@ bun "$T/omp-hydrate.ts" "$KIT_ROOT/core/omp/substrate-quality.ts" "$KIT_ROOT/tes
     "$T/hydrate-repo" seed >/dev/null \
     || fail "hydration seed probe failed"
 digest=$(printf '%s' "$T/hydrate-repo" | sha256sum | cut -c1-16)
-jq -e '.task.ownedEntries["owned.sh"] | type == "string"' \
-    "$HOME/.omp/run/substrate-quality/$digest.json" >/dev/null \
-    || fail "per-root runtime ledger did not persist owned entries"
+jq -e '.observed.entries["owned.sh"] | type == "string"' \
+    "$T/hydrate-repo/.git/substrate/agent-sessions/substrate-omp-$digest.json" >/dev/null \
+    || fail "engine session ledger did not persist owned entries"
 hydrated=$(bun "$T/omp-hydrate.ts" "$KIT_ROOT/core/omp/substrate-quality.ts" "$KIT_ROOT/test/lib/pi-probe.ts" \
     "$T/hydrate-repo" hydrate) \
     || fail "hydration checkpoint probe failed"
@@ -229,13 +229,13 @@ jq -e '.checkpoint.details.status == "passed"' <<< "$hydrated" >/dev/null \
     || fail "hydrated checkpoint left pending work"
 
 commit_payload='{"tool_input":{"command":"git commit -m \"fix: bypass\""}}'
-if printf '%s\n' "$commit_payload" | "$T/repo/substrate-engine hook protect-command" > "$T/claude-commit.out" 2>&1; then
+if printf '%s\n' "$commit_payload" | ( cd "$T/repo" && substrate-engine hook protect-command ) > "$T/claude-commit.out" 2>&1; then
     fail "Claude direct commit guard did not block"
 fi
 grep -Fq 'checkpoint transaction' "$T/claude-commit.out" \
     || fail "Claude direct commit rejection did not name the checkpoint"
 push_payload='{"tool_input":{"command":"git push origin main"}}'
-if printf '%s\n' "$push_payload" | "$T/repo/substrate-engine hook gate-before-push" > "$T/claude-push.out" 2>&1; then
+if printf '%s\n' "$push_payload" | ( cd "$T/repo" && substrate-engine hook gate-before-push ) > "$T/claude-push.out" 2>&1; then
     fail "Claude red push guard did not block"
 fi
 grep -Fq 'push blocked' "$T/claude-push.out" || fail "Claude red push rejection was not actionable"

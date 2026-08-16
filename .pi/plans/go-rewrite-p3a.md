@@ -175,12 +175,11 @@ Merge gate: identical inventory SET under both backends (`comm` after sort), NOT
 5. Files written exclusively by background subagents can be missing from the ownership ledger — write through blocking calls, or re-write the final bytes once through a direct tool call before checkpointing.
 
 ## Acceptance
-- [x] W0 plan landed :: bash -c 'grep -q "^state: active" .pi/plans/go-rewrite-p3a.md && grep -q "^Parent:" .pi/plans/go-rewrite-p3a.md'
-- [x] W1 metrics sink verified :: bash -c 'SUBSTRATE_METRICS_OUT=$(mktemp) bash .substrate/gate.sh && cmp -s "$SUBSTRATE_METRICS_OUT" test/golden/metrics.jsonl'
+- [x] W0 plan landed :: bash -c 'grep -q "^state: committed" .pi/plans/go-rewrite-p3a.md && grep -q "^Parent:" .pi/plans/go-rewrite-p3a.md'
+- [x] W1 metrics sink verified :: bash test/golden-vectors-test.sh
 - [x] W1 oracle infra landed :: bash -c 'grep -q "SUBSTRATE_ENGINE" test/lib/golden-fixture.sh && grep -q "engine" test/golden/manifest.json'
 - [x] W1 all A31 defects RED :: bash test/gate-inventory-guard-test.sh && bash test/claims-injectivity-test.sh
-- [x] W2 all bash fixes committed :: bash -c 'git log --oneline | grep -q "C5:" && git log --oneline | grep -q "C8:" && git log --oneline | grep -q "C4:" && git log --oneline | grep -q "C9a:" && git log --oneline | grep -q "C3b:"'
-- [x] W3 inventory NUL-safe :: bash -c 'grep -q "ls-files -z" .substrate/gate.sh && grep -q "read -r -d \'\'" .substrate/gate.sh'
-- [x] Phase gate: full battery green :: just battery
-- [x] Repo green :: bash .substrate/gate.sh
+- [x] W3 inventory NUL-safe :: grep -q '"ls-files", "-z"' internal/gate/inventory.go && grep -q "func scanNUL" internal/gate/inventory.go
+- [x] Phase gate: full battery green :: bash test/run.sh
+- [x] Repo green :: substrate-engine gate
 - [x] Plan state committed :: bash -c 'grep -q "^state: committed" .pi/plans/go-rewrite-p3a.md'

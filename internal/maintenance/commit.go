@@ -35,9 +35,15 @@ func CommitExact(ctx context.Context, unitsFile string, txID string, c *Context)
 		return "", fmt.Errorf("commit: no units to commit")
 	}
 
-	prev := os.Getenv("SUBSTRATE_MAINTENANCE_ID")
+	prev, hadPrev := os.LookupEnv("SUBSTRATE_MAINTENANCE_ID")
 	_ = os.Setenv("SUBSTRATE_MAINTENANCE_ID", txID)
-	defer func() { _ = os.Setenv("SUBSTRATE_MAINTENANCE_ID", prev) }()
+	defer func() {
+		if hadPrev {
+			_ = os.Setenv("SUBSTRATE_MAINTENANCE_ID", prev)
+		} else {
+			_ = os.Unsetenv("SUBSTRATE_MAINTENANCE_ID")
+		}
+	}()
 
 	if c.VCS == "jj" {
 		return commitExactJJ(ctx, c, units)
@@ -67,13 +73,11 @@ func commitExactGit(ctx context.Context, c *Context, units []string) (string, er
 	tempIndex := f.Name()
 	_ = f.Close()
 	_ = os.Remove(tempIndex)
+	defer func() { _ = os.Remove(tempIndex) }()
 
-	prevIndex := os.Getenv("GIT_INDEX_FILE")
-	_ = os.Setenv("GIT_INDEX_FILE", tempIndex)
-	defer func() {
-		_ = os.Setenv("GIT_INDEX_FILE", prevIndex)
-		_ = os.Remove(tempIndex)
-	}()
+	// A per-call env, not a process-wide os.Setenv: git subprocesses spawned
+	// elsewhere in this process must never see this transaction's temp index.
+	indexEnv := []string{"GIT_INDEX_FILE=" + tempIndex}
 
 	hasHead := true
 	if _, err := xshell.RunIn(ctx, c.RepoRoot, "git", "rev-parse", "--verify", "HEAD"); err != nil {
@@ -81,22 +85,22 @@ func commitExactGit(ctx context.Context, c *Context, units []string) (string, er
 	}
 
 	if hasHead {
-		if _, err := xshell.RunIn(ctx, c.RepoRoot, "git", "read-tree", "HEAD"); err != nil {
+		if _, err := xshell.RunInEnv(ctx, c.RepoRoot, indexEnv, "git", "read-tree", "HEAD"); err != nil {
 			return "", fmt.Errorf("commit: git read-tree: %w", err)
 		}
 	} else {
-		if _, err := xshell.RunIn(ctx, c.RepoRoot, "git", "read-tree", "--empty"); err != nil {
+		if _, err := xshell.RunInEnv(ctx, c.RepoRoot, indexEnv, "git", "read-tree", "--empty"); err != nil {
 			return "", fmt.Errorf("commit: git read-tree --empty: %w", err)
 		}
 	}
 
 	addArgs := []string{"add", "-f", "-A", "--"}
 	addArgs = append(addArgs, units...)
-	if _, err := xshell.RunIn(ctx, c.RepoRoot, "git", addArgs...); err != nil {
+	if _, err := xshell.RunInEnv(ctx, c.RepoRoot, indexEnv, "git", addArgs...); err != nil {
 		return "", fmt.Errorf("commit: git add: %w", err)
 	}
 
-	if _, err := xshell.RunIn(ctx, c.RepoRoot, "git", "commit", "-m", c.Message); err != nil {
+	if _, err := xshell.RunInEnv(ctx, c.RepoRoot, indexEnv, "git", "commit", "-m", c.Message); err != nil {
 		return "", fmt.Errorf("commit: git commit: %w", err)
 	}
 
@@ -106,10 +110,12 @@ func commitExactGit(ctx context.Context, c *Context, units []string) (string, er
 	}
 	hash := trimLine(string(result.Stdout))
 
-	resetArgs := []string{"reset", "--quiet", "HEAD", "--"}
-	resetArgs = append(resetArgs, units...)
-	if _, err := xshell.RunIn(ctx, c.RepoRoot, "git", resetArgs...); err != nil {
-		return "", fmt.Errorf("commit: git reset: %w", err)
+	// The commit above only touched the temp index; sync the real index or
+	// git status reports these paths as phantom deletions (in HEAD, not the index).
+	realAddArgs := []string{"add", "-A", "--"}
+	realAddArgs = append(realAddArgs, units...)
+	if _, err := xshell.RunIn(ctx, c.RepoRoot, "git", realAddArgs...); err != nil {
+		return "", fmt.Errorf("commit: sync real index: %w", err)
 	}
 
 	return hash, nil

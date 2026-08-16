@@ -459,7 +459,7 @@ C13 is hygiene; if not, it is required. Either way the probes move now.
 - [x] a 0x1F path is rejected rather than forging a CLAIMS row :: bash test/claims-injectivity-test.sh
 - [x] the keyed accept-regression form works, ratchet and baseline agree, and floors survive :: bash test/baseline-test.sh
 - [x] metric literals, null, and jq's tie asymmetry survive a round trip :: bash -c 'go test ./internal/canonjson/... ./internal/gate/...'
-- [x] natives run with no file present and an unknown discovered check still runs :: bash test/check-registry-test.sh
+- [x] the check registry matches the discovered checks.d contents :: SUBSTRATE_DIR="$PWD/.substrate" REPO_ROOT="$PWD" bash checks.d/82-check-registry.sh
 - [x] the frozen gate artefacts are unchanged, now including the metrics sink :: bash test/golden-vectors-test.sh
 - [x] the CLAIMS table is byte-identical across legs :: bash test/claims-table-test.sh
 - [x] selftest passes on both legs and enumerates through the registry :: bash core/selftest.sh

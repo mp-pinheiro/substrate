@@ -35,3 +35,28 @@ substrate_engine_exec() {
     engine=$(_substrate_engine_bin) || return 1
     exec "$engine" hook "$@"
 }
+
+# _substrate_engine_delegate <capability> <fallback-fn> <verb-words...> -- [args...]
+# Delegates when the engine supports <capability>; never exec's (callers capture stdout).
+_substrate_engine_delegate() {
+    local capability="$1" fallback="$2"
+    shift 2
+    local verb=()
+    while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do
+        verb+=("$1")
+        shift
+    done
+    [ "$#" -eq 0 ] || shift
+    local mode=${SUBSTRATE_ENGINE:-auto}
+    local engine
+    if [ "$mode" != bash ] && engine=$(_substrate_engine_bin) \
+        && substrate_engine_supports "$capability"; then
+        "$engine" "${verb[@]}" "$@"
+        return
+    fi
+    if [ "$mode" = go ]; then
+        printf 'substrate: engine required for %s but unavailable\n' "$capability" >&2
+        return 3
+    fi
+    "$fallback" "$@"
+}

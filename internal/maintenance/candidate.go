@@ -45,9 +45,6 @@ func OverlayWorktree(ctx context.Context, candidateDir string, dirtyPaths []stri
 			if !PathInManifest(path, manifest) {
 				continue
 			}
-			if !checkpoint && DirtyPathSeedable(ctx, base, path, profiles) {
-				continue
-			}
 		default:
 			return fmt.Errorf("overlay worktree: unknown phase %q", phase)
 		}

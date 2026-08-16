@@ -130,9 +130,15 @@ func (c *Candidate) seedGitRepo(ctx context.Context) error {
 
 // RunGate runs the gate in the candidate tree with the given flags.
 func (c *Candidate) RunGate(ctx context.Context, args ...string) (string, error) {
-	saved := os.Getenv("SUBSTRATE_FILE_LIST")
+	saved, hadSaved := os.LookupEnv("SUBSTRATE_FILE_LIST")
 	_ = os.Unsetenv("SUBSTRATE_FILE_LIST")
-	defer func() { _ = os.Setenv("SUBSTRATE_FILE_LIST", saved); }()
+	defer func() {
+		if hadSaved {
+			_ = os.Setenv("SUBSTRATE_FILE_LIST", saved)
+		} else {
+			_ = os.Unsetenv("SUBSTRATE_FILE_LIST")
+		}
+	}()
 	bin, err := xshell.EngineBin()
 	if err != nil {
 		return "", fmt.Errorf("candidate gate: %w", err)
