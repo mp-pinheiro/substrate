@@ -7,8 +7,8 @@ import (
 
 const maxSymlinkDepth = 40
 
-// WHY: matches GNU `readlink -f` — every component is resolved through
-// symlinks, but only the final component is allowed to not exist.
+// WHY: matches GNU `readlink -m`/`realpath -m` — components are resolved
+// through symlinks until one is missing, then the rest append lexically.
 func readlinkF(path string) (string, bool) {
 	if !strings.HasPrefix(path, "/") {
 		return "", false
@@ -16,6 +16,7 @@ func readlinkF(path string) (string, bool) {
 	queue := splitPathComponents(path)
 	resolved := ""
 	links := 0
+	missing := false
 	for len(queue) > 0 {
 		comp := queue[0]
 		queue = queue[1:]
@@ -31,13 +32,15 @@ func readlinkF(path string) (string, bool) {
 			continue
 		}
 		candidate := resolved + "/" + comp
+		if missing {
+			resolved = candidate
+			continue
+		}
 		info, err := os.Lstat(candidate)
 		if err != nil {
-			if len(queue) == 0 {
-				resolved = candidate
-				break
-			}
-			return "", false
+			missing = true
+			resolved = candidate
+			continue
 		}
 		if info.Mode()&os.ModeSymlink != 0 {
 			links++
