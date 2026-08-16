@@ -9,12 +9,14 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 2
 n=$(.substrate/forge.sh open-issue substrate-report)
 rc=$?
 if [ "$rc" -eq 3 ]; then
-    if [ -n "${CI:-}" ]; then
-        printf 'report-e2e: no usable token in CI — cannot verify the queue\n' >&2
+    # CI alone does not prove a forge runner — agent harnesses also export
+    # CI=true; only a runner injects GITHUB_REPOSITORY, needed to dispatch.
+    if [ -n "${CI:-}" ] && [ -n "${GITHUB_REPOSITORY:-}" ]; then
+        printf 'report-e2e: no usable token on the forge runner — cannot verify the queue\n' >&2
         exit 1
     fi
-    printf 'report-e2e: skipped locally (no token)\n'
-    exit 0
+    printf 'report-e2e: unverifiable — no forge token and no runner repository\n' >&2
+    exit 3
 elif [ "$rc" -ne 0 ]; then
     printf 'report-e2e: open-issue lookup failed\n' >&2
     exit 1
