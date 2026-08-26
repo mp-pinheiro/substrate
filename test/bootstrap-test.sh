@@ -61,6 +61,16 @@ managed_matches .github/workflows/substrate-report.yml "$KIT_ROOT/core/ci/github
     || fail "report workflow does not match its source"
 grep -q 'shellcheck zsh' .github/workflows/substrate-gate.yml \
     || fail "shell profile toolchain missing from gate workflow"
+grep -q 'apt-get install -y -qq --no-install-recommends sudo jq unzip file locales' .github/workflows/substrate-gate.yml \
+    || fail "Forgejo container prerequisites missing from gate workflow"
+prereq_match=$(grep -n -m1 'name: Install container prerequisites' .github/workflows/substrate-gate.yml)
+gitleaks_match=$(grep -n -m1 'name: Install Gitleaks' .github/workflows/substrate-gate.yml)
+[ -n "$prereq_match" ] && [ -n "$gitleaks_match" ] \
+    || fail "Forgejo prerequisite ordering anchors missing"
+prereq_line=${prereq_match%%:*}
+gitleaks_line=${gitleaks_match%%:*}
+[ "$prereq_line" -lt "$gitleaks_line" ] \
+    || fail "Forgejo container prerequisites run after Gitleaks installation"
 grep -q '\.substrate/install-jj\.sh' .github/workflows/substrate-gate.yml \
     || fail "core Jujutsu installer missing from gate workflow"
 cmp -s .claude/skills/review/SKILL.md "$KIT_ROOT/skills/review/SKILL.md" \
