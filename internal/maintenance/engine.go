@@ -294,7 +294,7 @@ func RunMaintenance(ctx context.Context, args []string) int {
 		return ExitPreflight
 	}
 
-	currentFingerprint := computeCurrentDirtyFingerprint(ctx, manifest)
+	currentFingerprint := computeCurrentDirtyFingerprint(ctx, manifest, c.VCS)
 	if currentFingerprint != dirtyFingerprint {
 		logx.Err().Line("maintenance: working copy changed while rendering maintenance candidate")
 		return ExitPreflight
@@ -400,8 +400,8 @@ func mapToJSONString(m map[string]string) string {
 	return string(b)
 }
 
-func computeCurrentDirtyFingerprint(ctx context.Context, manifest []string) string {
-	paths, err := CollectDirtyPaths(ctx, "")
+func computeCurrentDirtyFingerprint(ctx context.Context, manifest []string, vcs string) string {
+	paths, err := CollectDirtyPaths(ctx, vcs)
 	if err != nil {
 		return ""
 	}
