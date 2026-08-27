@@ -105,6 +105,12 @@ build_line=${build_step%%:*}
     || fail "consumer report workflow carries unsupported Forgejo permissions"
 grep -q 'echo "$GITHUB_WORKSPACE/build" >> "$GITHUB_PATH"' .github/workflows/substrate-gate.yml \
     || fail "Substrate engine path is not exported to later steps"
+grep -q 'bookworm-backports.list' .github/workflows/substrate-gate.yml \
+    || fail "Forgejo workflow does not provision the required Git backport source"
+grep -q 'apt-get install -y -qq --no-install-recommends -t bookworm-backports git' .github/workflows/substrate-gate.yml \
+    || fail "Forgejo workflow does not provision Git for Jujutsu"
+grep -q 'Git >= 2.41 is required by the pinned Jujutsu' .github/workflows/substrate-gate.yml \
+    || fail "Forgejo workflow does not enforce the Jujutsu Git requirement"
 cmp -s .claude/skills/review/SKILL.md "$KIT_ROOT/skills/review/SKILL.md" \
     || fail "Claude skill was not installed"
 cmp -s .omp/skills/review/SKILL.md "$KIT_ROOT/skills/review/SKILL.md" \
