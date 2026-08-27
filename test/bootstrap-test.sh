@@ -73,6 +73,32 @@ gitleaks_line=${gitleaks_match%%:*}
     || fail "Forgejo container prerequisites run after Gitleaks installation"
 grep -q '\.substrate/install-jj\.sh' .github/workflows/substrate-gate.yml \
     || fail "core Jujutsu installer missing from gate workflow"
+grep -q 'name: Resolve Substrate kit revision' .github/workflows/substrate-gate.yml \
+    || fail "Substrate kit revision step missing from gate workflow"
+grep -q 'repository: .*github.repository_owner.*/substrate' .github/workflows/substrate-gate.yml \
+    || fail "Substrate kit checkout missing from gate workflow"
+grep -q 'ref: .*steps.substrate-kit.outputs.revision' .github/workflows/substrate-gate.yml \
+    || fail "Substrate kit checkout is not pinned to vendor revision"
+grep -q 'go-version-file: .substrate-kit/go.mod' .github/workflows/substrate-gate.yml \
+    || fail "Substrate kit Go module missing from gate workflow"
+grep -q 'working-directory: .substrate-kit' .github/workflows/substrate-gate.yml \
+    || fail "Substrate engine build directory missing from gate workflow"
+grep -q 'name: Build substrate engine from kit' .github/workflows/substrate-gate.yml \
+    || fail "Substrate kit engine build step missing from gate workflow"
+grep -q 'mkdir -p "$GITHUB_WORKSPACE/build"' .github/workflows/substrate-gate.yml \
+    || fail "Substrate engine output directory missing from gate workflow"
+grep -q 'GITHUB_WORKSPACE/build/substrate-engine' .github/workflows/substrate-gate.yml \
+    || fail "Substrate engine output path missing from gate workflow"
+! grep -qx '          go-version-file: go.mod' .github/workflows/substrate-gate.yml \
+    || fail "consumer workflow still references root go.mod"
+kit_step=$(grep -n -m1 'name: Resolve Substrate kit revision' .github/workflows/substrate-gate.yml)
+checkout_step=$(grep -n -m1 'repository: .*github.repository_owner.*/substrate' .github/workflows/substrate-gate.yml)
+build_step=$(grep -n -m1 'name: Build substrate engine from kit' .github/workflows/substrate-gate.yml)
+kit_line=${kit_step%%:*}
+checkout_line=${checkout_step%%:*}
+build_line=${build_step%%:*}
+[ "$kit_line" -lt "$checkout_line" ] && [ "$checkout_line" -lt "$build_line" ] \
+    || fail "Substrate kit workflow steps are out of order"
 cmp -s .claude/skills/review/SKILL.md "$KIT_ROOT/skills/review/SKILL.md" \
     || fail "Claude skill was not installed"
 cmp -s .omp/skills/review/SKILL.md "$KIT_ROOT/skills/review/SKILL.md" \

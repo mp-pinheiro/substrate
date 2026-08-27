@@ -36,11 +36,33 @@ jobs:
         run: |
           bun install -g @ast-grep/cli@0.45.0 jscpd@5.0.14
           # substrate:profile-toolchain
-      - uses: actions/setup-go@v5
+      - name: Resolve Substrate kit revision
+        id: substrate-kit
+        run: |
+          revision=$(jq -er '
+            if .source == "trunk" and (.kitRevision | test("^[0-9a-f]{40}$"))
+            then .kitRevision
+            else error("invalid kit provenance")
+            end
+          ' .substrate/vendor.json) || {
+            echo "::error::.substrate/vendor.json does not identify a published kit revision"
+            exit 1
+          }
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          go-version-file: go.mod
-      - name: Build engine
-        run: go build -trimpath -buildvcs=false -o build/substrate-engine ./cmd/substrate-engine
+          repository: ${{ github.repository_owner }}/substrate
+          ref: ${{ steps.substrate-kit.outputs.revision }}
+          path: .substrate-kit
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: .substrate-kit/go.mod
+      - name: Build substrate engine from kit
+        working-directory: .substrate-kit
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/build"
+          go build -trimpath -buildvcs=false -o "$GITHUB_WORKSPACE/build/substrate-engine" ./cmd/substrate-engine
       - name: Run gate
         run: |
           export PATH="$PWD/build:$PATH"
