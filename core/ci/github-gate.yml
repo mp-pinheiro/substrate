@@ -6,10 +6,6 @@ on:
 concurrency:
   group: substrate-gate-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-permissions:
-  contents: read
-  actions: read
-  issues: read
 jobs:
   gate:
     runs-on: ubuntu-latest
@@ -63,10 +59,9 @@ jobs:
         run: |
           mkdir -p "$GITHUB_WORKSPACE/build"
           go build -trimpath -buildvcs=false -o "$GITHUB_WORKSPACE/build/substrate-engine" ./cmd/substrate-engine
+          echo "$GITHUB_WORKSPACE/build" >> "$GITHUB_PATH"
       - name: Run gate
-        run: |
-          export PATH="$PWD/build:$PATH"
-          substrate-engine gate
+        run: substrate-engine gate
       - name: Audit plan oracles
         if: github.event_name == 'push'
         env:

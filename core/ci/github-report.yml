@@ -6,9 +6,6 @@ on:
 concurrency:
   group: substrate-report
   cancel-in-progress: true
-permissions:
-  contents: read
-  issues: write
 jobs:
   report:
     runs-on: ubuntu-latest

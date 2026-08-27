@@ -99,6 +99,12 @@ checkout_line=${checkout_step%%:*}
 build_line=${build_step%%:*}
 [ "$kit_line" -lt "$checkout_line" ] && [ "$checkout_line" -lt "$build_line" ] \
     || fail "Substrate kit workflow steps are out of order"
+! grep -q '^permissions:' .github/workflows/substrate-gate.yml \
+    || fail "consumer gate workflow carries unsupported Forgejo permissions"
+! grep -q '^permissions:' .github/workflows/substrate-report.yml \
+    || fail "consumer report workflow carries unsupported Forgejo permissions"
+grep -q 'echo "$GITHUB_WORKSPACE/build" >> "$GITHUB_PATH"' .github/workflows/substrate-gate.yml \
+    || fail "Substrate engine path is not exported to later steps"
 cmp -s .claude/skills/review/SKILL.md "$KIT_ROOT/skills/review/SKILL.md" \
     || fail "Claude skill was not installed"
 cmp -s .omp/skills/review/SKILL.md "$KIT_ROOT/skills/review/SKILL.md" \
