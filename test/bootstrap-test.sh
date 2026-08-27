@@ -105,10 +105,14 @@ build_line=${build_step%%:*}
     || fail "consumer report workflow carries unsupported Forgejo permissions"
 grep -q 'echo "$GITHUB_WORKSPACE/build" >> "$GITHUB_PATH"' .github/workflows/substrate-gate.yml \
     || fail "Substrate engine path is not exported to later steps"
-grep -q 'bookworm-backports.list' .github/workflows/substrate-gate.yml \
-    || fail "Forgejo workflow does not provision the required Git backport source"
-grep -q 'apt-get install -y -qq --no-install-recommends -t bookworm-backports git' .github/workflows/substrate-gate.yml \
-    || fail "Forgejo workflow does not provision Git for Jujutsu"
+grep -q 'git_version=2.47.3' .github/workflows/substrate-gate.yml \
+    || fail "Forgejo workflow does not pin its Git source version"
+grep -q 'git_archive="/tmp/git-${git_version}.tar.gz"' .github/workflows/substrate-gate.yml \
+    || fail "Forgejo workflow does not download its pinned Git source"
+grep -q 'c073471530e92b716641ea2b381fcd0ece53eea9a76a9c5415f93f89e870dd5f' .github/workflows/substrate-gate.yml \
+    || fail "Forgejo workflow does not verify its Git source hash"
+grep -q 'make -C "$git_source" install' .github/workflows/substrate-gate.yml \
+    || fail "Forgejo workflow does not install its built Git"
 grep -q 'Git >= 2.41 is required by the pinned Jujutsu' .github/workflows/substrate-gate.yml \
     || fail "Forgejo workflow does not enforce the Jujutsu Git requirement"
 cmp -s .claude/skills/review/SKILL.md "$KIT_ROOT/skills/review/SKILL.md" \
