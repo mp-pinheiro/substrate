@@ -4,15 +4,27 @@ import { findGateRoot, runCommand } from "./policy";
 import { engineBaseCmd, engineObserve, engineStatus, readRuntimeState, sessionId, withRootLock } from "./runtime";
 import { runCheckpointTransaction } from "./transactions";
 
-async function policyProtectedPending(root: string, paths: string[]): Promise<string[]> {
-	const protectedPaths: string[] = [];
+async function pendingPathsForHook(
+	root: string,
+	paths: string[],
+	hook: "check-hard" | "protect-paths",
+): Promise<string[]> {
+	const blocked: string[] = [];
 	for (const path of paths) {
-		const result = await runCommand(root, [...engineBaseCmd(root), "hook", "protect-paths"], {
+		const result = await runCommand(root, [...engineBaseCmd(root), "hook", hook], {
 			stdin: JSON.stringify({ tool_input: { file_path: path } }),
 		});
-		if (result.exitCode !== 0) protectedPaths.push(path);
+		if (result.exitCode !== 0) blocked.push(path);
 	}
-	return protectedPaths;
+	return blocked;
+}
+
+async function hardProtectedPending(root: string, paths: string[]): Promise<string[]> {
+	return pendingPathsForHook(root, paths, "check-hard");
+}
+
+async function policyProtectedPending(root: string, paths: string[]): Promise<string[]> {
+	return pendingPathsForHook(root, paths, "protect-paths");
 }
 
 function registerSessionLifecycle(pi: ExtensionAPI): void {
@@ -37,14 +49,16 @@ function registerSessionLifecycle(pi: ExtensionAPI): void {
 			ctx.ui.notify("[substrate] no pending agent-owned changes; nothing to checkpoint", "info");
 			return;
 		}
-		const protectedPending = await policyProtectedPending(root, pendingOwned);
-		if (protectedPending.length === pendingOwned.length) {
+		const hardProtected = await hardProtectedPending(root, pendingOwned);
+		if (hardProtected.length === pendingOwned.length) {
 			ctx.ui.notify(
 				`[substrate — hand to user] pending paths are policy-protected and can never be agent-committed: ${pendingOwned.join(", ")}. Ask the user to commit them; no checkpoint retry will succeed.`,
 				"warning",
 			);
 			return;
 		}
+		const protectedPending = await policyProtectedPending(root, pendingOwned);
+		const fixableProtected = protectedPending.filter((path) => !hardProtected.includes(path));
 		const trackingError = status?.trackingError ?? null;
 		const driftNotice = status?.driftNotice ?? null;
 		let autoFailure = "";
@@ -81,6 +95,9 @@ function registerSessionLifecycle(pi: ExtensionAPI): void {
 		}
 		const details = [
 			pendingOwned.length > 0 ? `Agent-owned pending paths: ${pendingOwned.join(", ")}` : "",
+			fixableProtected.length > 0
+				? `Policy-protected pending paths require policy repair: ${fixableProtected.join(", ")}`
+				: "",
 			unowned.length > 0 ? `Unowned pending paths (left in place): ${unowned.join(", ")}` : "",
 			driftNotice ? driftNotice : "",
 			trackingError ? `Ownership tracking error: ${trackingError}` : "",
