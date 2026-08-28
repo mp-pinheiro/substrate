@@ -65,6 +65,8 @@ func Dispatch(ctx context.Context, name string, args []string, stdin io.Reader) 
 		return dispatchLifecycle(ctx, e, args, stdin)
 	case "protect-paths":
 		return dispatchProtectPaths(e, stdin)
+	// check-hard is internal-only: the OMP stop hook uses it to distinguish
+	// permanent name-governed paths from fixable protect-paths failures.
 	case "check-hard":
 		return dispatchCheckHard(stdin)
 	case "protect-command":
