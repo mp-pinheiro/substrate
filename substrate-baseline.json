@@ -159,6 +159,7 @@
   "comments:internal/receipt/toolchain_hash.go": 0,
   "comments:internal/receipt/vcs.go": 0,
   "comments:internal/receipt/vcs_test.go": 0,
+  "comments:internal/recovery/report.go": 0,
   "comments:internal/transaction/candidate.go": 0,
   "comments:internal/transaction/checkpoint.go": 0,
   "comments:internal/transaction/common.go": 0,
@@ -284,8 +285,7 @@
   "comments:test/vendor-drift-test.sh": 0,
   "comments:test/vendor-source-test.sh": 0,
   "dead_code": 0,
-  "dup_pct": 2.2685368102199397,
-  "max_file_lines": 460
+  "dup_pct": 2.242906082347618
 },
   "direction": {
   "comments:.claude/agents/enemy.md.substrate-managed.json": "lo",
@@ -447,6 +447,7 @@
   "comments:internal/receipt/toolchain_hash.go": "lo",
   "comments:internal/receipt/vcs.go": "lo",
   "comments:internal/receipt/vcs_test.go": "lo",
+  "comments:internal/recovery/report.go": "lo",
   "comments:internal/transaction/candidate.go": "lo",
   "comments:internal/transaction/checkpoint.go": "lo",
   "comments:internal/transaction/common.go": "lo",
@@ -572,15 +573,6 @@
   "comments:test/vendor-drift-test.sh": "lo",
   "comments:test/vendor-source-test.sh": "lo",
   "dead_code": "lo",
-  "dup_pct": "lo",
-  "max_file_lines": "lo"
-},
-  "accepted": {
-  "max_file_lines": {
-  "at": "2026-08-08",
-  "from": 418,
-  "reason": "C5 fix: 3 lines of guard in build_inventory for scoped inventory safety",
-  "to": 460
-}
+  "dup_pct": "lo"
 }
 }

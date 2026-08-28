@@ -9,10 +9,9 @@ blocks mutating git — every VCS change goes through jj.
 > checked-out git branch. Don't `git push`; use `jj git push`.
 
 **The jj mindset.** `@` (the working copy) is snapshotted continuously; commit early and often
-with `jj commit`, because commits are local, cheap, and fully reversible. Every commit and
-operation is a point you can travel back to (`jj op log`, `jj undo`). Never hoard finished work
-in an uncommitted `@` — a step you didn't commit is a restore point you don't have. Committing
-is free and local; **pushing** (`jj git push`) is the only step that seals anything to a remote.
+with `jj commit`, because commits are local and cheap. The checkpoint transaction records the
+commit and its publication bookmark; do not use generic history rewinds to recover a blocked
+checkpoint. Never hoard finished work in an uncommitted `@` — checkpoint before publication.
 
 ## One-time user config
 
@@ -82,17 +81,15 @@ intercept a direct agent-issued `jj git push` with the same guard. jj itself exp
 push hook (jj-vcs/jj#403), so a direct command from an unsupervised shell is outside that
 interception; use `jj push`.
 
-If a push ever says **"Nothing changed"**, `main` didn't move — advance it by hand with
-`jj tug` (= `jj bookmark advance --to @-`) and re-push. That should only happen for feature
-bookmarks.
+If a push says **"Nothing changed"**, stop and inspect the checkpoint receipt and its
+`publicationBookmark`; do not mutate refs to retry. A bare guarded `jj push` targets only
+that receipt bookmark, while selecting another bookmark or remote remains an explicit user action.
 
 ## Navigating through time (jj's core power)
 
 | To … | Do |
 |------|----|
 | See every operation (incl. auto-snapshots), newest first | `jj op log` |
-| Undo the last operation | `jj undo` |
-| Rewind the **whole repo** to a past operation | `jj op restore <op-id>` |
 | Inspect the commit graph | `jj log` |
 | Amend an earlier commit in place | `jj edit <rev>` |
 | Start a new change on top of any commit | `jj new <rev>` |
@@ -101,8 +98,6 @@ bookmarks.
 | Discard a whole commit | `jj abandon <rev>` |
 | Diff any two points | `jj diff --from <rev> --to <rev>` |
 
-`jj op log` + `jj op restore` is the safety net: any botched change is one command from being
-rewound, **provided the good state was committed**.
 
 ## Sending a PR instead of committing to main
 
