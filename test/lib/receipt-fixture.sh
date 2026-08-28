@@ -9,7 +9,7 @@ seed_repo() {
     git init -q --initial-branch=main
     git config user.name substrate
     git config user.email substrate@localhost
-    printf '{"version":1,"profiles":[],"inventory":"git","unscanned":["*.txt"],"protected_paths":[],"comment":{"allow_tags":[]},"budgets":{"max_file_lines":500},"duplication":{"min_tokens":35},"report":{"max_age_days":14},"checks":{"disabled":[]},"contracts":[]}\n' > substrate.json
+    printf '{"version":1,"profiles":[],"inventory":"git","unscanned":["*.txt"],"protected_paths":[],"comment":{"allow_tags":[]},"budgets":{"max_file_lines":750},"duplication":{"min_tokens":35},"report":{"max_age_days":14},"checks":{"disabled":[]},"contracts":[]}\n' > substrate.json
     printf '{"metrics":{}}\n' > substrate-baseline.json
     printf '0.1.0\n' > .substrate/VERSION
     printf '#!/usr/bin/env bash\nexit 0\n' > .substrate/checks.d/probe.sh

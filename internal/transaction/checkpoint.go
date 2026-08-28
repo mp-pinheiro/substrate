@@ -259,8 +259,8 @@ func runCheckpointFull(ctx context.Context, repo *vcs.Repo, repoRoot, metadataDi
 		}
 		return emitCommitFailure(opts, err, rollback)
 	}
-	if err := finalizePublicationBookmark(ctx, repo, publicationBookmark, commit); err != nil {
-		return emitCheckpointFailure(opts, recovery.Report{Status: "incomplete", Code: "checkpoint.bookmark-finalize", Owner: "user", Retry: "terminal", Summary: "checkpoint committed but publication bookmark finalization failed", Details: []string{fmt.Sprintf("commit: %s", commit), err.Error()}, Next: fmt.Sprintf("run jj bookmark set %s -r %s; do not run jj undo/redo/op restore", publicationBookmark, commit)}, 1)
+	if result := finalizeCheckpointBookmark(opts, publicationBookmark, commit, ctx, repo); result != 0 {
+		return result
 	}
 	logx.Out().Line("%s", commitOut)
 
@@ -361,8 +361,8 @@ func runCheckpointScoped(ctx context.Context, repo *vcs.Repo, repoRoot, metadata
 	if err != nil {
 		return emitCommitFailure(opts, err, nil)
 	}
-	if err := finalizePublicationBookmark(ctx, repo, publicationBookmark, commit); err != nil {
-		return emitCheckpointFailure(opts, recovery.Report{Status: "incomplete", Code: "checkpoint.bookmark-finalize", Owner: "user", Retry: "terminal", Summary: "checkpoint committed but publication bookmark finalization failed", Details: []string{fmt.Sprintf("commit: %s", commit), err.Error()}, Next: fmt.Sprintf("run jj bookmark set %s -r %s; do not run jj undo/redo/op restore", publicationBookmark, commit)}, 1)
+	if result := finalizeCheckpointBookmark(opts, publicationBookmark, commit, ctx, repo); result != 0 {
+		return result
 	}
 	logx.Out().Line("%s", commitOut)
 
@@ -442,6 +442,13 @@ func finishCheckpoint(ctx context.Context, repo *vcs.Repo, repoRoot, metadataDir
 	}
 	return 0
 }
+
+func finalizeCheckpointBookmark(opts checkpointOpts, publicationBookmark, commit string, ctx context.Context, repo *vcs.Repo) int {
+	if err := finalizePublicationBookmark(ctx, repo, publicationBookmark, commit); err != nil {
+		return emitCheckpointFailure(opts, recovery.Report{Status: "incomplete", Code: "checkpoint.bookmark-finalize", Owner: "user", Retry: "terminal", Summary: "checkpoint committed but publication bookmark finalization failed", Details: []string{fmt.Sprintf("commit: %s", commit), err.Error()}, Next: fmt.Sprintf("run jj bookmark set %s -r %s; do not run jj undo/redo/op restore", publicationBookmark, commit)}, 1)
+	}
+	return 0
+}
 func runGate(ctx context.Context, repoRoot string, args ...string) (string, error) {
 	bin, err := xshell.EngineBin()
 	if err != nil {
@@ -471,7 +478,7 @@ type gateReportError struct {
 func (e gateReportError) Error() string { return e.report.Summary }
 
 func parseRecoveryReport(output string) (recovery.Report, bool) {
-	for _, line := range reverseLines(strings.TrimSpace(output)) {
+	for _, line := range recovery.ReverseLines(strings.TrimSpace(output)) {
 		var report recovery.Report
 		if json.Unmarshal([]byte(line), &report) != nil ||
 			(report.Status != "blocked" && report.Status != "incomplete") ||
@@ -482,17 +489,6 @@ func parseRecoveryReport(output string) (recovery.Report, bool) {
 		return report, true
 	}
 	return recovery.Report{}, false
-}
-
-func reverseLines(s string) []string {
-	if s == "" {
-		return nil
-	}
-	parts := strings.Split(s, "\n")
-	for i, j := 0, len(parts)-1; i < j; i, j = i+1, j-1 {
-		parts[i], parts[j] = parts[j], parts[i]
-	}
-	return parts
 }
 
 func resolvePublicationBookmark(ctx context.Context, repo *vcs.Repo, base string) (string, error) {

@@ -136,8 +136,8 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 			if (pendingOwned.length === 0) {
 				return blockedToolResult(
 					leftover.length > 0
-						? `checkpoint blocked: no pending agent-owned changes; if the work is in another governed repo, commit it there: (cd <repo> && ./bin/substrate checkpoint --message <msg> --path <path>). Unowned pending paths stay in place: ${leftover.join(", ")}`
-						: "checkpoint blocked: no pending agent-owned changes; if the work is in another governed repo, commit it there: (cd <repo> && ./bin/substrate checkpoint --message <msg> --path <path>)",
+						? `[substrate — hand to user] policy.protected: no pending agent-owned changes; unowned pending paths stay in place: ${leftover.join(", ")}`
+						: "[substrate — hand to user] policy.protected: no pending agent-owned changes; preserve the work and ask the user to handle it",
 				);
 			}
 			const sid = sessionId(root);

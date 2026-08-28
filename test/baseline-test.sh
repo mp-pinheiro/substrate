@@ -170,12 +170,39 @@ if substrate-engine gate --tighten --accept-regression=probe:alpha --reason='try
     fail "accepted a never-acceptable metric"
 fi
 grep -q 'never-acceptable' "$T/never.out" || fail "never-acceptable rejection was not stated"
+printf '{"probe:alpha":3,"probe:beta":35}\n' > .git/probe-metrics.json
 
-printf '{"max_file_lines":600}\n' > .git/probe-metrics.json
-jq '.budgets.max_file_lines = 500' substrate.json > substrate.json.tmp && mv substrate.json.tmp substrate.json
-substrate-engine gate --tighten > "$T/headroom.out" 2>&1 || true
+printf '# budget-test: 749\n' > budget.yaml
+seq 748 >> budget.yaml
+git add budget.yaml
+substrate-engine gate --tighten > "$T/budget-749.out" 2>&1 || fail "749-line budget unexpectedly failed: $(cat "$T/budget-749.out")"
+printf '# budget-test: 750\n' > budget.yaml
+seq 749 >> budget.yaml
+substrate-engine gate --tighten > "$T/budget-750.out" 2>&1 || fail "750-line budget unexpectedly failed: $(cat "$T/budget-750.out")"
+printf '# budget-test: 751\n' > budget.yaml
+seq 750 >> budget.yaml
+if substrate-engine gate --tighten > "$T/headroom.out" 2>&1; then
+    fail "751-line budget unexpectedly passed"
+fi
 grep -q 'hard cap' "$T/headroom.out" || fail "hard cap not displayed for over-cap metric"
-grep -q 'over cap' "$T/headroom.out" || fail "over cap annotation missing"
+grep -q 'budget.yaml' "$T/headroom.out" || fail "over-cap culprit path missing"
 
-printf 'baseline-test: C3b bare-update hi-floor retention green\n'
-ok "over-cap budget metrics display hard cap annotation"
+before=$(sha256sum substrate-baseline.json)
+if substrate-engine gate --tighten --accept-regression=max_file_lines --reason='hard budget requires a refactor instead of ratchet acceptance' --json > "$T/budget-accept.out" 2>&1; then
+    fail "max_file_lines regression acceptance was allowed"
+fi
+jq -e '.code == "gate.budget-acceptance" and .owner == "user" and .retry == "terminal"' "$T/budget-accept.out" >/dev/null \
+    || fail "max_file_lines acceptance did not emit terminal user report"
+[ "$before" = "$(sha256sum substrate-baseline.json)" ] || fail "budget acceptance changed baseline bytes"
+
+jq '.metrics.max_file_lines = 749 | .direction.max_file_lines = "lo" | .accepted.max_file_lines = {"from": 1, "to": 2}' substrate-baseline.json > substrate-baseline.json.tmp \
+    && mv substrate-baseline.json.tmp substrate-baseline.json \
+    || fail "legacy max_file_lines baseline seed failed"
+printf '# budget-test: green\n' > budget.yaml
+seq 748 >> budget.yaml
+substrate-engine gate --tighten >/dev/null 2>&1 || fail "green budget migration failed"
+jq -e '(.metrics | has("max_file_lines") | not) and (.direction | has("max_file_lines") | not) and (.accepted | has("max_file_lines") | not)' substrate-baseline.json >/dev/null \
+    || fail "legacy max_file_lines baseline keys were not pruned"
+
+printf 'baseline-test: hard max_file_lines budget and migration green\n'
+ok "hard budget boundary, rejection, and legacy migration"

@@ -80,7 +80,7 @@ func receiptCommit(s string) string {
 }
 
 func reverseScanObjects(s string, visit func(*canonjson.Object) bool) bool {
-	for _, line := range reverseLines(strings.TrimSpace(s)) {
+	for _, line := range recovery.ReverseLines(strings.TrimSpace(s)) {
 		val, err := canonjson.Unmarshal([]byte(line))
 		if err != nil {
 			continue
@@ -112,17 +112,6 @@ func objStringArrayOK(obj *canonjson.Object, key string) []string {
 		}
 	}
 	return out
-}
-
-func reverseLines(s string) []string {
-	if s == "" {
-		return nil
-	}
-	parts := strings.Split(s, "\n")
-	for i, j := 0, len(parts)-1; i < j; i, j = i+1, j-1 {
-		parts[i], parts[j] = parts[j], parts[i]
-	}
-	return parts
 }
 
 func objStringOK(obj *canonjson.Object, key string) (string, bool) {

@@ -167,7 +167,7 @@ write_protected_config() {
         printf '  "protected_paths": %s,\n' "$protected"
         printf '  "contracts": %s,\n' "$contracts"
         printf '  "comment": { "allow_tags": ["SAFETY:", "WHY:", "PERF:", "HACK:"] },\n'
-        printf '  "budgets": { "max_file_lines": 500 },\n'
+        printf '  "budgets": { "max_file_lines": 750 },\n'
         printf '  "duplication": { "min_tokens": 35 },\n'
         printf '  "checks": { "disabled": [] }\n'
         printf '}\n'

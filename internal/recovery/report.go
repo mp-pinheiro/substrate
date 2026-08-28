@@ -43,6 +43,18 @@ func (r Report) JSONLine() (string, error) {
 	return string(data) + "\n", nil
 }
 
+// ReverseLines returns the input split into lines in reverse order.
+func ReverseLines(s string) []string {
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, "\n")
+	for i, j := 0, len(parts)-1; i < j; i, j = i+1, j-1 {
+		parts[i], parts[j] = parts[j], parts[i]
+	}
+	return parts
+}
+
 func label(r Report) string {
 	return r.Label()
 }

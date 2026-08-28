@@ -24,7 +24,7 @@ mkdir -p "$T/git-repo"
     mkdir -p components
     printf '#!/usr/bin/env bash\nset -euo pipefail\nls "$@"\n' > components/x.sh
     chmod +x components/x.sh
-    env -u CI "$KIT_ROOT/bin/substrate" init --profile shell >/dev/null 2>&1 || fail "git: init failed"
+    env -u CI "$KIT_ROOT/bin/substrate" init --profile shell --from-worktree >/dev/null 2>&1 || fail "git: init failed"
     [ -x .git/hooks/pre-commit ] || fail "git: pre-commit not installed"
     [ -x .git/hooks/pre-push ] || fail "git: pre-push not installed"
     grep -q '^# substrate-managed$' .git/hooks/pre-commit || fail "git: pre-commit lacks marker"
@@ -72,7 +72,7 @@ mkdir -p "$T/custom-hook-repo"
     printf '#!/usr/bin/env bash\necho custom\n' > .git/hooks/pre-commit
     chmod +x .git/hooks/pre-commit
     before=$(sha256sum .git/hooks/pre-commit)
-    if env -u CI "$KIT_ROOT/bin/substrate" init --profile shell > bootstrap.out 2>&1; then
+    if env -u CI "$KIT_ROOT/bin/substrate" init --profile shell --from-worktree > bootstrap.out 2>&1; then
         fail "git: init reported success with an unchained custom pre-commit hook"
     fi
     [ "$before" = "$(sha256sum .git/hooks/pre-commit)" ] \
@@ -92,7 +92,7 @@ mkdir -p "$T/hooks-path-repo"
     printf '#!/usr/bin/env bash\necho custom\n' > .githooks/pre-push
     chmod +x .githooks/pre-push
     before=$(sha256sum .githooks/pre-push)
-    if env -u CI "$KIT_ROOT/bin/substrate" init --profile shell > bootstrap.out 2>&1; then
+    if env -u CI "$KIT_ROOT/bin/substrate" init --profile shell --from-worktree > bootstrap.out 2>&1; then
         fail "git: init reported success with a custom hooksPath collision"
     fi
     [ "$before" = "$(sha256sum .githooks/pre-push)" ] \
@@ -112,7 +112,7 @@ mkdir -p "$T/jj-repo"
     mkdir -p components
     printf '#!/usr/bin/env bash\nset -euo pipefail\nls "$@"\n' > components/x.sh
     chmod +x components/x.sh
-    env -u CI "$KIT_ROOT/bin/substrate" init --profile shell >/dev/null 2>&1 || fail "jj: init failed"
+    env -u CI "$KIT_ROOT/bin/substrate" init --profile shell --from-worktree >/dev/null 2>&1 || fail "jj: init failed"
     jj config get aliases.push >/dev/null 2>&1 || fail "jj: push alias not configured"
     out=$(env -u CI substrate-engine gate --update-baseline 2>&1) || fail "jj: baseline not green: $out"
     jj commit -m 'feat: seed' >/dev/null 2>&1

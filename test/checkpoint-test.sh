@@ -138,7 +138,7 @@ git init -q --initial-branch=main
 jj git init --colocate . >/dev/null 2>&1 || fail "Jujutsu init failed"
 printf '#!/usr/bin/env bash\nprintf "owned\\n"\n' > owned.sh
 chmod +x owned.sh
-"$KIT_ROOT/bin/substrate" init --profile shell --vcs jj >/dev/null 2>&1 || fail "Jujutsu substrate init failed"
+"$KIT_ROOT/bin/substrate" init --profile shell --vcs jj --from-worktree >/dev/null 2>&1 || fail "Jujutsu substrate init failed"
 substrate-engine gate --update-baseline >/dev/null 2>&1 || fail "Jujutsu baseline failed"
 jj commit -m 'chore: initialize' >/dev/null 2>&1 || fail "Jujutsu seed commit failed"
 printf 'printf "changed\\n"\n' >> owned.sh

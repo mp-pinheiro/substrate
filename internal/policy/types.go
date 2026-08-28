@@ -54,7 +54,8 @@ func block(format string, a ...any) Decision {
 	if strings.Contains(stderr, "vendored") {
 		report.Owner, report.Retry, report.Next = "user", "terminal", "change the kit source, then the user runs substrate update --apply --checkpoint; never commit the mirror directly"
 	}
-	if strings.Contains(stderr, "jj commit") || strings.Contains(stderr, "checkpoint transaction") {
+	if strings.Contains(stderr, "jj commit") || strings.Contains(stderr, "checkpoint transaction") ||
+		strings.Contains(stderr, "checkpoint/baseline-transaction") {
 		report.Next = "after direct verification, call substrate_checkpoint"
 	}
 	return Decision{Block: true, Code: 2, Stderr: stderr, Recovery: report}

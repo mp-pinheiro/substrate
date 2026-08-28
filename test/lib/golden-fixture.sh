@@ -132,7 +132,7 @@ golden_write_config() {
         unscanned: [".substrate/**", "*.md", "**/*.md", ".gitignore", "justfile", "lib/legacy.sh"],
         protected_paths: [],
         comment: { allow_tags: ["SAFETY:", "WHY:", "PERF:", "HACK:"] },
-        budgets: { max_file_lines: 500 },
+        budgets: { max_file_lines: 750 },
         duplication: { min_tokens: 35 },
         checks: {
             disabled: [
