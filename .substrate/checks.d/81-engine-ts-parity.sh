@@ -22,6 +22,10 @@ while IFS= read -r cmd; do
 done < <(jq -r '.hooks[][]?.hooks[].command // empty' "$HOOKS_JSON" \
             | grep -E '^substrate-engine hook ')
 
+# Internal-only engine hooks are called by the OMP adapter for narrower
+# classifications and must not be exposed as Claude hook targets.
+declare -A internal_only=([check-hard]=1)
+
 if [ "${#hooks[@]}" -eq 0 ]; then
     printf 'no "substrate-engine hook" identities found in %s\n' "$HOOKS_JSON"
     rc=1
@@ -74,7 +78,7 @@ fi
 while IFS= read -r dcase; do
     v="${dcase#case \"}"
     v="${v%\"}"
-    if [ "$v" != "comment-ratchet" ] && [ -z "${hooks[$v]+x}" ]; then
+    if [ "$v" != "comment-ratchet" ] && [ -z "${hooks[$v]+x}" ] && [ -z "${internal_only[$v]+x}" ]; then
         printf 'note: dispatch verb "%s" has no claude-hooks.json entry\n' "$v" >&2
     fi
 done < <(grep -oE 'case "[A-Za-z0-9._-]+"' "$DISPATCH_GO")
