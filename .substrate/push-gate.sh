@@ -8,7 +8,7 @@ cd "$REPO_ROOT" || exit 2
 # shellcheck source=./receipt-lib.sh
 source "$SUBSTRATE_DIR/receipt-lib.sh"
 
-if gate_receipt_matches || (substrate-engine maintenance repository-receipt-matches) >/dev/null 2>&1; then
+if gate_receipt_matches || (substrate-engine receipt matches) >/dev/null 2>&1; then
     printf '[ok] push gate: exact-state receipt accepted\n'
     exit 0
 fi
