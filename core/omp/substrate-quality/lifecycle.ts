@@ -7,7 +7,7 @@ import { runCheckpointTransaction } from "./transactions";
 async function policyProtectedPending(root: string, paths: string[]): Promise<string[]> {
 	const protectedPaths: string[] = [];
 	for (const path of paths) {
-		const result = await runCommand(root, [...engineBaseCmd(root), "hook", "check-hard"], {
+		const result = await runCommand(root, [...engineBaseCmd(root), "hook", "protect-paths"], {
 			stdin: JSON.stringify({ tool_input: { file_path: path } }),
 		});
 		if (result.exitCode !== 0) protectedPaths.push(path);
