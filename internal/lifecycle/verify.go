@@ -38,7 +38,7 @@ func (e *Engine) Verify(ctx context.Context, session string) Result {
 
 	pending := intersectPreserveOrder(current.Entries.Keys(), objStringArray(state, "ownedPaths"))
 	if len(pending) == 0 {
-		return Result{Stderr: []byte("checkpoint blocked: no pending agent-owned changes\n"), Code: 2}
+		return Result{Stderr: []byte("checkpoint blocked: no pending agent-owned changes; if the work is in another governed repo, commit it there: (cd <repo> && ./bin/substrate checkpoint --message <msg> --path <path>)\n"), Code: 2}
 	}
 
 	doc := canonjson.NewObject().Set("paths", stringsToValues(pending)).Set("fingerprint", current.Fingerprint)

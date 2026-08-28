@@ -65,6 +65,8 @@ func Dispatch(ctx context.Context, name string, args []string, stdin io.Reader) 
 		return dispatchLifecycle(ctx, e, args, stdin)
 	case "protect-paths":
 		return dispatchProtectPaths(e, stdin)
+	case "check-hard":
+		return dispatchCheckHard(stdin)
 	case "protect-command":
 		return dispatchProtectCommand(e, stdin)
 	case "enforce-jj":

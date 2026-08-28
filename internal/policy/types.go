@@ -11,6 +11,7 @@ type Input struct {
 	Command   string
 	FilePath  string
 	SessionID string
+	RepoRoot  string
 }
 
 type Decision struct {

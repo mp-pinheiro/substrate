@@ -54,6 +54,18 @@ func dispatchProtectPaths(e env, stdin io.Reader) int {
 	}
 	return render(policy.ProtectPaths(in, cfg, e.repoRoot))
 }
+func dispatchCheckHard(stdin io.Reader) int {
+	payload, _ := io.ReadAll(stdin)
+	in, _ := buildInput(payload)
+	if in.FilePath == "" {
+		return 0
+	}
+	decision, blocked := policy.CheckHard(in.FilePath)
+	if !blocked {
+		return 0
+	}
+	return render(decision)
+}
 
 func dispatchProtectCommand(e env, stdin io.Reader) int {
 	payload, _ := io.ReadAll(stdin)
@@ -64,6 +76,7 @@ func dispatchProtectCommand(e env, stdin io.Reader) int {
 	if in.Command == "" {
 		return 0
 	}
+	in.RepoRoot = e.repoRoot
 	cfgPath := e.paths().ConfigPath
 	info, statErr := os.Stat(cfgPath)
 	present := statErr == nil && !info.IsDir()

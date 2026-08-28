@@ -49,6 +49,137 @@ function toolPath(input: object): string {
 	return "";
 }
 
+function commandArgv(command: string): string[][] {
+	const segments: string[] = [];
+	let start = 0;
+	let quote = "";
+	let escaped = false;
+	for (let i = 0; i < command.length; i++) {
+		const char = command[i];
+		if (escaped) {
+			escaped = false;
+			continue;
+		}
+		if (quote) {
+			if (quote !== "'" && char === "\\") escaped = true;
+			else if (char === quote) quote = "";
+			continue;
+		}
+		if (char === "'" || char === '"' || char === "`") {
+			quote = char;
+		} else if (char === "\n" || char === ";" || char === "&" || char === "|") {
+			const segment = command.slice(start, i).trim();
+			if (segment) segments.push(segment);
+			start = i + 1;
+		}
+	}
+	const finalSegment = command.slice(start).trim();
+	if (finalSegment) segments.push(finalSegment);
+
+	return segments.map((segment) => {
+		const argv: string[] = [];
+		let word = "";
+		let inWord = false;
+		quote = "";
+		escaped = false;
+		for (const char of segment) {
+			if (escaped) {
+				word += char;
+				inWord = true;
+				escaped = false;
+				continue;
+			}
+			if (quote) {
+				if (quote !== "'" && char === "\\") escaped = true;
+				else if (char === quote) quote = "";
+				else word += char;
+				inWord = true;
+				continue;
+			}
+			if (char === "'" || char === '"' || char === "`") {
+				quote = char;
+				inWord = true;
+			} else if (char === " " || char === "\t" || char === "\r") {
+				if (inWord) {
+					argv.push(word);
+					word = "";
+					inWord = false;
+				}
+			} else {
+				word += char;
+				inWord = true;
+			}
+		}
+		if (inWord) argv.push(word);
+		return argv;
+	}).filter((argv) => argv.length > 0);
+}
+
+function commandTargetCwd(command: string, cwd: string): string {
+	for (const argv of commandArgv(command)) {
+		for (let i = 1; i < argv.length; i++) {
+			if ((argv[i] === "-C" || argv[i] === "--repository") && argv[i + 1]) {
+				return resolve(cwd, argv[i + 1]);
+			}
+		}
+	}
+	return cwd;
+}
+function commandVerbIndex(argv: string[]): number {
+	for (let i = 1; i < argv.length; i++) {
+		if (["-C", "--git-dir", "--repository", "--work-tree", "--namespace", "-R", "-c"].includes(argv[i])) {
+			i++;
+			continue;
+		}
+		if (argv[i].startsWith("--git-dir=") || argv[i].startsWith("--repository=")) continue;
+		if (argv[i].startsWith("-")) continue;
+		return i;
+	}
+	return -1;
+}
+const GIT_MUTATING_VERBS: Record<string, true> = {
+	commit: true,
+	add: true,
+	rebase: true,
+	merge: true,
+	reset: true,
+	restore: true,
+	switch: true,
+	checkout: true,
+	"cherry-pick": true,
+	revert: true,
+	stash: true,
+	clean: true,
+	am: true,
+	apply: true,
+};
+
+function hasGitMutation(command: string): boolean {
+	return commandArgv(command).some((args) => {
+		const verb = commandVerbIndex(args);
+		return args[0] === "git" && verb >= 0 && GIT_MUTATING_VERBS[args[verb]] === true;
+	});
+}
+
+function hasDirectCommit(command: string): boolean {
+	return commandArgv(command).some((args) => {
+		const verb = commandVerbIndex(args);
+		return (
+			(args[0] === "jj" && verb >= 0 && ["commit", "describe", "squash"].includes(args[verb])) ||
+			(args[0] === "git" && verb >= 0 && args[verb] === "commit")
+		);
+	});
+}
+
+function hasPush(command: string): boolean {
+	return commandArgv(command).some((args) => {
+		const verb = commandVerbIndex(args);
+		return (
+			(args[0] === "jj" && verb >= 0 && args[verb] === "git" && args[verb + 1] === "push") ||
+			(args[0] === "git" && verb >= 0 && args[verb] === "push")
+		);
+	});
+}
 type CommandResult = { exitCode: number; stdout: string; stderr: string };
 
 async function readStream(
@@ -126,8 +257,14 @@ async function refreshReport(root: string): Promise<string | null> {
 }
 
 export {
+	commandArgv,
+	commandTargetCwd,
+	commandVerbIndex,
 	engineVersion,
 	findGateRoot,
+	hasGitMutation,
+	hasDirectCommit,
+	hasPush,
 	findJjRoot,
 	refreshReport,
 	runCommand,

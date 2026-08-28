@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 func check05Unclaimed(ctx context.Context, inv []string, claims []byte, env map[string]string) (int, []MetricRecord, string, error) {
@@ -62,7 +63,12 @@ func check05Unclaimed(ctx context.Context, inv []string, claims []byte, env map[
 		if skip {
 			continue
 		}
-		findings = append(findings, fmt.Sprintf("%s: claimed by no profile — add a profile claim or list it in substrate.json unscanned", f))
+		info, err := os.Stat(filepath.Join(repoRoot, f))
+		if err != nil {
+			findings = append(findings, fmt.Sprintf("%s: stat failed: %v — claimed by no profile — add a profile claim or list it in substrate.json unscanned", f, err))
+		} else {
+			findings = append(findings, fmt.Sprintf("%s: %d bytes, mtime %s — claimed by no profile — add a profile claim or list it in substrate.json unscanned", f, info.Size(), info.ModTime().UTC().Format(time.RFC3339Nano)))
+		}
 		rc = 1
 	}
 

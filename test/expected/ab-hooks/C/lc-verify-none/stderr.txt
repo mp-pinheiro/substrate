@@ -1,1 +1,1 @@
-checkpoint blocked: no pending agent-owned changes
+checkpoint blocked: no pending agent-owned changes; if the work is in another governed repo, commit it there: (cd <repo> && ./bin/substrate checkpoint --message <msg> --path <path>)

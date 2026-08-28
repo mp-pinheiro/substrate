@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/mp-pinheiro/substrate/internal/canonjson"
+	"github.com/mp-pinheiro/substrate/internal/policy"
 )
 
 // stopDecision is the pure projection of the batched jq computation at
@@ -80,6 +81,15 @@ func (d stopDecision) reasonText(session, autoNote string) string {
 	return reason
 }
 
+func stopSystemMessage(message string) Result {
+	doc := canonjson.NewObject().Set("systemMessage", message)
+	body, err := marshalLine(doc)
+	if err != nil {
+		return Result{Code: 2}
+	}
+	return Result{Stdout: body, Code: 0}
+}
+
 func (e *Engine) Stop(ctx context.Context, payload []byte) Result {
 	session, _ := sessionFromPayload(payload)
 	statePath := e.statePath(session)
@@ -92,6 +102,18 @@ func (e *Engine) Stop(ctx context.Context, payload []byte) Result {
 	}
 	current := e.snapshot(ctx)
 	decision := evaluateStop(state, current, stopHookActive(payload))
+	if len(decision.Pending) == 0 {
+		return stopSystemMessage("[substrate] no pending agent-owned changes; nothing to checkpoint")
+	}
+	protected := 0
+	for _, path := range decision.Pending {
+		if _, blocked := policy.CheckHard(path); blocked {
+			protected++
+		}
+	}
+	if protected == len(decision.Pending) {
+		return stopSystemMessage(fmt.Sprintf("[substrate — hand to user] pending paths are policy-protected and can never be agent-committed: %s. Ask the user to commit them; no checkpoint retry will succeed.", strings.Join(decision.Pending, ", ")))
+	}
 
 	autoNote := ""
 	if decision.AttemptCheckpoint {
@@ -106,12 +128,7 @@ func (e *Engine) Stop(ctx context.Context, payload []byte) Result {
 				commit = "unknown"
 			}
 			msg := fmt.Sprintf("Substrate auto-checkpoint %s committed agent-owned work. No push performed.", commit)
-			doc := canonjson.NewObject().Set("systemMessage", msg)
-			body, err := marshalLine(doc)
-			if err != nil {
-				return Result{Code: 2}
-			}
-			return Result{Stdout: body, Code: 0}
+			return stopSystemMessage(msg)
 		}
 		autoNote = fmt.Sprintf(" Automatic checkpoint failed: %s.", last)
 	}
@@ -123,12 +140,7 @@ func (e *Engine) Stop(ctx context.Context, payload []byte) Result {
 	reason := decision.reasonText(session, autoNote)
 
 	if decision.StopActive || decision.AlreadyBlocked {
-		doc := canonjson.NewObject().Set("systemMessage", reason)
-		body, err := marshalLine(doc)
-		if err != nil {
-			return Result{Code: 2}
-		}
-		return Result{Stdout: body, Code: 0}
+		return stopSystemMessage(reason)
 	}
 
 	state.Set("stopBlocked", true)

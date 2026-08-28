@@ -1,6 +1,8 @@
 package policy
 
 import (
+	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -14,13 +16,11 @@ const bq = "`"
 var (
 	reVerifyMention     = regexp.MustCompile(`(^|[[:space:]/])substrate[[:space:]]+verify([[:space:];&|>]|$)`)
 	reVerifyExact       = regexp.MustCompile(`^[[:space:]]*([^[:space:]]*/)?substrate[[:space:]]+verify[[:space:]]*$`)
-	reCommitForms       = regexp.MustCompile(`(^|[;&|(` + bq + `][[:space:]]*)(jj[[:space:]]+(commit|describe|squash)|git[[:space:]]+commit)([[:space:]"\\]|$)`)
 	reCheckpointSh      = regexp.MustCompile(`(^|[;&|(` + bq + `][[:space:]]*)[^[:space:]]*\.substrate/checkpoint\.sh([[:space:]"\\]|$)`)
 	reCheckpointCmd     = regexp.MustCompile(`(^|[;&|][[:space:]]*|[[:space:]])substrate[[:space:]]+checkpoint([[:space:]]|$)`)
 	reRestructureCmd    = regexp.MustCompile(`(^|[;&|][[:space:]]*|[[:space:]])substrate[[:space:]]+restructure([[:space:]]|$)`)
 	reRestructureSh     = regexp.MustCompile(`(^|[;&|(` + bq + `][[:space:]]*)[^[:space:]]*\.substrate/restructure\.sh([[:space:]"\\]|$)`)
 	reBaselineFlags     = regexp.MustCompile(`(^|[[:space:]])(--update-baseline|--tighten|--accept-regression)([[:space:]=]|$)`)
-	reMutator           = regexp.MustCompile(`(^|[;&|][[:space:]]*|[[:space:]])(rm|mv|cp|install|chmod|chown|ln|touch|truncate|tee|dd)([[:space:]]|$)|perl([^;&|]*[[:space:]])-[^[:space:]]*i`)
 	reTeeOrRedir        = regexp.MustCompile(`>>?[^;&|]*\$|tee[[:space:]][^;&|]*\$`)
 	reCheckpointExact   = compileLocaleRegexp(`^[[:space:]]*([^[:space:]]*/)?substrate[[:space:]]+checkpoint([[:space:]]|$)`)
 	reBaselineFlagsBare = compileLocaleRegexp(`(^|[[:space:]])(--update-baseline|--tighten|--accept-regression)([[:space:]]|$)`)
@@ -36,8 +36,8 @@ func ProtectCommand(in Input, cfg *config.Config, configPresent, configCorrupt b
 	if matchAnyLine(reVerifyMention, cmd) && !matchAnyLine(reVerifyExact, cmd) {
 		return block("BLOCKED: run substrate verify directly and unmodified; pipes, redirects, and chained commands can hide a failing verdict\n")
 	}
-	if matchAnyLine(reCommitForms, cmd) {
-		return block("BLOCKED: commits must use the Substrate checkpoint transaction after direct verification; do not run jj commit, jj describe, jj squash, or git commit directly\n")
+	if hasDirectCommit(cmd, in.RepoRoot) {
+		return block("BLOCKED: commits must use the Substrate checkpoint transaction after direct verification; do not run jj commit, jj describe, jj squash, or git commit directly. If the harness checkpoint cannot own the path (work in another governed repo), run: ./bin/substrate checkpoint --message <msg> --path <path>\n")
 	}
 	if matchAnyLine(reCheckpointSh, cmd) {
 		return block("BLOCKED: invoke checkpoints through the harness lifecycle, not the vendored script directly\n")
@@ -63,7 +63,7 @@ func ProtectCommand(in Input, cfg *config.Config, configPresent, configCorrupt b
 		return block("blocked: substrate.json is corrupt — fix it before running mutating Bash commands\n")
 	}
 
-	mutator := matchAnyLine(reMutator, cmd)
+	mutator := commandHasMutator(cmd)
 
 	if d, blocked := blockIfNamed(cmd, mutator, "substrate-baseline.json", "baseline — governed basename anywhere in the tree"); blocked {
 		return d
@@ -147,7 +147,7 @@ func blockIfNamed(cmd string, mutator bool, needle, label string) (Decision, boo
 	if needle == "" {
 		return Decision{}, false
 	}
-	if mutator && containsAnyLine(needle, cmd) {
+	if mutator && mutatorContains(cmd, needle) {
 		return block("BLOCKED: Bash command can mutate governed path %s (%s); use the protected workflow instead\n", needle, label), true
 	}
 	dotted := escapeDots(needle)
@@ -158,6 +158,209 @@ func blockIfNamed(cmd string, mutator bool, needle, label string) (Decision, boo
 		return block("BLOCKED: indirect shell write resolves to governed path %s (%s)\n", needle, label), true
 	}
 	return Decision{}, false
+}
+
+func commandSegments(cmd string) []string {
+	var segments []string
+	start := 0
+	quote := byte(0)
+	escaped := false
+	for i := range len(cmd) {
+		c := cmd[i]
+		if escaped {
+			escaped = false
+			continue
+		}
+		if quote != 0 {
+			if quote != '\'' && c == '\\' {
+				escaped = true
+			} else if c == quote {
+				quote = 0
+			}
+			continue
+		}
+		switch c {
+		case '\'', '"', '`':
+			quote = c
+		case '\n', ';', '&', '|':
+			if segment := strings.TrimSpace(cmd[start:i]); segment != "" {
+				segments = append(segments, segment)
+			}
+			start = i + 1
+		}
+	}
+	if segment := strings.TrimSpace(cmd[start:]); segment != "" {
+		segments = append(segments, segment)
+	}
+	return segments
+}
+
+func shellWords(segment string) []string {
+	var words []string
+	var word strings.Builder
+	quote := byte(0)
+	escaped := false
+	inWord := false
+	for i := range len(segment) {
+		c := segment[i]
+		if escaped {
+			word.WriteByte(c)
+			inWord = true
+			escaped = false
+			continue
+		}
+		switch {
+		case quote == '\'':
+			if c == quote {
+				quote = 0
+			} else {
+				word.WriteByte(c)
+			}
+			inWord = true
+		case quote != 0:
+			switch c {
+			case '\\':
+				escaped = true
+			case quote:
+				quote = 0
+			default:
+				word.WriteByte(c)
+			}
+			inWord = true
+		case c == '\'' || c == '"' || c == '`':
+			quote = c
+			inWord = true
+		case c == ' ' || c == '\t' || c == '\r':
+			if inWord {
+				words = append(words, word.String())
+				word.Reset()
+				inWord = false
+			}
+		default:
+			word.WriteByte(c)
+			inWord = true
+		}
+	}
+	if inWord {
+		words = append(words, word.String())
+	}
+	return words
+}
+
+func commandHasMutator(cmd string) bool {
+	for _, segment := range commandSegments(cmd) {
+		if isMutator(shellWords(segment)) {
+			return true
+		}
+	}
+	return false
+}
+
+func mutatorContains(cmd, needle string) bool {
+	for _, segment := range commandSegments(cmd) {
+		if isMutator(shellWords(segment)) && strings.Contains(segment, needle) {
+			return true
+		}
+	}
+	return false
+}
+
+func isMutator(argv []string) bool {
+	if len(argv) == 0 {
+		return false
+	}
+	switch argv[0] {
+	case "rm", "mv", "cp", "install", "chmod", "chown", "ln", "touch", "truncate", "tee", "dd":
+		return true
+	case "perl":
+		for _, arg := range argv[1:] {
+			if strings.HasPrefix(arg, "-") && strings.Contains(arg, "i") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func hasDirectCommit(cmd, repoRoot string) bool {
+	for _, segment := range commandSegments(cmd) {
+		argv := shellWords(segment)
+		if !isCommitForm(argv) || commitTargetOutside(argv, repoRoot) {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+func isCommitForm(argv []string) bool {
+	if len(argv) < 2 || (argv[0] != "git" && argv[0] != "jj") {
+		return false
+	}
+	for i := 1; i < len(argv); i++ {
+		switch argv[i] {
+		case "-C", "--git-dir", "--repository", "--work-tree", "--namespace", "-R":
+			i++
+			continue
+		}
+		if strings.HasPrefix(argv[i], "--git-dir=") || strings.HasPrefix(argv[i], "--repository=") {
+			continue
+		}
+		if argv[0] == "git" && argv[i] == "commit" {
+			return true
+		}
+		if argv[0] == "jj" && (argv[i] == "commit" || argv[i] == "describe" || argv[i] == "squash") {
+			return true
+		}
+		return false
+	}
+	return false
+}
+
+func commitTargetOutside(argv []string, repoRoot string) bool {
+	if repoRoot == "" {
+		return false
+	}
+	for i := 1; i < len(argv); i++ {
+		target := ""
+		switch {
+		case argv[i] == "-C" || argv[i] == "--repository" || argv[i] == "--git-dir":
+			if i+1 < len(argv) {
+				target = argv[i+1]
+			}
+		case strings.HasPrefix(argv[i], "--git-dir="):
+			target = strings.TrimPrefix(argv[i], "--git-dir=")
+		}
+		if target == "" {
+			continue
+		}
+		if !strings.HasPrefix(target, "/") {
+			target = repoRoot + "/" + target
+		}
+		rel, err := filepath.Rel(repoRoot, filepath.Clean(target))
+		if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return false
+		}
+		return !hasGateRoot(target)
+	}
+	return false
+}
+
+func hasGateRoot(path string) bool {
+	dir := filepath.Clean(path)
+	if info, err := os.Stat(dir); err == nil && !info.IsDir() {
+		dir = filepath.Dir(dir)
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, ".substrate", "VERSION")); err == nil {
+			return true
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return false
+		}
+		dir = parent
+	}
 }
 
 func escapeDots(s string) string {

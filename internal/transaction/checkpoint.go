@@ -75,14 +75,14 @@ func RunCheckpoint(ctx context.Context, args []string) int {
 		}
 		ownedPaths = parseVerifyPaths(result.Stdout)
 		if len(ownedPaths) == 0 {
-			logx.Err().Line("checkpoint blocked: no pending Claude-owned changes")
+			logx.Err().Line("checkpoint blocked: no pending agent-owned changes")
 			return ExitPreflight
 		}
 	} else {
 		ownedPaths = opts.paths
 	}
 	if len(ownedPaths) == 0 {
-		logx.Err().Line("checkpoint blocked: no agent-owned paths were supplied")
+		logx.Err().Line("checkpoint blocked: no agent-owned paths were supplied; pass --path <path> once per file")
 		return ExitPreflight
 	}
 

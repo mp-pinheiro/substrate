@@ -1,1 +1,1 @@
-BLOCKED: commits must use the Substrate checkpoint transaction after direct verification; do not run jj commit, jj describe, jj squash, or git commit directly
+BLOCKED: commits must use the Substrate checkpoint transaction after direct verification; do not run jj commit, jj describe, jj squash, or git commit directly. If the harness checkpoint cannot own the path (work in another governed repo), run: ./bin/substrate checkpoint --message <msg> --path <path>

@@ -6,6 +6,10 @@ import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { initializeRuntime, writeRuntimeState } from "./substrate-quality/identity";
 import { registerSessionLifecycle } from "./substrate-quality/lifecycle";
 import {
+	commandTargetCwd,
+	hasDirectCommit,
+	hasGitMutation,
+	hasPush,
 	findGateRoot,
 	findJjRoot,
 	runCommand,
@@ -29,6 +33,16 @@ import {
 } from "./substrate-quality/transactions";
 
 const GATE_TOOLS: Record<string, true> = { substrate_checkpoint: true, substrate_restructure: true };
+function blockedBash(reason: string): { block: true; reason: string } {
+	return { block: true, reason };
+}
+function trackingRoot(event: { toolName: string; input: object }, cwd: string): string | null {
+	if (GATE_TOOLS[event.toolName] || isReadOnlyTool(event.toolName, event.input)) return null;
+	const path = toolPath(event.input);
+	const root = findGateRoot(path ? dirname(resolve(cwd, path)) : cwd);
+	if (!root || !existsSync(join(root, ".substrate", "VERSION"))) return null;
+	return root;
+}
 
 export default function substrateQuality(pi: ExtensionAPI): void {
 	if (!initializeRuntime(pi)) return;
@@ -117,8 +131,8 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 			if (pendingOwned.length === 0) {
 				return blockedToolResult(
 					leftover.length > 0
-						? `checkpoint blocked: no pending agent-owned changes; unowned pending paths stay in place: ${leftover.join(", ")}`
-						: "checkpoint blocked: no pending agent-owned changes",
+						? `checkpoint blocked: no pending agent-owned changes; if the work is in another governed repo, commit it there: (cd <repo> && ./bin/substrate checkpoint --message <msg> --path <path>). Unowned pending paths stay in place: ${leftover.join(", ")}`
+						: "checkpoint blocked: no pending agent-owned changes; if the work is in another governed repo, commit it there: (cd <repo> && ./bin/substrate checkpoint --message <msg> --path <path>)",
 				);
 			}
 			const sid = sessionId(root);
@@ -211,18 +225,12 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 	pi.on("tool_call", async (event, ctx) => {
 		if (event.toolName !== "bash") return;
 		if (!findJjRoot(ctx.cwd)) return;
-		const cmd = String(event.input.command ?? "").replaceAll(/jj\s+git/g, "JJ_GIT");
-		if (/git\s+(commit|add|rebase|merge|reset|restore|switch|checkout|cherry-pick|revert|stash|clean|am|apply)([\s"\\]|$)/.test(cmd)) {
-			return {
-				block: true,
-				reason: "BLOCKED: this repo is jj-managed — use jj, not git, for VCS changes: 'jj commit -m', 'jj tug', 'jj git push' (see docs/jj-workflow.md). Read-only git (log/status/diff/show) and release 'git tag' are fine.",
-			};
+		const cmd = String(event.input.command ?? "");
+		if (hasGitMutation(cmd)) {
+			return blockedBash("BLOCKED: this repo is jj-managed — use jj, not git, for VCS changes: 'jj commit -m', 'jj tug', 'jj git push' (see docs/jj-workflow.md). Read-only git (log/status/diff/show) and release 'git tag' are fine.");
 		}
-		if (/git\s+push/.test(cmd) && !/(--tags|\sv\d)/.test(cmd)) {
-			return {
-				block: true,
-				reason: "BLOCKED: use 'jj git push', not 'git push', in this jj-managed repo (release tags are the exception: 'git push origin vX.Y.Z'). See docs/jj-workflow.md.",
-			};
+		if (hasPush(cmd) && !/(--tags|\sv\d)/.test(cmd)) {
+			return blockedBash("BLOCKED: use 'jj git push', not 'git push', in this jj-managed repo (release tags are the exception: 'git push origin vX.Y.Z'). See docs/jj-workflow.md.");
 		}
 	});
 
@@ -230,39 +238,28 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 	pi.on("tool_call", async (event, ctx) => {
 		if (event.toolName !== "bash" || !findGateRoot(ctx.cwd)) return;
 		const cmd = String(event.input.command ?? "");
-		if (!/(^|[;&|(`]\s*)(jj\s+(commit|describe|squash)|git\s+commit)(\s|$)/m.test(cmd)) return;
-		return {
-			block: true,
-			reason:
-				"BLOCKED: use the substrate_checkpoint tool after direct verification. It enforces ownership, runs the gate, tightens the baseline, and commits locally.",
-		};
+		if (!hasDirectCommit(cmd)) return;
+		return blockedBash("BLOCKED: use the substrate_checkpoint tool after direct verification. It enforces ownership, runs the gate, tightens the baseline, and commits locally.");
 	});
 
 	// mirrors: gate-before-push.sh
 	pi.on("tool_call", async (event, ctx) => {
 		if (event.toolName !== "bash") return;
 		const cmd = String(event.input.command ?? "");
-		if (!/(^|[;&|]\s*|\s)(jj\s+git\s+push|git\s+push)\b/.test(cmd)) return;
+		if (!hasPush(cmd)) return;
 		if (/\s-R\s/.test(cmd)) return;
-		const root = findGateRoot(ctx.cwd);
+		const root = findGateRoot(commandTargetCwd(cmd, ctx.cwd));
 		if (!root) return;
 		const result = await runCommand(root, [".substrate/push-gate.sh"]);
 		if (result.exitCode === 0) return;
 		const report = [result.stdout, result.stderr].join("\n").trim().split("\n").slice(-25).join("\n");
-		return {
-			block: true,
-			reason: `blocked: push guard rejected this state\n${report}`,
-		};
+		return blockedBash(`blocked: push guard rejected this state\n${report}`);
 	});
-
 	// mirrors: agent-lifecycle.sh observe — feed the engine ledger after each
 	// non-read-only tool call; the engine owns snapshot/fingerprint/reconcile.
 	pi.on("tool_result", async (event, ctx) => {
-		if (GATE_TOOLS[event.toolName] || isReadOnlyTool(event.toolName, event.input)) return;
-		const path = toolPath(event.input);
-		const root = findGateRoot(path ? dirname(resolve(ctx.cwd, path)) : ctx.cwd);
+		const root = trackingRoot(event, ctx.cwd);
 		if (!root) return;
-		if (!existsSync(join(root, ".substrate", "VERSION"))) return;
 		await withRootLock(root, async () => {
 			await engineEnsureStarted(root);
 			await engineObserve(root);
@@ -271,11 +268,8 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 
 	// mirrors: changed-files-scan.sh — only proven read-only tools/actions skip scanning, so unknown tools stay covered
 	pi.on("tool_result", async (event, ctx) => {
-		if (GATE_TOOLS[event.toolName] || isReadOnlyTool(event.toolName, event.input)) return;
-		const path = toolPath(event.input);
-		const root = findGateRoot(path ? dirname(resolve(ctx.cwd, path)) : ctx.cwd);
+		const root = trackingRoot(event, ctx.cwd);
 		if (!root) return;
-		if (!existsSync(join(root, ".substrate", "VERSION"))) return;
 		const result = await runCommand(root, [...engineBaseCmd(root), "hook", "changed-files-scan"]);
 		const at = new Date().toISOString();
 		if (result.exitCode === 0) {

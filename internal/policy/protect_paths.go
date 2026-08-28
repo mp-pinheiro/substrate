@@ -109,7 +109,7 @@ func checkHard(name string) (Decision, bool) {
 	case bashglob.Match("substrate.json", name):
 		return block("blocked: substrate.json contains human-approved policy — change it through guarded substrate maintenance\n"), true
 	case bashglob.Match(".substrate/*", name), bashglob.Match("*/.substrate/*", name):
-		return block("blocked: %s is vendored substrate core — change the kit and run: substrate update\n", name), true
+		return block("blocked: %s is vendored substrate core — change the kit and run: substrate update. Agent checkpoints never commit vendored paths; ask the user to commit this file.\n", name), true
 	case bashglob.Match("CLAUDE.md", name), bashglob.Match("*/CLAUDE.md", name):
 		return block("blocked: CLAUDE.md is the governance doc — propose the edit to the user instead\n"), true
 	}

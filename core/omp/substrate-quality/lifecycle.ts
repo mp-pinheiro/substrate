@@ -1,8 +1,19 @@
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { writeRuntimeState } from "./identity";
-import { findGateRoot } from "./policy";
-import { engineObserve, engineStatus, readRuntimeState, sessionId, withRootLock } from "./runtime";
+import { findGateRoot, runCommand } from "./policy";
+import { engineBaseCmd, engineObserve, engineStatus, readRuntimeState, sessionId, withRootLock } from "./runtime";
 import { runCheckpointTransaction } from "./transactions";
+
+async function policyProtectedPending(root: string, paths: string[]): Promise<string[]> {
+	const protectedPaths: string[] = [];
+	for (const path of paths) {
+		const result = await runCommand(root, [...engineBaseCmd(root), "hook", "check-hard"], {
+			stdin: JSON.stringify({ tool_input: { file_path: path } }),
+		});
+		if (result.exitCode !== 0) protectedPaths.push(path);
+	}
+	return protectedPaths;
+}
 
 function registerSessionLifecycle(pi: ExtensionAPI): void {
 	pi.on("session_stop", async (event, ctx) => {
@@ -12,8 +23,28 @@ function registerSessionLifecycle(pi: ExtensionAPI): void {
 			await engineObserve(root);
 		});
 		const status = await engineStatus(root);
+		if (!status) {
+			const reason = "[substrate — completion blocked]\nOwnership status unavailable; retry the session stop hook.";
+			if (event.stop_hook_active) {
+				ctx.ui.notify(reason, "warning");
+				return;
+			}
+			return { continue: true, additionalContext: reason, decision: "block" as const, reason };
+		}
 		const pendingOwned = status?.pendingOwned ?? [];
 		const dirtyPaths = status?.dirtyPaths ?? [];
+		if (pendingOwned.length === 0) {
+			ctx.ui.notify("[substrate] no pending agent-owned changes; nothing to checkpoint", "info");
+			return;
+		}
+		const protectedPending = await policyProtectedPending(root, pendingOwned);
+		if (protectedPending.length === pendingOwned.length) {
+			ctx.ui.notify(
+				`[substrate — hand to user] pending paths are policy-protected and can never be agent-committed: ${pendingOwned.join(", ")}. Ask the user to commit them; no checkpoint retry will succeed.`,
+				"warning",
+			);
+			return;
+		}
 		const trackingError = status?.trackingError ?? null;
 		const driftNotice = status?.driftNotice ?? null;
 		let autoFailure = "";
