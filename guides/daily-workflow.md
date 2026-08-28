@@ -49,14 +49,13 @@ For a human-driven change:
 substrate checkpoint --message 'fix(scope): concise subject' --path path/to/file
 ```
 
-Initial baseline creation and regression acceptance remain explicit:
+Initial baseline creation remains explicit:
 
 ```sh
 substrate baseline
-substrate baseline --accept-regression=max_file_lines --reason "file count grew with new profiles; splitting them into N files adds more overhead than the line count"
 ```
 
-Each acceptance requires a written reason that is committed to `substrate-baseline.json` and reviewed in the diff. Failing to provide one produces a usage error.
+`max_file_lines` is a hard budget, not a ratchet. Files at or below the 750-line cap pass regardless of historical baseline; split files above it or request a reviewed `substrate.json` policy change. Ordinary ratchet regressions require an explicit keyed acceptance and written reason.
 
 ## 4. Push
 

@@ -103,15 +103,15 @@ func CheckHard(name string) (Decision, bool) {
 func checkHard(name string) (Decision, bool) {
 	switch {
 	case bashglob.Match("substrate-baseline.json", name):
-		return block("blocked: baseline changes only via the gate (--update-baseline)\n"), true
+		return block("blocked: baseline changes are checkpoint/baseline-transaction owned; use the sanctioned checkpoint workflow\n"), true
 	case bashglob.Match("*/substrate-baseline.json", name):
-		return block("blocked: %s is not the repo baseline, but that basename is governed anywhere in the tree — the rule is name-based so it can rule on paths whose parents do not exist yet; rename the file if it is not a substrate baseline\n", name), true
+		return block("blocked: %s is a governed baseline path; use the sanctioned checkpoint workflow\n", name), true
 	case bashglob.Match("substrate.json", name):
-		return block("blocked: substrate.json contains human-approved policy — change it through guarded substrate maintenance\n"), true
+		return block("blocked: substrate.json contains human-approved policy — present the policy change to the user\n"), true
 	case bashglob.Match(".substrate/*", name), bashglob.Match("*/.substrate/*", name):
-		return block("blocked: %s is vendored substrate core — change the kit and run: substrate update. Agent checkpoints never commit vendored paths; ask the user to commit this file.\n", name), true
+		return block("blocked: %s is vendored substrate core — change the kit source, then the user runs substrate update --apply --checkpoint; never commit the mirror directly\n", name), true
 	case bashglob.Match("CLAUDE.md", name), bashglob.Match("*/CLAUDE.md", name):
-		return block("blocked: CLAUDE.md is the governance doc — propose the edit to the user instead\n"), true
+		return block("blocked: CLAUDE.md is governance policy — present the change to the user\n"), true
 	}
 	return Decision{}, false
 }

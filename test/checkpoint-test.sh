@@ -40,10 +40,12 @@ git commit -qm 'chore: establish baseline'
 [ -z "$(git status --porcelain=v1 --untracked-files=all)" ] || fail "probe seed left the tree dirty"
 printf '{"probe:alpha":20}\n' > .git/probe-metrics.json
 printf 'printf "grow\\n"\n' >> owned.sh
-if substrate-engine checkpoint --message 'feat(x): grow' --path owned.sh > "$T/accept.out" 2>&1; then
+if substrate-engine checkpoint --message 'feat(x): grow' --path owned.sh --json > "$T/accept.out" 2>&1; then
     fail "checkpoint accepted an unreviewed metric regression"
 fi
-grep -q 'beyond their grandfathered baseline' "$T/accept.out" || fail "unreviewed regression rejection was not actionable"
+if ! jq -e '.status == "blocked" and .code == "gate.ratchet" and .owner == "agent" and .retry == "after-change" and ([.details[] | contains("probe:alpha")] | any) and (.next | contains("refactor first"))' "$T/accept.out" >/dev/null; then
+    fail "unreviewed regression recovery report was not actionable: $(cat "$T/accept.out")"
+fi
 if substrate-engine checkpoint --message 'feat(x): grow' --path owned.sh --accept-regression=probe:alpha > "$T/noreason.out" 2>&1; then
     fail "checkpoint accepted regression without --reason"
 fi
@@ -71,7 +73,10 @@ if printf '{"session_id":"clean-session","stop_hook_active":false}\n' \
     fail "Claude stop accepted red owned work"
 fi
 grep -q 'completion blocked' "$T/stop.out" || fail "Claude stop rejection was not actionable"
-grep -q 'Automatic checkpoint failed' "$T/stop.out" || fail "auto-checkpoint failure was not surfaced"
+grep -q 'fix before proceeding\|hand to user' "$T/stop.out" || fail "auto-checkpoint recovery was not surfaced: $(cat "$T/stop.out")"
+if grep -q 'checkpoint blocked: gate or baseline tightening failed' "$T/stop.out"; then
+    fail "generic checkpoint retry text was emitted"
+fi
 git checkout -q -- owned.sh
 printf 'printf "changed\\n"\n' >> owned.sh
 printf '{"session_id":"clean-session"}\n' | substrate-engine hook agent-lifecycle observe >/dev/null
@@ -122,7 +127,7 @@ mv baseline.tmp substrate-baseline.json
 if substrate-engine checkpoint --message 'fix(shell): reject governed path' --path substrate-baseline.json > "$T/checkpoint.out" 2>&1; then
     fail "checkpoint accepted a governed baseline path"
 fi
-grep -q 'baseline changes only via the gate' "$T/checkpoint.out" || fail "governed path rejection was not actionable"
+grep -q 'checkpoint/baseline-transaction owned' "$T/checkpoint.out" || fail "governed path rejection was not actionable"
 git restore -- substrate-baseline.json
 
 mkdir -p "$T/jj-repo"

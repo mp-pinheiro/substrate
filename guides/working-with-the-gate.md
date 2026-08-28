@@ -30,16 +30,17 @@ Plans are gated artifacts: exactly one `state:` line, acceptance items in execut
 You copy-pasted something jscpd can see. Extract the shared shape into a helper and call it from both sites. `substrate report` lists the worst clusters with file:line spans.
 
 ```
-src/big.py: 612 lines exceeds the hard cap 500 — split it (budgets.max_file_lines in substrate.json)
+src/big.py: 751 lines exceeds the hard cap 750 — split it (budgets.max_file_lines in substrate.json)
 [!] FAIL 30-budgets
 ```
-Split the file. Raising the cap is a config diff everyone sees.
+Split the file. `max_file_lines` is a hard budget, not a ratchet, and cannot be accepted with `--accept-regression`; raising the cap requires a reviewed `substrate.json` policy change.
 
+Ratchet findings are separate:
 ```
-max_file_lines: 418 (best 413, hard cap 500 — 82 under cap)
+dup_pct: 0.31 (best 0.28)
 [!] FAIL ratchet: metrics regressed beyond their grandfathered baseline
 ```
-The ceiling moved while the hard cap still holds — this is a reviewed choice, not a violation. The gate shows how much headroom remains under the cap so you can judge the regression. If you accept it, the reason you write is committed to `substrate-baseline.json` and reviewed in the diff.
+Refactor first. If the cheaper refactor is not viable, present the exact metric key and alternative to the user for an explicit acceptance.
 
 ```
 invalid JSON: config/foo.json

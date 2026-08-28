@@ -2,11 +2,11 @@ package gate
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
-	"encoding/json"
 )
 
 func check40DataValidity(ctx context.Context, inv []string, claims []byte, env map[string]string) (int, []MetricRecord, string, error) {

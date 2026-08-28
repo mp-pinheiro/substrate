@@ -29,13 +29,13 @@ func EnforceJJ(in Input, repoRoot string) Decision {
 		return Decision{}
 	}
 	if reGitMutate.match(cmd) {
-		return block("BLOCKED: this repo is jj-managed — use jj, not git, for VCS changes: 'jj commit -m', 'jj tug', 'jj git push' (see docs/jj-workflow.md). Read-only git (log/status/diff/show) and release 'git tag' are fine.\n")
+		return block("BLOCKED: this repo is jj-managed — use substrate_checkpoint after direct verification, not direct VCS mutation (see docs/jj-workflow.md).\n")
 	}
 	if reGitPush.match(cmd) {
 		if reTagPush.match(cmd) {
 			return Decision{}
 		}
-		return block("BLOCKED: use 'jj git push', not 'git push', in this jj-managed repo (release tags are the exception: 'git push origin vX.Y.Z'). See docs/jj-workflow.md.\n")
+		return block("BLOCKED: use the guarded publication workflow, not git push, in this jj-managed repo (release tags are the exception: 'git push origin vX.Y.Z'). See docs/jj-workflow.md.\n")
 	}
 	return Decision{}
 }

@@ -319,20 +319,24 @@ install_jj_workflow_doc() {
 wire_jj_runtime() {
     [ -d .jj ] || return 0
     command -v jj >/dev/null 2>&1 || { warn ".jj present but jj not installed — jj wiring skipped"; return 1; }
-    local trunk=main
-    if jj bookmark list 2>/dev/null | grep -q '^master:' && ! jj bookmark list 2>/dev/null | grep -q '^main:'; then
+    local trunk=main bookmarks
+    bookmarks=$(jj bookmark list 2>/dev/null) || { warn "jj bookmark list failed"; return 1; }
+    if printf '%s\n' "$bookmarks" | grep -q '^master:' && ! printf '%s\n' "$bookmarks" | grep -q '^main:'; then
         trunk=master
     fi
     jj config get aliases.tug >/dev/null 2>&1 \
-        || jj config set --user aliases.tug '["bookmark", "advance", "--to", "@-"]'
-    jj config set --repo experimental-advance-branches.enabled-branches "[\"$trunk\"]"
-    if ! jj bookmark list 2>/dev/null | grep -q "^$trunk:"; then
+        || jj config set --user aliases.tug '["bookmark", "advance", "--to", "@-"]' \
+        || { warn "jj tug alias configuration failed"; return 1; }
+    jj config set --repo experimental-advance-branches.enabled-branches "[\"$trunk\"]" \
+        || { warn "jj auto-advance configuration failed"; return 1; }
+    if ! printf '%s\n' "$bookmarks" | grep -q "^$trunk:"; then
         jj bookmark create "$trunk" -r @- 2>/dev/null \
-            && success "trunk bookmark $trunk created at @-" \
-            || warn "no $trunk bookmark yet — create it after the first commit: jj bookmark create $trunk -r @-"
+            || { warn "trunk bookmark $trunk creation failed"; return 1; }
+        success "trunk bookmark $trunk created at @-"
     fi
-    if jj bookmark list --all-remotes 2>/dev/null | grep -q "^$trunk@origin:"; then
-        jj bookmark track "$trunk" --remote=origin 2>/dev/null || true
+    if printf '%s\n' "$(jj bookmark list --all-remotes 2>/dev/null)" | grep -q "^$trunk@origin:"; then
+        jj bookmark track "$trunk" --remote=origin 2>/dev/null \
+            || { warn "jj bookmark tracking failed for $trunk@origin"; return 1; }
     fi
     success "jj tug wired ($trunk auto-advance; --repo config is machine-local, rerun init per clone)"
 }

@@ -77,7 +77,14 @@ function registerSessionLifecycle(pi: ExtensionAPI): void {
 				);
 				return;
 			}
-			autoFailure = result.summary.split("\n").slice(-8).join("\n");
+			if (result.report?.owner === "user" || result.report?.status === "incomplete") {
+				writeRuntimeState(root, {
+					lastCheckpoint: { status: "pending", at: new Date().toISOString() },
+				});
+				ctx.ui.notify(result.summary, "warning");
+				return;
+			}
+			autoFailure = result.summary;
 		}
 		const unowned = dirtyPaths.filter((path) => !pendingOwned.includes(path)).sort();
 		const blockingOwnership =

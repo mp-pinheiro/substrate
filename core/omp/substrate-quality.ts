@@ -55,7 +55,7 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 			acceptRegression: pi.typebox.Type.Optional(
 				pi.typebox.Type.Array(pi.typebox.Type.String(), {
 					description:
-						"Ratcheted metric keys whose regression the user reviewed and accepted, e.g. [\"max_file_lines\"]. Omit unless the gate reported that exact key regressed.",
+						"Ratcheted metric keys whose regression the user reviewed and accepted. Omit unless the gate reported that exact key regressed.",
 				}),
 			),
 			acceptRegressionReason: pi.typebox.Type.Optional(
@@ -99,6 +99,11 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 				acceptRegression = raw as string[];
 			}
 			let reason: string | undefined;
+			if (acceptRegression.includes("max_file_lines")) {
+				return blockedToolResult(
+					"max_file_lines is a hard budget, not a ratchet; split the file or request a reviewed substrate.json policy change",
+				);
+			}
 			if ("acceptRegressionReason" in params && params.acceptRegressionReason !== undefined) {
 				const rawReason = params.acceptRegressionReason;
 				if (typeof rawReason !== "string") {
@@ -227,7 +232,7 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 		if (!findJjRoot(ctx.cwd)) return;
 		const cmd = String(event.input.command ?? "");
 		if (hasGitMutation(cmd)) {
-			return blockedBash("BLOCKED: this repo is jj-managed — use jj, not git, for VCS changes: 'jj commit -m', 'jj tug', 'jj git push' (see docs/jj-workflow.md). Read-only git (log/status/diff/show) and release 'git tag' are fine.");
+			return blockedBash("BLOCKED: this repo is jj-managed — use substrate_checkpoint after direct verification, not direct VCS mutation (see docs/jj-workflow.md).");
 		}
 		if (hasPush(cmd) && !/(--tags|\sv\d)/.test(cmd)) {
 			return blockedBash("BLOCKED: use 'jj git push', not 'git push', in this jj-managed repo (release tags are the exception: 'git push origin vX.Y.Z'). See docs/jj-workflow.md.");

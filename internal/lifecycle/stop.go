@@ -121,16 +121,19 @@ func (e *Engine) Stop(ctx context.Context, payload []byte) Result {
 		if runErr != nil {
 			out, code = runErr.Error(), -1
 		}
-		last := lastLine(out)
+		report, valid := recoveryReport(out)
 		if code == 0 {
-			commit := commitFieldOf(last)
+			commit := receiptCommit(out)
 			if commit == "" {
-				commit = "unknown"
+				autoNote = " [substrate — hand to user] recovery.protocol-invalid: automatic checkpoint returned no valid receipt."
+			} else {
+				return stopSystemMessage(fmt.Sprintf("Substrate auto-checkpoint %s committed agent-owned work. No push performed.", commit))
 			}
-			msg := fmt.Sprintf("Substrate auto-checkpoint %s committed agent-owned work. No push performed.", commit)
-			return stopSystemMessage(msg)
+		} else if valid {
+			autoNote = fmt.Sprintf(" %s %s: %s. %s Next: %s", report.Label(), report.Code, report.Summary, strings.Join(report.Details, " "), report.Next)
+		} else {
+			autoNote = " [substrate — hand to user] recovery.protocol-invalid: preserve pending work and hand this raw output to the user: " + strings.TrimSpace(out)
 		}
-		autoNote = fmt.Sprintf(" Automatic checkpoint failed: %s.", last)
 	}
 
 	if decision.CleanExit {

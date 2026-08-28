@@ -174,10 +174,25 @@ cmd_doctor() {
     fi
 
     if [ -d .jj ]; then
-        if jj config get experimental-advance-branches.enabled-branches >/dev/null 2>&1; then
-            success "jj trunk auto-advance configured"
+        local trunk configured bookmarks remotes
+        trunk="${SUBSTRATE_JJ_TRUNK:-main}"
+        configured=$(jj config get experimental-advance-branches.enabled-branches 2>/dev/null) || configured=""
+        if [[ "$configured" == *"$trunk"* ]]; then
+            success "jj trunk auto-advance configured ($trunk)"
         else
-            warn "jj repo without auto-advance — machine-local config; run: substrate init (wire_jj) per clone"
+            warn "jj trunk auto-advance does not include configured trunk $trunk — rerun init"
+        fi
+        bookmarks=$(jj bookmark list 2>/dev/null) || bookmarks=""
+        if printf '%s\n' "$bookmarks" | grep -q "^$trunk:"; then
+            success "jj local trunk bookmark exists ($trunk)"
+        else
+            warn "jj local trunk bookmark missing ($trunk) — create it after the first commit"
+        fi
+        remotes=$(jj bookmark list --all-remotes 2>/dev/null) || remotes=""
+        if printf '%s\n' "$remotes" | grep -q "^$trunk@origin:"; then
+            success "jj trunk tracks origin ($trunk@origin)"
+        else
+            warn "jj trunk tracking is missing ($trunk@origin)"
         fi
         if grep -q 'enforce-jj.sh' .claude/settings.json 2>/dev/null; then
             success "jj workflow hooks wired"

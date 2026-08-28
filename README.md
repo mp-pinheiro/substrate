@@ -59,7 +59,7 @@ Profile mappings currently cover YAML/JSON, C++, Go, Lua, Python, shell, Svelte,
 | profile checks | language toolchain findings (shellcheck, ruff, golangci-lint, sqlfluff, tflint, tsc, ...) |
 | vendor-drift (kit repo) | `.substrate/` diverging from `core/` |
 
-Everything fails closed: a broken or missing detector is a red gate ("cannot pass blind"), never a silent skip. Ratchets support both directions — `metric` (lower is better) and `metric_hi` (higher is better, e.g. coverage); `--tighten` (used by every checkpoint) tightens component-wise and garbage-collects orphaned keys. Loosening requires `--accept-regression[=key1,key2] --reason <text>` (justification is committed to the baseline diff) and prints the diff. Escape hatches are line-scoped markers (`gate:allow-comment`, `gate:allow-*`), the `unscanned` ledger, `checks.config` (per-check runtime overrides), and `scopes` (per-path profile restriction) — all diff-visible.
+Everything fails closed: a broken or missing detector is a red gate ("cannot pass blind"), never a silent skip. Budgets and ratchets are separate: `budgets.max_file_lines` is a hard cap (the generated default is 750), while `metric` (lower is better) and `metric_hi` (higher is better, e.g. coverage) are ratchets. Values within the file-line cap are never ratchet regressions, and `max_file_lines` cannot be accepted with `--accept-regression`; request a reviewed `substrate.json` policy change instead. `--tighten` (used by every checkpoint) tightens ratchets component-wise and prunes legacy budget keys. Escape hatches are line-scoped markers (`gate:allow-comment`, `gate:allow-*`), the `unscanned` ledger, `checks.config` (per-check runtime overrides), and `scopes` (per-path profile restriction) — all diff-visible.
 
 ## Profiles
 

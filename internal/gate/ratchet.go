@@ -10,10 +10,11 @@ import (
 )
 
 type RatchetResult struct {
-	AcceptedNow []string
-	Worse       []string
-	Better      int
-	BudgetWarn  []string
+	AcceptedNow    []string
+	Worse          []string
+	Better         int
+	BudgetWarn     []string
+	FailureDetails []string
 }
 
 func RunRatchet(metricsOut, baselinePath, configPath string, flags PreflightFlags) (*RatchetResult, int) {
@@ -24,7 +25,9 @@ func RunRatchet(metricsOut, baselinePath, configPath string, flags PreflightFlag
 
 	data, err := os.ReadFile(metricsOut)
 	if err != nil {
-		warn("ratchet: cannot read metrics: %v", err)
+		detail := fmt.Sprintf("ratchet: cannot read metrics: %v", err)
+		warn("%s", detail)
+		result.FailureDetails = []string{detail}
 		return result, 1
 	}
 	lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
@@ -61,12 +64,17 @@ func RunRatchet(metricsOut, baselinePath, configPath string, flags PreflightFlag
 
 	baseMetrics, baseDir, err := loadBaseline(baselinePath)
 	if err != nil {
-		warn("ratchet: cannot read baseline metrics")
+		detail := "ratchet: cannot read baseline metrics"
+		warn("%s", detail)
+		result.FailureDetails = []string{detail}
 		return result, 1
 	}
 
 	var worse []string
 	for name, cur := range currentMetrics {
+		if name == "max_file_lines" {
+			continue
+		}
 		dir := currentDir[name]
 		if dir == "" {
 			dir = baseDir[name]
@@ -91,12 +99,10 @@ func RunRatchet(metricsOut, baselinePath, configPath string, flags PreflightFlag
 			} else {
 				capMsg = fmt.Sprintf(", hard cap %.0f — %.0f under cap", budget, budget-curF)
 			}
+		} else if dir == "hi" {
+			regressed = curF < baseF-1e-9
 		} else {
-			if dir == "hi" {
-				regressed = curF < baseF-1e-9
-			} else {
-				regressed = curF > baseF+1e-9
-			}
+			regressed = curF > baseF+1e-9
 		}
 		if regressed {
 			bestText := string(base.Raw)
@@ -109,9 +115,15 @@ func RunRatchet(metricsOut, baselinePath, configPath string, flags PreflightFlag
 			worse = append(worse, fmt.Sprintf("%s: %s (best %s%s)", name, string(cur.Raw), bestText, capMsg))
 		}
 	}
+	sort.Strings(worse)
+	result.Worse = append([]string(nil), worse...)
+	result.FailureDetails = append([]string(nil), worse...)
 
 	var better int
 	for name := range baseMetrics {
+		if name == "max_file_lines" {
+			continue
+		}
 		dir := currentDir[name]
 		if dir == "" {
 			dir = baseDir[name]
@@ -130,10 +142,8 @@ func RunRatchet(metricsOut, baselinePath, configPath string, flags PreflightFlag
 			if curF > baseF+1e-9 {
 				better++
 			}
-		} else {
-			if curF < baseF-1e-9 {
-				better++
-			}
+		} else if curF < baseF-1e-9 {
+			better++
 		}
 	}
 
@@ -169,7 +179,7 @@ func RunRatchet(metricsOut, baselinePath, configPath string, flags PreflightFlag
 			}
 			var accepted, rejected, neverAccepted []string
 			for _, line := range worse {
-				key, _, _ := strings.Cut(line, ": ")
+				key := metricKey(line)
 				if !acceptSet[key] {
 					rejected = append(rejected, line)
 					continue
@@ -184,7 +194,7 @@ func RunRatchet(metricsOut, baselinePath, configPath string, flags PreflightFlag
 			if len(neverAccepted) > 0 {
 				for _, n := range neverAccepted {
 					fmt.Println(n)
-					key := func() string { k, _, _ := strings.Cut(n, ": "); return k }()
+					key := metricKey(n)
 					warn("FAIL ratchet: %s is never-acceptable (ratchet.never_accept in substrate.json) — fix the regression or change that policy in a separate reviewed commit", strings.TrimSpace(key))
 				}
 				result.Worse = worse
@@ -207,7 +217,7 @@ func RunRatchet(metricsOut, baselinePath, configPath string, flags PreflightFlag
 		} else if flags.AcceptRegression {
 			var neverAccepted []string
 			for _, line := range worse {
-				key, _, _ := strings.Cut(line, ": ")
+				key := metricKey(line)
 				if neverAccept[key] {
 					neverAccepted = append(neverAccepted, line)
 				} else {
@@ -217,7 +227,7 @@ func RunRatchet(metricsOut, baselinePath, configPath string, flags PreflightFlag
 			if len(neverAccepted) > 0 {
 				for _, n := range neverAccepted {
 					fmt.Println(n)
-					key := func() string { k, _, _ := strings.Cut(n, ": "); return k }()
+					key := metricKey(n)
 					warn("FAIL ratchet: %s is never-acceptable (ratchet.never_accept in substrate.json) — fix the regression or change that policy in a separate reviewed commit", strings.TrimSpace(key))
 				}
 				result.Worse = worse
@@ -236,6 +246,7 @@ func RunRatchet(metricsOut, baselinePath, configPath string, flags PreflightFlag
 			result.Worse = worse
 			return result, 1
 		}
+
 	} else if better > 0 {
 		info("ratchet: %d metric(s) improved on baseline — checkpoint locks them in automatically", better)
 	} else {
@@ -243,6 +254,13 @@ func RunRatchet(metricsOut, baselinePath, configPath string, flags PreflightFlag
 	}
 
 	return result, 0
+}
+func metricKey(line string) string {
+	index := strings.LastIndex(line, ": ")
+	if index < 0 {
+		return strings.TrimSpace(line)
+	}
+	return line[:index]
 }
 
 func getNeverAccept(configPath string) map[string]bool {

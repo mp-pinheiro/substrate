@@ -73,6 +73,10 @@ func Matches(ctx context.Context, repoRoot string) (bool, error) {
 
 // A BuildState refusal is deliberate: the receipt is written non-reusable, never failed (C17).
 func Write(ctx context.Context, repoRoot, source, commit, vcsName, session, accepted string) (string, error) {
+	return WriteWithPublicationBookmark(ctx, repoRoot, source, commit, vcsName, session, accepted, "")
+}
+
+func WriteWithPublicationBookmark(ctx context.Context, repoRoot, source, commit, vcsName, session, accepted, publicationBookmark string) (string, error) {
 	repo, err := detectBackend(repoRoot)
 	if err != nil {
 		return "", err
@@ -117,6 +121,7 @@ func Write(ctx context.Context, repoRoot, source, commit, vcsName, session, acce
 		Set("source", source).
 		Set("session", jqx.Nullable(session)).
 		Set("acceptedRegressions", acceptedDoc).
+		Set("publicationBookmark", jqx.Nullable(publicationBookmark)).
 		Set("fingerprint", fp).
 		Set("reusable", reusable).
 		Set("engineVersion", readEngineVersion(repoRoot)).

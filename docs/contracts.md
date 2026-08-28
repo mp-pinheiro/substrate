@@ -23,7 +23,7 @@ The interfaces every component implements. Change these deliberately — everyth
   "unscanned": ["*.md", "*.json", "LICENSE", "docs/**"],
   "protected_paths": ["*.env", "secrets/**"],
   "comment": { "allow_tags": ["SAFETY:", "WHY:", "PERF:", "HACK:"] },
-  "budgets": { "max_file_lines": 500 },
+  "budgets": { "max_file_lines": 750 },
   "checks": { "disabled": [] },
   "ratchet": { "never_accept": ["dead_code"] },
   "contracts": [{ "name": "api", "regen": "bun run generate", "paths": ["src/generated"] }]
@@ -77,7 +77,7 @@ Runner inputs (set by the caller, not by a check): `SUBSTRATE_FILE_LIST` scopes 
 - exit 1 — findings; the report is stdout, every line actionable (`file:line — problem — fix`)
 - exit >=2 — infrastructure failure; the runner fails the gate with "cannot pass blind"
 
-Ratcheted measurements: `metric <name> <value>` (lower is better) and `metric_hi <name> <value>` (higher is better — coverage, type-coverage). The RUNNER compares against `baseline.metrics[name]` using the direction in `baseline.direction[name]` (absent = lower): regression fails, improvement prints a lock-in hint, `--update-baseline` (refused while red) writes emitted values, `--tighten` (used by every checkpoint) lowers/raises existing ceilings component-wise and handles orphaned keys by direction — a lower-is-better orphan is pruned (absence already means zero tolerance, so pruning tightens), a higher-is-better orphan keeps its ceiling AND its direction (absence would mean no floor at all, and losing the direction would re-read the metric as lower-is-better on the next run). Raising a ceiling requires `--accept-regression[=key1,key2]` plus a mandatory `--reason=<text>` (≥20 chars, no shell metacharacters) committed to the `accepted` record in the baseline. `ratchet.never_accept` in `substrate.json` lists metrics that must never be accepted. Regression lines show budget headroom when a `budgets` hard cap exists for the metric: `max_file_lines: 418 (best 413, hard cap 500 — 82 under cap)`.
+Ratcheted measurements: `metric <name> <value>` (lower is better) and `metric_hi <name> <value>` (higher is better — coverage, type-coverage). The runner compares these against `baseline.metrics[name]` using `baseline.direction[name]` (absent = lower): regressions fail, improvements print a lock-in hint, `--update-baseline` writes emitted values only on green, and `--tighten` adjusts existing ratchet ceilings after a green checkpoint. Ratchets and budgets are disjoint: `budgets.max_file_lines` is a hard per-file cap, and values at or below the cap are never ratchet regressions. `max_file_lines` is not persisted in ratchet baseline metrics and cannot be accepted with `--accept-regression`.
 
 Per-path profile scoping: `substrate.json`'s `scopes` map restricts which profiles are active per path prefix. A file under `app/` is only claimed if its profile is in `scopes["app/"].profiles`. Files outside all scopes are unaffected. Scope-excluded files are not flagged by `05-unclaimed-source.sh`.
 
@@ -85,7 +85,7 @@ Ordering: core checks 05–59, profile checks 60–79, repo-local checks 80–99
 
 ## Baseline (`substrate-baseline.json`, repo root, tracked)
 
-`{"metrics": {"dup_pct": 0.28, "comments:src/x.go": 2}, "direction": {"coverage": "hi"}, "accepted": {"max_file_lines": {"from": 413, "to": 418, "at": "2026-08-07", "reason": "file grew because..."}}}`. The checkpoint transaction lowers/raises existing ceilings component-wise only after a green run (pruning orphaned lower-is-better keys, retaining orphaned higher-is-better floors with their direction, and reporting every prune), stages the new JSON beside the original, and atomically replaces it before committing. Initial debt adoption remains explicit; `--accept-regression[=key1,key2]` paired with `--reason=<text>` is the only loosening path and prints the exact diff. The `accepted` record's `from` is sticky (first-accepted floor) and auto-prunes when the metric returns to or past its `from`; it is omitted entirely when empty. When the file exists, an absent lower-is-better key means zero tolerance; a higher-is-better metric has no floor without a recorded ceiling, which is why its ceiling survives an idle run.
+The baseline stores only ratchet metrics, their directions, and reviewed acceptance records. The checkpoint transaction tightens existing ratchets only after a green run, stages the new JSON beside the original, and atomically replaces it before committing. Initial debt adoption remains explicit. A hard-budget change is a policy decision in `substrate.json`, not a ratchet acceptance.
 
 - `hooks/protect-paths.sh` — PreToolUse(Write|Edit) stdin JSON; blocks: any symlink write (message names the target), baseline, `.substrate/`, `CLAUDE.md`/governance, `protected_paths` globs. Exit 2 = blocked.
 - `hooks/changed-files-scan.sh` — PostToolUse(Bash|Write|Edit|MultiEdit|NotebookEdit|Task); scans every changed path in the working tree (jj diff or git status), not the tool's declared target, so bash/eval writes are covered; runs the comment ratchet per changed scannable file (pass-only memo in `$TMPDIR`) and flags `protected_paths` writes the write-time hook could not intercept. Report on stderr, exit 2 = blocking feedback.

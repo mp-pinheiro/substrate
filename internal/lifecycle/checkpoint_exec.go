@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/mp-pinheiro/substrate/internal/canonjson"
+	"github.com/mp-pinheiro/substrate/internal/recovery"
 	"github.com/mp-pinheiro/substrate/internal/xshell"
 )
 
@@ -51,28 +52,83 @@ func runMerged(ctx context.Context, dir, name string, args ...string) (string, i
 	}
 }
 
-func lastLine(s string) string {
-	trimmed := trimTrailingNewlines(s)
-	if trimmed == "" {
-		return ""
-	}
-	parts := strings.Split(trimmed, "\n")
-	return parts[len(parts)-1]
+func recoveryReport(s string) (recovery.Report, bool) {
+	var report recovery.Report
+	found := reverseScanObjects(s, func(obj *canonjson.Object) bool {
+		status, ok1 := objStringOK(obj, "status")
+		code, ok2 := objStringOK(obj, "code")
+		owner, ok3 := objStringOK(obj, "owner")
+		retry, ok4 := objStringOK(obj, "retry")
+		summary, ok5 := objStringOK(obj, "summary")
+		next, ok6 := objStringOK(obj, "next")
+		if !ok1 || !ok2 || !ok3 || !ok4 || !ok5 || !ok6 {
+			return false
+		}
+		report = recovery.Report{Status: status, Code: code, Owner: owner, Retry: retry, Summary: summary, Details: objStringArrayOK(obj, "details"), Next: next}
+		return true
+	})
+	return report, found
 }
 
-func commitFieldOf(line string) string {
-	if line == "" {
-		return ""
+func receiptCommit(s string) string {
+	var commit string
+	reverseScanObjects(s, func(obj *canonjson.Object) bool {
+		commit, _ = objStringOK(obj, "commit")
+		return commit != ""
+	})
+	return commit
+}
+
+func reverseScanObjects(s string, visit func(*canonjson.Object) bool) bool {
+	for _, line := range reverseLines(strings.TrimSpace(s)) {
+		val, err := canonjson.Unmarshal([]byte(line))
+		if err != nil {
+			continue
+		}
+		obj, ok := val.(*canonjson.Object)
+		if !ok {
+			continue
+		}
+		if visit(obj) {
+			return true
+		}
 	}
-	val, err := canonjson.Unmarshal([]byte(line))
-	if err != nil {
-		return ""
-	}
-	obj, ok := val.(*canonjson.Object)
+	return false
+}
+
+func objStringArrayOK(obj *canonjson.Object, key string) []string {
+	v, ok := obj.Get(key)
 	if !ok {
-		return ""
+		return nil
 	}
-	return objString(obj, "commit")
+	values, ok := v.([]canonjson.Value)
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if s, ok := value.(string); ok {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+func reverseLines(s string) []string {
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, "\n")
+	for i, j := 0, len(parts)-1; i < j; i, j = i+1, j-1 {
+		parts[i], parts[j] = parts[j], parts[i]
+	}
+	return parts
+}
+
+func objStringOK(obj *canonjson.Object, key string) (string, bool) {
+	v, ok := obj.Get(key)
+	s, isString := v.(string)
+	return s, ok && isString
 }
 
 func (e *Engine) runAutoCheckpoint(ctx context.Context, session string) (string, int, error) {

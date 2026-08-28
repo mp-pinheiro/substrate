@@ -75,7 +75,7 @@ seed_config() {
         ],
         protected_paths: [],
         comment: { allow_tags: ["SAFETY:", "WHY:", "PERF:", "HACK:"] },
-        budgets: { max_file_lines: 500 },
+        budgets: { max_file_lines: 750 },
         duplication: { min_tokens: 35 },
         ratchet: { never_accept: [] },
         report: { max_age_days: 14 },

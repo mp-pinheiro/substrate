@@ -4,22 +4,77 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
+
+	"github.com/mp-pinheiro/substrate/internal/recovery"
 )
+
+func emitFailure(flags PreflightFlags, report recovery.Report, rc int) int {
+	recovery.Emit(report, flags.JSON)
+	return rc
+}
+
+func gateFailure(flags PreflightFlags, results []CheckResult, ratchet *RatchetResult) recovery.Report {
+	details := make([]string, 0)
+	for _, result := range results {
+		if result.RC == 0 {
+			continue
+		}
+		class := "finding"
+		if result.RC >= 2 {
+			class = "infrastructure"
+		}
+		details = append(details, fmt.Sprintf("%s: exit=%d (%s)\n%s", result.Name, result.RC, class, result.Output))
+	}
+	code := "gate.findings"
+	next := "fix the named checks, then rerun substrate-engine gate"
+	if ratchet != nil {
+		if len(ratchet.Worse) > 0 || len(ratchet.FailureDetails) > 0 {
+			code = "gate.ratchet"
+			next = "refactor first; if that costs more, present these exact keys and the alternative to the user"
+		}
+		if len(ratchet.FailureDetails) > 0 {
+			details = append(details, ratchet.FailureDetails...)
+		} else {
+			details = append(details, ratchet.Worse...)
+		}
+	}
+	for _, warning := range ratchetWarnings(ratchet) {
+		details = append(details, warning)
+	}
+	if len(details) == 0 {
+		details = append(details, "gate failed without detector details")
+	}
+	return recovery.Report{Status: "blocked", Code: code, Owner: "agent", Retry: "after-change", Summary: "gate checks did not pass", Details: details, Next: next}
+}
+
+func ratchetWarnings(r *RatchetResult) []string {
+	if r == nil {
+		return nil
+	}
+	return append([]string(nil), r.BudgetWarn...)
+}
 
 func Run(ctx context.Context, args []string) int {
 	subDir, repoRoot, err := ResolveRoots()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "gate: %v\n", err)
+		if containsJSON(args) {
+			recovery.Emit(recovery.Report{Status: "blocked", Code: "gate.infrastructure", Owner: "user", Retry: "terminal", Summary: "gate could not resolve repository roots", Details: []string{err.Error()}, Next: "repair the repository setup, then rerun the gate"}, true)
+		} else {
+			fmt.Fprintf(os.Stderr, "gate: %v\n", err)
+		}
 		return 12
 	}
-
 	flags, rest, err := ParseFlags(args)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "gate: %v\n", err)
+		if containsJSON(args) {
+			recovery.Emit(recovery.Report{Status: "blocked", Code: "gate.infrastructure", Owner: "user", Retry: "terminal", Summary: "gate arguments are invalid", Details: []string{err.Error()}, Next: "correct the command arguments"}, true)
+		} else {
+			fmt.Fprintf(os.Stderr, "gate: %v\n", err)
+		}
 		return 12
 	}
-
 	for _, r := range rest {
 		if r == "--list-checks" {
 			return listChecks(repoRoot, subDir)
@@ -39,7 +94,15 @@ func Run(ctx context.Context, args []string) int {
 		Flags:    flags,
 	})
 	if rc != 0 {
+		if flags.JSON {
+			return emitFailure(flags, recovery.Report{Status: "blocked", Code: "gate.infrastructure", Owner: "user", Retry: "terminal", Summary: "gate preflight failed", Details: []string{"preflight rejected the gate inputs"}, Next: "repair the reported preflight issue, then rerun the gate"}, rc)
+		}
 		return rc
+	}
+	if flags.AcceptRegression && strings.Contains(","+flags.AcceptKeys+",", ",max_file_lines,") {
+		const next = "max_file_lines is a hard budget, not a ratchet; split the file or request a reviewed substrate.json policy change"
+		report := recovery.Report{Status: "blocked", Code: "gate.budget-acceptance", Owner: "user", Retry: "terminal", Summary: "max_file_lines cannot be accepted as a regression", Details: []string{next}, Next: next}
+		return emitFailure(flags, report, 1)
 	}
 
 	inventory, err := BuildInventory(repoRoot, subDir, os.Getenv("SUBSTRATE_FILE_LIST"))
@@ -85,6 +148,7 @@ func Run(ctx context.Context, args []string) int {
 		return 3
 	}
 
+	var ratchetResult *RatchetResult
 	metricsFile, err := os.CreateTemp("", "substrate-metrics-*")
 	if err == nil {
 		metricsPath := metricsFile.Name()
@@ -103,7 +167,8 @@ func Run(ctx context.Context, args []string) int {
 			stagedMove(metricsPath, metricsOut)
 		}
 
-		ratchetResult, ratchetFailures := RunRatchet(metricsPath, baselinePath, configPath, flags)
+		var ratchetFailures int
+		ratchetResult, ratchetFailures = RunRatchet(metricsPath, baselinePath, configPath, flags)
 		if ratchetFailures > 0 {
 			ctxRun.Failures += ratchetFailures
 		}
@@ -125,7 +190,7 @@ func Run(ctx context.Context, args []string) int {
 	took := FormatDuration(int(time.Since(gateStart).Milliseconds()))
 	if ctxRun.Failures > 0 {
 		warn("gate: %d check(s) failed (%s)", ctxRun.Failures, took)
-		return 1
+		return emitFailure(flags, gateFailure(flags, ctxRun.Results, ratchetResult), 1)
 	}
 	successMsg("gate: all checks passed (%s)", took)
 	return 0
@@ -146,7 +211,14 @@ func listChecks(repoRoot, subDir string) int {
 	}
 	return 0
 }
-
+func containsJSON(args []string) bool {
+	for _, arg := range args {
+		if arg == "--json" {
+			return true
+		}
+	}
+	return false
+}
 
 func warn(format string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, "\033[0;33m[!]\033[0m "+format+"\n", args...)

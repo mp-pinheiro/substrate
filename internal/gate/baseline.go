@@ -40,6 +40,9 @@ func WriteBaseline(baselinePath, metricsOut, configPath string, flags PreflightF
 		if err := json.Unmarshal([]byte(line), &m); err != nil {
 			continue
 		}
+		if m.Name == "max_file_lines" {
+			continue
+		}
 		if m.Dir != "" {
 			currentDir[m.Name] = m.Dir
 		}
@@ -58,6 +61,8 @@ func WriteBaseline(baselinePath, metricsOut, configPath string, flags PreflightF
 			warn("baseline: cannot load existing baseline: %v", err)
 			return 1
 		}
+		delete(oldMetrics, "max_file_lines")
+		delete(oldDir, "max_file_lines")
 
 		acceptSet := make(map[string]bool)
 		for _, k := range strings.Split(flags.AcceptKeys, ",") {
@@ -108,11 +113,16 @@ func WriteBaseline(baselinePath, metricsOut, configPath string, flags PreflightF
 			acceptedEntries := make(map[string]interface{})
 			if oldAccepted != nil {
 				for k, v := range oldAccepted {
-					acceptedEntries[k] = v
+					if k != "max_file_lines" {
+						acceptedEntries[k] = v
+					}
 				}
 			}
 			today := time.Now().UTC().Format("2006-01-02")
 			for _, k := range acceptedNow {
+				if k == "max_file_lines" {
+					continue
+				}
 				from := "0"
 				sticky := false
 				if oldAccepted != nil {
@@ -131,10 +141,8 @@ func WriteBaseline(baselinePath, metricsOut, configPath string, flags PreflightF
 				}
 				toBytes, _ := currentMetrics[k].MarshalJSON()
 				acceptedEntries[k] = map[string]interface{}{
-					"from":   json.RawMessage(from),
-					"to":     json.RawMessage(toBytes),
-					"at":     today,
-					"reason": flags.AcceptReason,
+					"from": json.RawMessage(from), "to": json.RawMessage(toBytes),
+					"at": today, "reason": flags.AcceptReason,
 				}
 			}
 			for k, v := range acceptedEntries {

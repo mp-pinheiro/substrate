@@ -14,6 +14,7 @@ import (
 	"github.com/mp-pinheiro/substrate/internal/logx"
 	"github.com/mp-pinheiro/substrate/internal/policy"
 	"github.com/mp-pinheiro/substrate/internal/receipt"
+	"github.com/mp-pinheiro/substrate/internal/recovery"
 	"github.com/mp-pinheiro/substrate/internal/vcs"
 	"github.com/mp-pinheiro/substrate/internal/xshell"
 )
@@ -203,6 +204,17 @@ func usage() {
 	logx.Err().Line("usage: substrate-engine checkpoint --message \"type(scope): subject\" [--session <id> | --path <repo-relative-path> ...] [--accept-regression=<metric>[,<metric>] --reason <text>] [--json]")
 }
 
+func emitCommitFailure(opts checkpointOpts, err error, rollback func()) int {
+	if rollback != nil {
+		rollback()
+	}
+	return emitCheckpointFailure(opts, recovery.Report{
+		Status: "blocked", Code: "checkpoint.commit", Owner: "user", Retry: "terminal",
+		Summary: "checkpoint commit failed", Details: []string{err.Error()},
+		Next: "repair the reported commit failure, then rerun checkpoint",
+	}, 1)
+}
+
 func runCheckpointFull(ctx context.Context, repo *vcs.Repo, repoRoot, metadataDir string, normalized []string, opts checkpointOpts, baselinePath string) int {
 	baselineBackup, err := os.ReadFile(baselinePath)
 	if err != nil {
@@ -217,14 +229,20 @@ func runCheckpointFull(ctx context.Context, repo *vcs.Repo, repoRoot, metadataDi
 	}
 	gateOut, err := runGate(ctx, repoRoot, gateArgs...)
 	if err != nil {
-		logx.Out().Line("%s", gateOut)
-		logx.Err().Line("checkpoint blocked: gate or baseline tightening failed")
-		return 1
+		return emitGateFailure(opts, gateOut, err)
 	}
 	logx.Out().Line("%s", gateOut)
 
 	commitPaths := make([]string, len(normalized))
 	copy(commitPaths, normalized)
+	baseRevision, baseErr := CurrentGateRevision(ctx, repo)
+	if baseErr != nil {
+		return emitCheckpointFailure(opts, recovery.Report{Status: "blocked", Code: "checkpoint.bookmark-ambiguous", Owner: "user", Retry: "terminal", Summary: "checkpoint base revision unavailable", Details: []string{baseErr.Error()}, Next: "resolve the repository revision and rerun checkpoint"})
+	}
+	publicationBookmark, bookmarkErr := resolvePublicationBookmark(ctx, repo, baseRevision)
+	if bookmarkErr != nil {
+		return emitCheckpointFailure(opts, recovery.Report{Status: "blocked", Code: "checkpoint.bookmark-ambiguous", Owner: "user", Retry: "terminal", Summary: "checkpoint publication bookmark is ambiguous", Details: []string{bookmarkErr.Error()}, Next: "choose the intended local bookmark and rerun checkpoint"})
+	}
 
 	baselineChanged := false
 	currentBaseline, _ := os.ReadFile(baselinePath)
@@ -235,61 +253,55 @@ func runCheckpointFull(ctx context.Context, repo *vcs.Repo, repoRoot, metadataDi
 
 	commit, commitOut, err := commitPathsFn(ctx, repo, repoRoot, opts.message, commitPaths)
 	if err != nil {
+		var rollback func()
 		if baselineChanged {
-			restoreBaseline(baselinePath, baselineBackup)
+			rollback = func() { restoreBaseline(baselinePath, baselineBackup) }
 		}
-		logx.Err().Line("checkpoint failed: %v", err)
-		return 1
+		return emitCommitFailure(opts, err, rollback)
+	}
+	if err := finalizePublicationBookmark(ctx, repo, publicationBookmark, commit); err != nil {
+		return emitCheckpointFailure(opts, recovery.Report{Status: "incomplete", Code: "checkpoint.bookmark-finalize", Owner: "user", Retry: "terminal", Summary: "checkpoint committed but publication bookmark finalization failed", Details: []string{fmt.Sprintf("commit: %s", commit), err.Error()}, Next: fmt.Sprintf("run jj bookmark set %s -r %s; do not run jj undo/redo/op restore", publicationBookmark, commit)}, 1)
 	}
 	logx.Out().Line("%s", commitOut)
 
 	current, err := ChangedPaths(ctx, repo)
 	if err != nil {
-		logx.Err().Line("checkpoint incomplete: cannot inspect post-commit working copy")
-		return 1
+		return emitCheckpointFailure(opts, recovery.Report{
+			Status: "incomplete", Code: "checkpoint.incomplete", Owner: "user", Retry: "terminal",
+			Summary: "checkpoint committed but post-commit state inspection failed",
+			Details: []string{fmt.Sprintf("commit: %s", commit), "failed phase: post-commit state inspection", err.Error()},
+			Next:    "preserve the commit and pending state; do not run jj undo/redo/op restore",
+		}, 1)
 	}
 	if len(current) != 0 {
-		logx.Err().Line("checkpoint incomplete: post-commit pending paths remain")
-		for _, p := range current {
-			logx.Err().Line("  %s", p)
-		}
-		return 1
+		details := []string{fmt.Sprintf("commit: %s", commit), "failed phase: post-commit state inspection"}
+		details = append(details, current...)
+		return emitCheckpointFailure(opts, recovery.Report{
+			Status: "incomplete", Code: "checkpoint.incomplete", Owner: "user", Retry: "terminal",
+			Summary: "checkpoint committed but pending paths remain",
+			Details: details,
+			Next:    "preserve the commit and pending state; do not run jj undo/redo/op restore",
+		}, 1)
 	}
 
 	verifyOut, err := runGate(ctx, repoRoot)
 	if err != nil {
 		logx.Out().Line("%s", verifyOut)
-		logx.Err().Line("checkpoint incomplete: post-commit gate failed; receipt not written")
-		return 1
+		details := []string{fmt.Sprintf("commit: %s", commit), "failed phase: post-commit gate verification"}
+		if report, ok := parseRecoveryReport(verifyOut); ok {
+			details = append(details, report.Details...)
+		} else {
+			details = append(details, strings.TrimSpace(verifyOut))
+		}
+		return emitCheckpointFailure(opts, recovery.Report{
+			Status: "incomplete", Code: "checkpoint.incomplete", Owner: "user", Retry: "terminal",
+			Summary: "checkpoint committed but post-commit verification failed", Details: details,
+			Next: "preserve the commit and pending state; do not run jj undo/redo/op restore",
+		}, 1)
 	}
 	logx.Out().Line("%s", verifyOut)
 
-	acceptCSV := strings.Join(opts.accept, ",")
-	receiptJSON, err := receipt.Write(ctx, repoRoot, "checkpoint", commit, string(repo.Kind), opts.session, acceptCSV)
-	if err != nil {
-		logx.Err().Line("checkpoint incomplete: exact-state receipt write failed")
-		return 1
-	}
-
-	if opts.session != "" {
-		substrateDir := filepath.Join(repoRoot, ".substrate")
-		pathsCfg, _ := config.DiscoverFromSubstrateDir(substrateDir)
-		le := lifecycle.New(pathsCfg, repo)
-		le.SetStateDir(filepath.Join(metadataDir, "substrate", "agent-sessions"))
-		result := le.Complete(ctx, opts.session, commit)
-		if result.Code != 0 {
-			_, _ = os.Stderr.Write(result.Stderr)
-			logx.Err().Line("checkpoint incomplete: commit exists but Claude lifecycle receipt update failed")
-			return 1
-		}
-	}
-
-	if opts.json {
-		logx.Out().Line("%s", receiptJSON)
-	} else {
-		logx.Out().Line("checkpoint complete: %s (%s)", commit[:12], opts.message)
-	}
-	return 0
+	return finishCheckpoint(ctx, repo, repoRoot, metadataDir, commit, publicationBookmark, opts)
 }
 
 func runCheckpointScoped(ctx context.Context, repo *vcs.Repo, repoRoot, metadataDir string, normalized, leftover []string, opts checkpointOpts, baselinePath string) int {
@@ -304,6 +316,10 @@ func runCheckpointScoped(ctx context.Context, repo *vcs.Repo, repoRoot, metadata
 	if err != nil || base == "" {
 		logx.Err().Line("checkpoint blocked: cannot resolve the checked revision")
 		return ExitPreflight
+	}
+	publicationBookmark, bookmarkErr := resolvePublicationBookmark(ctx, repo, base)
+	if bookmarkErr != nil {
+		return emitCheckpointFailure(opts, recovery.Report{Status: "blocked", Code: "checkpoint.bookmark-ambiguous", Owner: "user", Retry: "terminal", Summary: "checkpoint publication bookmark is ambiguous", Details: []string{bookmarkErr.Error()}, Next: "choose the intended local bookmark and rerun checkpoint"})
 	}
 	res, err := xshell.RunIn(ctx, repoRoot, "git", "cat-file", "-e", base+"^{commit}")
 	if err != nil || res.Code != 0 {
@@ -323,11 +339,10 @@ func runCheckpointScoped(ctx context.Context, repo *vcs.Repo, repoRoot, metadata
 		gateArgs = append(gateArgs, "--accept-regression="+strings.Join(opts.accept, ","))
 		gateArgs = append(gateArgs, "--reason="+opts.reason)
 	}
+	gateArgs = append(gateArgs, "--json")
 	gateOut, err := candidate.RunGate(ctx, gateArgs...)
 	if err != nil {
-		logx.Out().Line("%s", gateOut)
-		logx.Err().Line("checkpoint blocked: gate failed for the agent-owned paths (unowned pending work was excluded)")
-		return 1
+		return emitGateFailure(opts, gateOut, err)
 	}
 	logx.Out().Line("%s", gateOut)
 
@@ -342,48 +357,35 @@ func runCheckpointScoped(ctx context.Context, repo *vcs.Repo, repoRoot, metadata
 	if baselineChanged {
 		commitPaths = append(commitPaths, "substrate-baseline.json")
 	}
-
 	commit, commitOut, err := commitPathsFn(ctx, repo, repoRoot, opts.message, commitPaths)
 	if err != nil {
-		logx.Err().Line("checkpoint failed: %v", err)
-		return 1
+		return emitCommitFailure(opts, err, nil)
+	}
+	if err := finalizePublicationBookmark(ctx, repo, publicationBookmark, commit); err != nil {
+		return emitCheckpointFailure(opts, recovery.Report{Status: "incomplete", Code: "checkpoint.bookmark-finalize", Owner: "user", Retry: "terminal", Summary: "checkpoint committed but publication bookmark finalization failed", Details: []string{fmt.Sprintf("commit: %s", commit), err.Error()}, Next: fmt.Sprintf("run jj bookmark set %s -r %s; do not run jj undo/redo/op restore", publicationBookmark, commit)}, 1)
 	}
 	logx.Out().Line("%s", commitOut)
 
 	current, err := ChangedPaths(ctx, repo)
 	if err != nil {
-		logx.Err().Line("checkpoint incomplete: cannot inspect post-commit working copy")
-		return 1
+		return emitCheckpointFailure(opts, recovery.Report{
+			Status: "incomplete", Code: "checkpoint.incomplete", Owner: "user", Retry: "terminal",
+			Summary: "checkpoint committed but post-commit state inspection failed",
+			Details: []string{fmt.Sprintf("commit: %s", commit), err.Error()},
+			Next:    "preserve the commit and pending state; do not run jj undo/redo/op restore",
+		}, 1)
 	}
 	if !stringSlicesEqual(current, leftover) {
-		logx.Err().Line("checkpoint incomplete: post-commit pending paths diverge from the expected remainder")
-		return 1
+		return emitCheckpointFailure(opts, recovery.Report{
+			Status: "incomplete", Code: "checkpoint.incomplete", Owner: "user", Retry: "terminal",
+			Summary: "checkpoint committed but pending paths diverged",
+			Details: append([]string{fmt.Sprintf("commit: %s", commit)}, current...),
+			Next:    "preserve the commit and pending state; do not run jj undo/redo/op restore",
+		}, 1)
 	}
 
-	acceptCSV := strings.Join(opts.accept, ",")
-	receiptJSON, err := receipt.Write(ctx, repoRoot, "checkpoint", commit, string(repo.Kind), opts.session, acceptCSV)
-	if err != nil {
-		logx.Err().Line("checkpoint incomplete: exact-state receipt write failed")
-		return 1
-	}
-
-	if opts.session != "" {
-		substrateDir := filepath.Join(repoRoot, ".substrate")
-		pathsCfg, _ := config.DiscoverFromSubstrateDir(substrateDir)
-		le := lifecycle.New(pathsCfg, repo)
-		le.SetStateDir(filepath.Join(metadataDir, "substrate", "agent-sessions"))
-		result := le.Complete(ctx, opts.session, commit)
-		if result.Code != 0 {
-			_, _ = os.Stderr.Write(result.Stderr)
-			logx.Err().Line("checkpoint incomplete: commit exists but Claude lifecycle receipt update failed")
-			return 1
-		}
-	}
-
-	if opts.json {
-		logx.Out().Line("%s", receiptJSON)
-	} else {
-		logx.Out().Line("checkpoint complete: %s (%s)", commit[:12], opts.message)
+	if result := finishCheckpoint(ctx, repo, repoRoot, metadataDir, commit, publicationBookmark, opts); result != 0 {
+		return result
 	}
 	if len(leftover) > 0 {
 		logx.Err().Line("checkpoint left unowned pending paths in place:")
@@ -404,23 +406,137 @@ func resolveRepoRoot() (string, error) {
 	}
 	return dir, nil
 }
+func finishCheckpoint(ctx context.Context, repo *vcs.Repo, repoRoot, metadataDir, commit, publicationBookmark string, opts checkpointOpts) int {
+	acceptCSV := strings.Join(opts.accept, ",")
+	receiptJSON, err := receipt.WriteWithPublicationBookmark(ctx, repoRoot, "checkpoint", commit, string(repo.Kind), opts.session, acceptCSV, publicationBookmark)
+	if err != nil {
+		return emitCheckpointFailure(opts, recovery.Report{
+			Status: "incomplete", Code: "checkpoint.incomplete", Owner: "user", Retry: "terminal",
+			Summary: "checkpoint committed but exact-state receipt write failed",
+			Details: []string{fmt.Sprintf("commit: %s", commit), err.Error()},
+			Next:    "preserve the commit and pending state; do not run jj undo/redo/op restore",
+		}, 1)
+	}
 
+	if opts.session != "" {
+		substrateDir := filepath.Join(repoRoot, ".substrate")
+		pathsCfg, _ := config.DiscoverFromSubstrateDir(substrateDir)
+		le := lifecycle.New(pathsCfg, repo)
+		le.SetStateDir(filepath.Join(metadataDir, "substrate", "agent-sessions"))
+		result := le.Complete(ctx, opts.session, commit)
+		if result.Code != 0 {
+			_, _ = os.Stderr.Write(result.Stderr)
+			return emitCheckpointFailure(opts, recovery.Report{
+				Status: "incomplete", Code: "checkpoint.incomplete", Owner: "user", Retry: "terminal",
+				Summary: "checkpoint committed but lifecycle receipt update failed",
+				Details: []string{fmt.Sprintf("commit: %s", commit), string(result.Stderr)},
+				Next:    "preserve the commit and pending state; do not run jj undo/redo/op restore",
+			}, 1)
+		}
+	}
+
+	if opts.json {
+		logx.Out().Line("%s", receiptJSON)
+	} else {
+		logx.Out().Line("checkpoint complete: %s (%s)", commit[:12], opts.message)
+	}
+	return 0
+}
 func runGate(ctx context.Context, repoRoot string, args ...string) (string, error) {
 	bin, err := xshell.EngineBin()
 	if err != nil {
 		return "", fmt.Errorf("gate: %w", err)
 	}
-	res, err := xshell.RunIn(ctx, repoRoot, bin, append([]string{"gate"}, args...)...)
+	gateArgs := append([]string{"gate"}, args...)
+	gateArgs = append(gateArgs, "--json")
+	res, err := xshell.RunIn(ctx, repoRoot, bin, gateArgs...)
 	output := string(res.Stdout) + string(res.Stderr)
 	if err != nil {
 		return output, fmt.Errorf("gate: %w", err)
 	}
 	if res.Code != 0 {
+		if report, ok := parseRecoveryReport(output); ok {
+			return output, gateReportError{report: report, code: res.Code}
+		}
 		return output, fmt.Errorf("gate failed with code %d", res.Code)
 	}
 	return output, nil
 }
 
+type gateReportError struct {
+	report recovery.Report
+	code   int
+}
+
+func (e gateReportError) Error() string { return e.report.Summary }
+
+func parseRecoveryReport(output string) (recovery.Report, bool) {
+	for _, line := range reverseLines(strings.TrimSpace(output)) {
+		var report recovery.Report
+		if json.Unmarshal([]byte(line), &report) != nil ||
+			(report.Status != "blocked" && report.Status != "incomplete") ||
+			report.Code == "" || report.Owner == "" || report.Retry == "" ||
+			report.Summary == "" || report.Next == "" {
+			continue
+		}
+		return report, true
+	}
+	return recovery.Report{}, false
+}
+
+func reverseLines(s string) []string {
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, "\n")
+	for i, j := 0, len(parts)-1; i < j; i, j = i+1, j-1 {
+		parts[i], parts[j] = parts[j], parts[i]
+	}
+	return parts
+}
+
+func resolvePublicationBookmark(ctx context.Context, repo *vcs.Repo, base string) (string, error) {
+	if repo.Kind != vcs.KindJJ {
+		return "", nil
+	}
+	res, err := xshell.RunIn(ctx, repo.Root, "jj", "bookmark", "list", "--template", `name ++ "\t" ++ if(self.remote(), "remote", "local") ++ "\t" ++ self.normal_target().commit_id() ++ "\n"`)
+	if err != nil || res.Code != 0 {
+		return "", fmt.Errorf("cannot inspect jj bookmarks")
+	}
+	var trunk, feature []string
+	for _, line := range strings.Split(string(res.Stdout), "\n") {
+		parts := strings.SplitN(line, "\t", 3)
+		if len(parts) != 3 || parts[1] != "local" || parts[2] != base {
+			continue
+		}
+		if parts[0] == "main" || parts[0] == "master" {
+			trunk = append(trunk, parts[0])
+		} else {
+			feature = append(feature, parts[0])
+		}
+	}
+	if len(trunk) == 1 {
+		return trunk[0], nil
+	}
+	if len(trunk) > 1 || len(feature) > 1 {
+		return "", fmt.Errorf("ambiguous publication bookmarks at %s: %s", base, strings.Join(append(trunk, feature...), ", "))
+	}
+	if len(feature) == 1 {
+		return feature[0], nil
+	}
+	return "main", nil
+}
+
+func finalizePublicationBookmark(ctx context.Context, repo *vcs.Repo, name, commit string) error {
+	if repo.Kind != vcs.KindJJ || name == "" {
+		return nil
+	}
+	res, err := xshell.RunIn(ctx, repo.Root, "jj", "bookmark", "set", name, "-r", commit)
+	if err != nil || res.Code != 0 {
+		return fmt.Errorf("jj bookmark set %s -r %s failed", name, commit)
+	}
+	return nil
+}
 func commitPathsFn(ctx context.Context, repo *vcs.Repo, repoRoot, message string, paths []string) (string, string, error) {
 	if repo.Kind == vcs.KindJJ {
 		return commitJJ(ctx, repo, message, paths)
@@ -495,4 +611,31 @@ func stringSlicesEqual(a, b []string) bool {
 		}
 	}
 	return true
+}
+func emitCheckpointFailure(opts checkpointOpts, report recovery.Report, codes ...int) int {
+	if opts.json {
+		recovery.Emit(report, true)
+	} else {
+		recovery.Emit(report, false)
+	}
+	if len(codes) > 0 {
+		return codes[0]
+	}
+	return 1
+}
+
+func emitGateFailure(opts checkpointOpts, output string, cause error) int {
+	report, ok := parseRecoveryReport(output)
+	if !ok {
+		report = recovery.Report{
+			Status:  "blocked",
+			Code:    "recovery.protocol-invalid",
+			Owner:   "user",
+			Retry:   "terminal",
+			Summary: "checkpoint gate returned an invalid recovery report",
+			Details: []string{strings.TrimSpace(output), cause.Error()},
+			Next:    "preserve the pending work and hand the gate output to the user",
+		}
+	}
+	return emitCheckpointFailure(checkpointOpts{json: opts.json}, report, 1)
 }

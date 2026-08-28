@@ -9,12 +9,12 @@ import (
 )
 
 type Preflight struct {
-	SubDir    string
-	RepoRoot  string
-	Config    string
-	Langmap   string
-	Baseline  string
-	Flags     PreflightFlags
+	SubDir   string
+	RepoRoot string
+	Config   string
+	Langmap  string
+	Baseline string
+	Flags    PreflightFlags
 }
 
 type PreflightFlags struct {
@@ -23,6 +23,7 @@ type PreflightFlags struct {
 	AcceptRegression bool
 	AcceptKeys       string
 	AcceptReason     string
+	JSON             bool
 }
 
 func ResolveRoots() (subDir, repoRoot string, err error) {
@@ -68,6 +69,8 @@ func ParseFlags(args []string) (PreflightFlags, []string, error) {
 			f.UpdateBaseline = true
 			f.AcceptRegression = true
 			f.AcceptKeys = strings.TrimPrefix(a, "--accept-regression=")
+		case a == "--json":
+			f.JSON = true
 		case a == "--list-checks":
 			rest = append(rest, a)
 		case strings.HasPrefix(a, "--reason="):

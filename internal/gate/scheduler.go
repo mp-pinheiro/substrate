@@ -182,7 +182,8 @@ func RunChecks(ctx *RunContext, specs []checkSpec, claimsData []byte) error {
 	failures := 0
 	for i, r := range collected {
 		if r.Output != "" {
-			fmt.Print(r.Output)
+			fmt.Print(strings.TrimRight(r.Output, "\n"))
+			fmt.Print("\n")
 		}
 		took := FormatDuration(r.MS)
 		if r.RC == 0 {

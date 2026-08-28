@@ -8,6 +8,17 @@ type CheckpointReceipt = {
 	vcs: string;
 	at: string;
 	status: string;
+	publicationBookmark?: string | null;
+};
+
+type RecoveryReport = {
+	status: "blocked" | "incomplete";
+	code: string;
+	owner: "agent" | "user";
+	retry: "after-change" | "terminal";
+	summary: string;
+	details: string[];
+	next: string;
 };
 
 type ToolOutcome = {
@@ -17,8 +28,87 @@ type ToolOutcome = {
 };
 
 type ProgressSink = (text: string) => void;
-
 type TransactionIO = { progress?: ProgressSink; signal?: AbortSignal };
+
+function renderRecovery(report: RecoveryReport): string {
+	const label =
+		report.status === "incomplete"
+			? "[substrate — checkpoint incomplete]"
+			: report.owner === "user"
+				? "[substrate — hand to user]"
+				: "[substrate — fix before proceeding]";
+	return [
+		`${label} ${report.summary}`,
+		...report.details.map((detail) => detail.split("\n").map((line) => `  ${line}`).join("\n")),
+		report.next ? `next: ${report.next}` : "",
+	]
+		.filter(Boolean)
+		.join("\n");
+}
+
+function checkpointReport(output: string): RecoveryReport | null {
+	const candidate = reverseJSONObjects(output, (value) =>
+		(value.status === "blocked" || value.status === "incomplete") &&
+		typeof value.code === "string" &&
+		(value.owner === "agent" || value.owner === "user") &&
+		(value.retry === "after-change" || value.retry === "terminal") &&
+		typeof value.summary === "string" &&
+		Array.isArray(value.details) &&
+		value.details.every((detail) => typeof detail === "string") &&
+		typeof value.next === "string",
+	);
+	return candidate as unknown as RecoveryReport | null;
+}
+
+function protocolInvalid(output: string): RecoveryReport {
+	return {
+		status: "blocked",
+		code: "recovery.protocol-invalid",
+		owner: "user",
+		retry: "terminal",
+		summary: "checkpoint returned no valid recovery envelope",
+		details: [output.trim() || "the checkpoint produced no output"],
+		next: "preserve pending work and hand this raw output to the user; do not retry automatically",
+	};
+}
+
+function checkpointReceipt(output: string): CheckpointReceipt | null {
+	const value = reverseJSONObjects(
+		output,
+		(candidate) =>
+			typeof candidate.commit === "string" &&
+			typeof candidate.vcs === "string" &&
+			typeof candidate.at === "string" &&
+			typeof candidate.status === "string",
+	);
+	if (!value) return null;
+	return {
+		commit: value.commit as string,
+		vcs: value.vcs as string,
+		at: value.at as string,
+		status: value.status as string,
+		publicationBookmark:
+			typeof value.publicationBookmark === "string" || value.publicationBookmark === null
+				? value.publicationBookmark
+				: null,
+	};
+}
+
+function reverseJSONObjects(
+	output: string,
+	visit: (value: Record<string, unknown>) => boolean,
+): Record<string, unknown> | null {
+	for (const line of output.trim().split("\n").reverse()) {
+		try {
+			const value: unknown = JSON.parse(line);
+			if (!value || typeof value !== "object") continue;
+			const candidate = value as Record<string, unknown>;
+			if (visit(candidate)) return candidate;
+		} catch {}
+	}
+	return null;
+}
+
 
 function blockedToolResult(message: string): ToolOutcome {
 	return {
@@ -61,28 +151,6 @@ function registerGateTool(
 	});
 }
 
-function checkpointReceipt(output: string): CheckpointReceipt | null {
-	for (const line of output.trim().split("\n").reverse()) {
-		try {
-			const value: unknown = JSON.parse(line);
-			if (!value || typeof value !== "object") continue;
-			if (
-				!("commit" in value) ||
-				typeof value.commit !== "string" ||
-				!("vcs" in value) ||
-				typeof value.vcs !== "string" ||
-				!("at" in value) ||
-				typeof value.at !== "string" ||
-				!("status" in value) ||
-				typeof value.status !== "string"
-			) {
-				continue;
-			}
-			return { commit: value.commit, vcs: value.vcs, at: value.at, status: value.status };
-		} catch {}
-	}
-	return null;
-}
 
 function resolveEngineBin(root: string): string | null {
 	const fromEnv = process.env.SUBSTRATE_ENGINE_BIN;
@@ -145,7 +213,7 @@ async function runCheckpointTransaction(
 	acceptRegression: string[] = [],
 	reason?: string,
 	io: TransactionIO = {},
-): Promise<{ receipt: CheckpointReceipt | null; ok: boolean; summary: string }> {
+): Promise<{ receipt: CheckpointReceipt | null; report: RecoveryReport | null; ok: boolean; summary: string }> {
 	const command = [
 		...resolveCheckpointCmd(root),
 		"--message",
@@ -156,14 +224,17 @@ async function runCheckpointTransaction(
 		"--json",
 	];
 	const result = await spawnTransactionScript(root, command, 40, io);
+	const report = checkpointReport(result.stdout + "\n" + result.summary);
 	if (result.exitCode !== 0) {
-		return {
-			receipt: null,
-			ok: false,
-			summary: `${result.summary}\ncheckpoint failed with exit ${result.exitCode}`,
-		};
+		const terminal = report ?? protocolInvalid(result.stdout + "\n" + result.summary);
+		return { receipt: null, report: terminal, ok: false, summary: renderRecovery(terminal) };
 	}
-	return { receipt: checkpointReceipt(result.stdout), ok: true, summary: result.summary };
+	const receipt = checkpointReceipt(result.stdout);
+	if (!receipt) {
+		const terminal = protocolInvalid(result.stdout + "\n" + result.summary);
+		return { receipt: null, report: terminal, ok: false, summary: renderRecovery(terminal) };
+	}
+	return { receipt, report: null, ok: true, summary: result.summary };
 }
 
 async function runRestructureTransaction(
