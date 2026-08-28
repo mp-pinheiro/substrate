@@ -6,6 +6,7 @@ set -uo pipefail
 SUBSTRATE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SUBSTRATE_DIR/.." && pwd)"
 cd "$REPO_ROOT" || exit 2
+source "$SUBSTRATE_DIR/receipt-lib.sh"
 
 if ! "$SUBSTRATE_DIR/push-gate.sh"; then
     exit 2
@@ -30,9 +31,9 @@ if [ -n "$bookmark" ]; then
     fi
 else
     candidates_file=$(mktemp) || { printf 'push blocked: cannot infer publication bookmark\n' >&2; exit 2; }
-    while IFS=$'\t' read -r name rev; do
-        [ "$rev" = "$commit" ] && printf '%s\n' "$name" >> "$candidates_file"
-    done < <(jj bookmark list --template 'name ++ "\t" ++ commit_id ++ "\n"' 2>/dev/null)
+    while IFS=$'\t' read -r name kind rev; do
+        [ "$kind" = "local" ] && [ "$rev" = "$commit" ] && printf '%s\n' "$name" >> "$candidates_file"
+    done < <(jj bookmark list --template 'name ++ "\t" ++ if(self.remote(), "remote", "local") ++ "\t" ++ self.normal_target().commit_id() ++ "\n"' 2>/dev/null)
     mapfile -t candidates < "$candidates_file"
     rm -f "$candidates_file"
     if [ "${#candidates[@]}" -eq 0 ]; then
@@ -40,6 +41,7 @@ else
         exit 2
     fi
     if [ "${#candidates[@]}" -gt 1 ]; then
+        preferred=()
         for candidate in "${candidates[@]}"; do
             case "$candidate" in
                 main|master) preferred+=("$candidate") ;;

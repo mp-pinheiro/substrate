@@ -117,8 +117,8 @@ mkdir -p "$T/jj-repo"
     out=$(env -u CI substrate-engine gate --update-baseline 2>&1) || fail "jj: baseline not green: $out"
     jj commit -m 'feat: seed' >/dev/null 2>&1
     jj bookmark create main -r @- >/dev/null 2>&1
-
     printf 'plain text\n' > orphan.xyz
+    cp substrate.json "$T/jj-substrate.json"
     jq '.push_gate = false' substrate.json > "$T/jj-push-gate-optout.json"
     mv "$T/jj-push-gate-optout.json" substrate.json
     out=$(env -u CI jj push -b main 2>&1)
@@ -126,14 +126,48 @@ mkdir -p "$T/jj-repo"
     [ "$rc" -ne 0 ] || fail "jj: push not blocked by red gate"
     grep -q 'push blocked' <<< "$out" || fail "jj: block message missing: $out"
     git ls-remote --heads "$T/jj-origin.git" | grep -q main && fail "jj: ref reached remote despite red gate"
-    jj restore substrate.json >/dev/null 2>&1
 
+    cp "$T/jj-substrate.json" substrate.json
     rm orphan.xyz
-    out=$(env -u CI .substrate/push-gate.sh 2>&1) || fail "jj: receipt seed failed: $out"
-    grep -q 'green receipt recorded' <<< "$out" || fail "jj: receipt seed was not recorded: $out"
-    out=$(env -u CI jj push -b main 2>&1) || fail "jj: green push failed: $out"
+    printf 'printf "checkpointed\\n"\n' >> components/x.sh
+    env -u CI substrate-engine checkpoint --message 'fix(shell): checkpoint jj change' --path components/x.sh >/dev/null 2>&1 \
+        || fail "jj: checkpoint failed"
+    commit=$(jq -r '.commit' .git/substrate/gate-receipt.json)
+    bookmark=$(jq -r '.publicationBookmark' .git/substrate/gate-receipt.json)
+    [ "$bookmark" = main ] || fail "jj: receipt publication bookmark is not main"
+    [ "$(jj log -r "$bookmark" --no-graph -T commit_id)" = "$commit" ] \
+        || fail "jj: local publication bookmark does not match receipt commit"
+    if ! env -u CI substrate-engine receipt matches; then
+        fail "jj: checkpoint gate receipt did not match current state"
+    fi
+
+    out=$(env -u CI jj push 2>&1) || fail "jj: green push failed: $out"
     grep -q 'exact-state receipt accepted' <<< "$out" || fail "jj: push did not reuse its exact receipt: $out"
-    git ls-remote --heads "$T/jj-origin.git" | grep -q main || fail "jj: green push produced no remote ref"
+    remote=$(git ls-remote "$T/jj-origin.git" "refs/heads/$bookmark" | cut -f1)
+    [ "$remote" = "$commit" ] || fail "jj: remote bookmark does not match receipt commit"
+    out=$(env -u CI jj push 2>&1) || fail "jj: unchanged push failed: $out"
+    grep -q 'Nothing changed' <<< "$out" || fail "jj: unchanged push did not report Nothing changed: $out"
+    base=$(jj log -r @- --no-graph -T commit_id)
+    parent=$(jj log -r 'parents(main)' --no-graph -T commit_id)
+    out=$(jj bookmark set --allow-backwards main -r "$parent" 2>&1)
+    [ "$?" -eq 0 ] || fail "jj: could not move main behind checkpoint base: parent=$parent output=$out"
+    [ "$(jj log -r main --no-graph -T commit_id)" != "$base" ] || fail "jj: main bookmark did not move behind base"
+    jj bookmark create feature -r "$base" >/dev/null 2>&1
+    jj config unset --repo experimental-advance-branches.enabled-branches >/dev/null 2>&1 || true
+    printf 'printf "feature\\n"\n' >> components/x.sh
+    env -u CI substrate-engine checkpoint --message 'fix(shell): checkpoint feature' --path components/x.sh >/dev/null 2>&1 \
+        || fail "jj: feature checkpoint failed"
+    feature_commit=$(jq -r '.commit' .git/substrate/gate-receipt.json)
+    feature_bookmark=$(jq -r '.publicationBookmark' .git/substrate/gate-receipt.json)
+    [ "$feature_bookmark" = feature ] \
+        || fail "jj: feature bookmark was not selected: $feature_bookmark (main=$(jj log -r main --no-graph -T commit_id), feature=$(jj log -r feature --no-graph -T commit_id), base=$(jj log -r @- --no-graph -T commit_id))"
+    [ "$(jj log -r feature --no-graph -T commit_id)" = "$feature_commit" ] \
+        || fail "jj: feature bookmark does not match checkpoint commit"
+    [ "$(jj log -r main --no-graph -T commit_id)" = "$parent" ] \
+        || fail "jj: stale main bookmark moved unexpectedly"
+    out=$(env -u CI jj push 2>&1) || fail "jj: feature push failed: $out"
+    remote=$(git ls-remote "$T/jj-origin.git" "refs/heads/feature" | cut -f1)
+    [ "$remote" = "$feature_commit" ] || fail "jj: feature remote does not match checkpoint commit"
 ) || exit 1
 
 printf 'vcs-hooks-test: git commit/push gates and jj gated push green\n'

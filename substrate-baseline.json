@@ -285,7 +285,7 @@
   "comments:test/vendor-drift-test.sh": 0,
   "comments:test/vendor-source-test.sh": 0,
   "dead_code": 0,
-  "dup_pct": 2.214260353119654
+  "dup_pct": 2.211690363349131
 },
   "direction": {
   "comments:.claude/agents/enemy.md.substrate-managed.json": "lo",
