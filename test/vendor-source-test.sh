@@ -42,6 +42,90 @@ reset_kit() {
     git -C "$T/kit" reset --hard -q origin/main
     git -C "$T/kit" clean -qfd
 }
+# Registry generation must hash canonical sources and fail closed on new checks.
+git clone -q "$KIT_ROOT" "$T/registry-kit" || fail "registry kit clone failed"
+cp "$KIT_ROOT/checks.d/82-check-registry.sh" "$T/registry-kit/checks.d/82-check-registry.sh"
+cp "$KIT_ROOT/cmd/generate-registry/main.go" "$T/registry-kit/cmd/generate-registry/main.go"
+(cd "$T/registry-kit" && go run ./cmd/generate-registry > internal/gate/registry_gen.go) \
+    || fail "registry generation in clone failed"
+cat > "$T/registry-kit/checks.d/89-registry-new.sh" <<'EOF'
+#!/usr/bin/env bash
+set -uo pipefail
+source "$SUBSTRATE_DIR/gate-lib.sh"
+exit 0
+EOF
+chmod +x "$T/registry-kit/checks.d/89-registry-new.sh"
+if (cd "$T/registry-kit" && ./bin/substrate update --apply > "$T/registry-missing.out" 2>&1); then
+    fail "update accepted an unregistered repository check"
+fi
+grep -q '89-registry-new.sh not yet in registry' "$T/registry-missing.out" \
+    || fail "missing registry entry was not reported"
+[ ! -e "$T/registry-kit/.substrate/checks.d/89-registry-new.sh" ] \
+    || fail "failed update installed the unregistered check"
+
+printf '\n' >> "$T/registry-kit/core/checks.d/20-duplication.sh"
+jq '.profiles += ["registry-overlay"]' "$T/registry-kit/substrate.json" \
+    > "$T/registry-kit/substrate.json.new" \
+    || fail "registry profile config update failed"
+mv "$T/registry-kit/substrate.json.new" "$T/registry-kit/substrate.json"
+mkdir -p "$T/registry-kit/profiles/base/checks.d" \
+         "$T/registry-kit/profiles/registry-overlay/checks.d" \
+         "$T/registry-kit/substrate-profiles/registry-overlay/checks.d"
+cat > "$T/registry-kit/profiles/base/checks.d/68-registry-order.sh" <<'EOF'
+#!/usr/bin/env bash
+set -uo pipefail
+source "$SUBSTRATE_DIR/gate-lib.sh"
+: base
+exit 0
+EOF
+cat > "$T/registry-kit/profiles/registry-overlay/checks.d/68-registry-order.sh" <<'EOF'
+#!/usr/bin/env bash
+set -uo pipefail
+source "$SUBSTRATE_DIR/gate-lib.sh"
+: profiles
+exit 0
+EOF
+cat > "$T/registry-kit/substrate-profiles/registry-overlay/checks.d/68-registry-order.sh" <<'EOF'
+#!/usr/bin/env bash
+set -uo pipefail
+source "$SUBSTRATE_DIR/gate-lib.sh"
+: substrate-profiles
+exit 0
+EOF
+chmod +x "$T/registry-kit"/profiles/base/checks.d/68-registry-order.sh \
+    "$T/registry-kit"/profiles/registry-overlay/checks.d/68-registry-order.sh \
+    "$T/registry-kit"/substrate-profiles/registry-overlay/checks.d/68-registry-order.sh
+cat > "$T/registry-kit/profiles/registry-overlay/profile.json" <<'EOF'
+{"name":"registry-overlay","claims":{},"toolchain":[],"ci":[],"checks":["68-registry-order.sh"]}
+EOF
+cat > "$T/registry-kit/substrate-profiles/registry-overlay/profile.json" <<'EOF'
+{"name":"registry-overlay","claims":{},"toolchain":[],"ci":[],"checks":["68-registry-order.sh"]}
+EOF
+(cd "$T/registry-kit" && go run ./cmd/generate-registry > internal/gate/registry_gen.go) \
+    || fail "registry regeneration with overlays failed"
+(cd "$T/registry-kit" && ./bin/substrate update --apply > "$T/registry-success.out" 2>&1) \
+    || fail "update rejected canonical registry sources"
+cmp "$T/registry-kit/core/checks.d/20-duplication.sh" \
+    "$T/registry-kit/.substrate/checks.d/20-duplication.sh" \
+    || fail "vendored core check differs from canonical source"
+cmp "$T/registry-kit/checks.d/82-check-registry.sh" \
+    "$T/registry-kit/.substrate/checks.d/82-check-registry.sh" \
+    || fail "vendored repository check differs from canonical source"
+cmp "$T/registry-kit/checks.d/89-registry-new.sh" \
+    "$T/registry-kit/.substrate/checks.d/89-registry-new.sh" \
+    || fail "vendored root check differs from canonical source"
+cmp "$T/registry-kit/substrate-profiles/registry-overlay/checks.d/68-registry-order.sh" \
+    "$T/registry-kit/.substrate/checks.d/68-registry-order.sh" \
+    || fail "profile override precedence did not select the configured source"
+registry_68_digest=$(sha256sum "$T/registry-kit/.substrate/checks.d/68-registry-order.sh" | cut -d' ' -f1)
+grep -q "\"68-registry-order.sh\".*\"$registry_68_digest\"" \
+    "$T/registry-kit/internal/gate/registry_gen.go" \
+    || fail "registry digest does not match the selected profile source"
+registry_89_digest=$(sha256sum "$T/registry-kit/checks.d/89-registry-new.sh" | cut -d' ' -f1)
+grep -q "\"89-registry-new.sh\".*\"$registry_89_digest\"" \
+    "$T/registry-kit/internal/gate/registry_gen.go" \
+    || fail "registry digest does not match the repository source"
+
 
 # Clean kit: init succeeds and records provenance
 reset_kit
