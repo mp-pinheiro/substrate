@@ -9,6 +9,7 @@ import {
 	commandTargetCwd,
 	hasDirectCommit,
 	hasGitMutation,
+	hasRawGitPush,
 	hasPush,
 	findGateRoot,
 	findJjRoot,
@@ -226,15 +227,17 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 		};
 	});
 
-	// mirrors: enforce-jj.sh
+	// mirrors: enforce-jj.sh — substrate-managed jj repos only (plain jj repos
+	// keep their own hooks); `jj git push` is sanctioned and flows to the gate.
 	pi.on("tool_call", async (event, ctx) => {
 		if (event.toolName !== "bash") return;
+		if (!findGateRoot(ctx.cwd)) return;
 		if (!findJjRoot(ctx.cwd)) return;
 		const cmd = String(event.input.command ?? "");
 		if (hasGitMutation(cmd)) {
 			return blockedBash("BLOCKED: this repo is jj-managed — use substrate_checkpoint after direct verification, not direct VCS mutation (see docs/jj-workflow.md).");
 		}
-		if (hasPush(cmd) && !/(--tags|\sv\d)/.test(cmd)) {
+		if (hasRawGitPush(cmd) && !/(--tags|\sv\d)/.test(cmd)) {
 			return blockedBash("BLOCKED: use 'jj git push', not 'git push', in this jj-managed repo (release tags are the exception: 'git push origin vX.Y.Z'). See docs/jj-workflow.md.");
 		}
 	});

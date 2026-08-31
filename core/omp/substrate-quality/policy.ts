@@ -31,7 +31,8 @@ function engineVersion(root: string): string {
 		return "unknown";
 	}
 }
-// jj hooks are runtime-gated: active only when the repo root carries .jj
+// jj rules apply only inside substrate-managed repos whose root carries .jj;
+// plain jj repos are governed by their own vendored hooks, not this extension
 function findJjRoot(cwd: string): string | null {
 	let dir = resolve(cwd);
 	for (;;) {
@@ -180,6 +181,15 @@ function hasPush(command: string): boolean {
 		);
 	});
 }
+
+// EnforceJJ normalizes `jj git` away before its git-push match, so the mirror
+// must block only raw `git push`; `jj git push` flows on to the push gate.
+function hasRawGitPush(command: string): boolean {
+	return commandArgv(command).some((args) => {
+		const verb = commandVerbIndex(args);
+		return args[0] === "git" && verb >= 0 && args[verb] === "push";
+	});
+}
 type CommandResult = { exitCode: number; stdout: string; stderr: string };
 
 async function readStream(
@@ -264,6 +274,7 @@ export {
 	findGateRoot,
 	hasGitMutation,
 	hasDirectCommit,
+	hasRawGitPush,
 	hasPush,
 	findJjRoot,
 	refreshReport,

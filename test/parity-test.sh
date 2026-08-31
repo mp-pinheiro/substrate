@@ -32,6 +32,12 @@ git clone -q "$T/repo" "$T/dirty-repo"
 git -C "$T/dirty-repo" config user.name substrate
 git -C "$T/dirty-repo" config user.email substrate@localhost
 printf 'printf "preexisting\\n"\n' >> "$T/dirty-repo/owned.sh"
+git init -q --initial-branch=main "$T/plain-jj"
+(cd "$T/plain-jj" && jj git init --colocate) >/dev/null 2>&1 || fail "plain jj fixture failed"
+git clone -q "$T/repo" "$T/jj-sub"
+git -C "$T/jj-sub" config user.name substrate
+git -C "$T/jj-sub" config user.email substrate@localhost
+(cd "$T/jj-sub" && jj git init --colocate) >/dev/null 2>&1 || fail "substrate jj fixture failed"
 
 cat > "$T/omp-lifecycle.ts" <<'TS'
 import { appendFileSync, writeFileSync } from "node:fs";
@@ -123,6 +129,23 @@ const pushBlocks = await callAll(
 	{ toolName: "bash", toolCallId: "push", input: { command: "git push origin main" } },
 	ctx,
 );
+const plainJjCtx = probe.context(process.argv[6]);
+const plainPushBlocks = await callAll(
+	"tool_call",
+	{ toolName: "bash", toolCallId: "plain-push", input: { command: "git push origin main" } },
+	plainJjCtx,
+);
+const plainCommitBlocks = await callAll(
+	"tool_call",
+	{ toolName: "bash", toolCallId: "plain-commit", input: { command: "git commit -m x" } },
+	plainJjCtx,
+);
+const jjSubCtx = probe.context(process.argv[7]);
+const jjPushBlocks = await callAll(
+	"tool_call",
+	{ toolName: "bash", toolCallId: "jj-push", input: { command: "jj git push" } },
+	jjSubCtx,
+);
 console.log(
 	JSON.stringify({
 		beforeStop,
@@ -134,6 +157,9 @@ console.log(
 		commitBlocks,
 		dirtyCheckpoint,
 		pushBlocks,
+		plainPushBlocks,
+		plainCommitBlocks,
+		jjPushBlocks,
 		notifications,
 		loopTicks,
 		progressFrames: progressFrames.length,
@@ -142,7 +168,7 @@ console.log(
 TS
 
 omp_results=$(bun "$T/omp-lifecycle.ts" "$KIT_ROOT/core/omp/substrate-quality.ts" \
-    "$KIT_ROOT/test/lib/pi-probe.ts" "$T/repo" "$T/dirty-repo") \
+    "$KIT_ROOT/test/lib/pi-probe.ts" "$T/repo" "$T/dirty-repo" "$T/plain-jj" "$T/jj-sub") \
     || fail "OMP lifecycle probe failed"
 jq -e '.beforeStop.decision == "block" and (.beforeStop.reason | contains("Agent-owned pending paths: owned.sh")) and (.beforeStop.reason | contains("Automatic checkpoint failed"))' \
     <<< "$omp_results" >/dev/null || fail "OMP stop did not block red owned work with the auto-failure detail: $omp_results"
@@ -174,6 +200,10 @@ git -C "$T/dirty-repo" show --name-only --pretty=format: HEAD | grep -qx 'owned.
     && fail "unowned owned.sh leaked into the OMP path-scoped commit"
 jq -e 'any(.pushBlocks[]; .block == true and (.reason | contains("push guard rejected")))' \
     <<< "$omp_results" >/dev/null || fail "OMP red push was not blocked: $omp_results"
+jq -e '(.plainPushBlocks | length) == 0 and (.plainCommitBlocks | length) == 0' \
+    <<< "$omp_results" >/dev/null || fail "OMP enforced jj governance in a non-substrate jj repo: $omp_results"
+jq -e '(.jjPushBlocks | map(select((.reason // "") | contains("jj-managed"))) | length) == 0' \
+    <<< "$omp_results" >/dev/null || fail "OMP blocked the sanctioned jj git push in a substrate repo: $omp_results"
 [ "$(git -C "$T/repo" log -1 --pretty=%s)" = 'chore(agent): checkpoint owned work at session stop' ] \
     || fail "OMP auto-checkpoint wrote the wrong commit"
 [ "$(git -C "$T/repo" log -2 --pretty=%s | tail -n 1)" = 'fix(shell): checkpoint omp work' ] \
