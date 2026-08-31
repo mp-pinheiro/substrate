@@ -23,6 +23,7 @@ for chk in "$SUBSTRATE_DIR"/checks.d/*.sh; do
     want="${expected[$name]:-}"
     if [ -z "$want" ]; then
         printf '%s not yet in registry — run: just generate-registry\n' "$name"
+        rc=1
     elif [ "$actual" != "$want" ]; then
         printf '%s modified without re-generating registry — digest mismatch\n' "$name"
         printf '  actual:  %s\n' "$actual"
