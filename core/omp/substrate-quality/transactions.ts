@@ -131,6 +131,9 @@ function registerGateTool(
 	},
 	run: (root: string, params: unknown, io: TransactionIO) => Promise<ToolOutcome>,
 ): void {
+	// Registration advertises the tool for the whole session, so a session rooted
+	// outside a governed repo must not see gate tools that could only refuse.
+	if (!findGateRoot(process.cwd())) return;
 	pi.registerTool({
 		name: spec.name,
 		label: spec.label,

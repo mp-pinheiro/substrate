@@ -270,4 +270,23 @@ if printf '%s\n' "$push_payload" | ( cd "$T/repo" && substrate-engine hook gate-
 fi
 grep -Fq 'push blocked' "$T/claude-push.out" || fail "Claude red push rejection was not actionable"
 
+cat > "$T/omp-registration.ts" <<'TS'
+const { bootProbe } = await import(process.argv[3]);
+const probe = await bootProbe(process.argv[2]);
+console.log(JSON.stringify({ tools: Object.keys(probe.tools).sort() }));
+TS
+
+# gate tools are advertised for the whole session, so a session rooted outside
+# a substrate repo must not see them at all
+outside_tools=$(cd "$T/plain-jj" && bun "$T/omp-registration.ts" \
+    "$KIT_ROOT/core/omp/substrate-quality.ts" "$KIT_ROOT/test/lib/pi-probe.ts") \
+    || fail "OMP registration probe failed outside a substrate repo"
+jq -e '.tools == []' <<< "$outside_tools" >/dev/null \
+    || fail "OMP advertised gate tools outside a substrate repo: $outside_tools"
+inside_tools=$(cd "$T/repo" && bun "$T/omp-registration.ts" \
+    "$KIT_ROOT/core/omp/substrate-quality.ts" "$KIT_ROOT/test/lib/pi-probe.ts") \
+    || fail "OMP registration probe failed inside a substrate repo"
+jq -e '.tools == ["substrate_checkpoint", "substrate_restructure"]' <<< "$inside_tools" >/dev/null \
+    || fail "OMP did not advertise gate tools inside a substrate repo: $inside_tools"
+
 printf 'parity-test: structural mirrors, lifecycle, checkpoint, command, push parity green\n'
