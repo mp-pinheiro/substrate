@@ -24,6 +24,7 @@ declare const Bun: {
 };
 
 declare const process: {
+	cwd(): string;
 	env: Record<string, string | undefined>;
 	pid: number;
 	kill(pid: number, signal?: string): boolean;

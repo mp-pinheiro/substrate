@@ -17,12 +17,12 @@ Produce a small, self-contained brief that lets a fresh session implement a task
    - **Contracts** — which profile claims, checks, and gate rules apply (name the file and check).
    - **Pattern to copy** — one concrete exemplar file in this repo that the new code should imitate.
    - **Non-goals** — what must NOT change.
-   - **Acceptance** — executable items in the tracked form `- [ ] claim :: verify-command`, ending with the repo's own green-check item (`- [ ] gate green :: substrate gate` in a Substrate-governed repo).
+   - **Acceptance** — executable items in the tracked form `- [ ] claim :: verify-command`, always ending with `- [ ] gate green :: substrate gate`.
 5. Keep the pack under 60 lines. Print its path.
 
 # Rules
 
 - The pack must be usable with zero conversation history.
 - Point to files; never paste file contents into the pack.
-- Acceptance items must be machine-checkable: in a governed repo, `substrate audit` runs every `:: verify-command` verbatim.
+- Acceptance items must be machine-checkable: `substrate audit` runs every `:: verify-command` verbatim.
 - No implementation in this session.

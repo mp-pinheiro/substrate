@@ -369,30 +369,21 @@ install_harness_assets() {
     done
     return "$rc"
 }
-install_user_harness_assets() {
-    local source source_root dest_root name root rc=0
+# Helpers are repo-scoped: a governed repo receives them from
+# install_harness_assets, so user-level copies load in every unrelated repo.
+purge_user_harness_assets() {
+    local root rc=0 empty
+    empty=$(mktemp -d) || { warn "cannot stage the user asset purge"; return 1; }
     for root in "$HOME/.claude/skills" "$HOME/.omp/agent/skills"; do
-        prepare_asset_root "$root" "user skills" || { rc=1; continue; }
-        for source in "$KIT_ROOT"/skills/*/; do
-            [ -d "$source" ] || continue
-            name=$(basename "$source")
-            sync_managed_asset_dir "$source" "$root/$name" "user skill $name" || rc=1
-        done
-        prune_managed_asset_dirs "$KIT_ROOT/skills" "$root" "user skill" || rc=1
+        [ -d "$root" ] || continue
+        user_path_safe "$root" "user skills root" || { rc=1; continue; }
+        prune_managed_asset_dirs "$empty" "$root" "user skill" || rc=1
     done
-    for source_root in "$KIT_ROOT/agents/claude" "$KIT_ROOT/agents/omp"; do
-        [ -d "$source_root" ] || continue
-        case "$source_root" in
-            */claude) dest_root="$HOME/.claude/agents" ;;
-            */omp) dest_root="$HOME/.omp/agent/agents" ;;
-        esac
-        prepare_asset_root "$dest_root" "user agents" || { rc=1; continue; }
-        for source in "$source_root"/*.md; do
-            [ -f "$source" ] || continue
-            name=$(basename "$source")
-            sync_managed_asset_file "$source" "$dest_root/$name" "user agent ${name%.md}" || rc=1
-        done
-        prune_managed_asset_files "$source_root" "$dest_root" "user agent" || rc=1
+    for root in "$HOME/.claude/agents" "$HOME/.omp/agent/agents"; do
+        [ -d "$root" ] || continue
+        user_path_safe "$root" "user agents root" || { rc=1; continue; }
+        prune_managed_asset_files "$empty" "$root" "user agent" || rc=1
     done
+    rmdir "$empty" 2>/dev/null
     return "$rc"
 }

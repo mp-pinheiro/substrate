@@ -19,6 +19,16 @@ mkdir -p "$HOME/.claude" "$T/repo"
 printf '{"hooks": {"PostToolUse": [{"matcher": "Write", "hooks": [{"type": "command", "command": "bash my-user-hook.sh"}, {"type": "command", "command": "bash \\\"$HOME/.claude/hooks/substrate-launch.sh\\\" retired-hook.sh"}]}]}}\n' \
     > "$HOME/.claude/settings.json"
 
+mkdir -p "$HOME/.omp/agent/skills/review" "$HOME/.claude/skills/review" \
+    "$HOME/.omp/agent/agents" "$HOME/.claude/skills/mine"
+for managed in "$HOME/.omp/agent/skills/review" "$HOME/.claude/skills/review"; do
+    printf '{"managed_by":"substrate"}\n' > "$managed/.substrate-managed.json"
+    printf -- '---\nname: review\ndescription: stale global copy\n---\n' > "$managed/SKILL.md"
+done
+printf -- '---\nname: explorer\ndescription: stale global copy\n---\n' > "$HOME/.omp/agent/agents/explorer.md"
+printf '{"managed_by":"substrate"}\n' > "$HOME/.omp/agent/agents/explorer.md.substrate-managed.json"
+printf -- '---\nname: mine\ndescription: user-owned skill\n---\n' > "$HOME/.claude/skills/mine/SKILL.md"
+
 cd "$T/repo" || exit 9
 git init -q .
 git config user.email substrate@localhost
@@ -44,14 +54,17 @@ cmp -s "$HOME/.omp/agent/extensions/substrate-quality/lifecycle.ts" \
 cmp -s "$HOME/.omp/agent/extensions/substrate-quality/identity.ts" \
     "$KIT_ROOT/core/omp/substrate-quality/identity.ts" \
     || fail "user-level omp identity module differs from kit copy"
-[ -f "$HOME/.omp/agent/agents/explorer.md" ] || fail "user-level omp agent not installed"
-[ -f "$HOME/.omp/agent/skills/review/SKILL.md" ] || fail "user-level omp skill not installed"
-[ -f "$HOME/.claude/agents/explorer.md" ] || fail "user-level Claude agent not installed"
-[ -f "$HOME/.claude/skills/review/SKILL.md" ] || fail "user-level Claude skill not installed"
-cmp -s "$HOME/.omp/agent/agents/explorer.md" "$KIT_ROOT/agents/omp/explorer.md" \
-    || fail "user-level omp agent differs from kit copy"
-cmp -s "$HOME/.claude/skills/review/SKILL.md" "$KIT_ROOT/skills/review/SKILL.md" \
-    || fail "user-level Claude skill differs from kit copy"
+[ ! -e "$HOME/.omp/agent/skills/review" ] || fail "stale user-level omp skill survived the purge"
+[ ! -e "$HOME/.claude/skills/review" ] || fail "stale user-level Claude skill survived the purge"
+[ ! -e "$HOME/.omp/agent/agents/explorer.md" ] || fail "stale user-level omp agent survived the purge"
+[ ! -e "$HOME/.omp/agent/agents/explorer.md.substrate-managed.json" ] \
+    || fail "stale user-level omp agent marker survived the purge"
+[ -f "$HOME/.claude/skills/mine/SKILL.md" ] || fail "purge removed a user-owned skill"
+[ -f .omp/skills/review/SKILL.md ] || fail "repo-level omp skill not installed"
+[ -f .claude/skills/review/SKILL.md ] || fail "repo-level Claude skill not installed"
+[ -f .omp/agents/explorer.md ] || fail "repo-level omp agent not installed"
+cmp -s .claude/skills/review/SKILL.md "$KIT_ROOT/skills/review/SKILL.md" \
+    || fail "repo-level Claude skill differs from kit copy"
 [ -e "$HOME/.omp/profiles" ] && fail "HOME/.omp/profiles was created — installer crossed into profile stacks"
 
 # The user-level omp extension resolves each write target, not the session cwd.
@@ -112,7 +125,7 @@ omp_results=$(bun "$T/omp-probe.ts" "$HOME/.omp/agent/extensions/substrate-quali
 	"$T/nowhere" "$T/repo" "$T/repo/components/gapfill.sh" \
 	"$T/repo/missing/deep/substrate-baseline.json" \
 	"$T/repo/escaped-parent/missing/file.sh")
-jq -e '.writes[0].block == true and (.writes[0].reason | contains("governed basename anywhere in the tree") or contains("governed anywhere in the tree"))' <<< "$omp_results" >/dev/null \
+jq -e '.writes[0].block == true and (.writes[0].reason | contains("missing/deep/substrate-baseline.json is a governed baseline path"))' <<< "$omp_results" >/dev/null \
 	|| fail "user-level omp extension missed a cross-repo protected write, or lost the nested-lookalike verdict: $omp_results"
 jq -e '.writes[1].block == true and (.writes[1].reason | contains("outside the repo"))' <<< "$omp_results" >/dev/null \
 	|| fail "user-level omp extension missed a missing-parent symlink escape: $omp_results"
@@ -179,7 +192,7 @@ out=$(cd "$T/nowhere" && printf '%s' "$probe_missing" \
     | CLAUDE_PROJECT_DIR="$T/nowhere" bash "$LAUNCH" protect-paths.sh 2>&1)
 rc=$?
 [ "$rc" -eq 2 ] || fail "missing-parent target bypassed launcher routing (rc=$rc: $out)"
-printf '%s' "$out" | grep -q 'governed anywhere in the tree' \
+printf '%s' "$out" | grep -q 'is a governed baseline path' \
 	|| fail "missing-parent verdict lost the nested-lookalike distinction (a root-baseline message here misleads): $out"
 
 # subdirectory + relative payload path: upward walk from the target

@@ -90,7 +90,7 @@ install_user_harness() {
         warn "user-level Claude launcher install failed"
         return 1
     fi
-    install_user_harness_assets || rc=1
+    purge_user_harness_assets || rc=1
 
 
     if [ -L "$settings" ]; then
