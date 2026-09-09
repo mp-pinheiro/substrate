@@ -25,14 +25,18 @@ cfg_json() {
     jq -c "$1" "$CONFIG"
 }
 
+# WHY: BSD wc and friends pad their counts, so trim before tonumber; non-numeric input still fails closed.
+metric_emit() {
+    jq -cn --arg n "$1" --arg v "$2" --arg d "$3" \
+        '{name: $n, value: ($v | sub("^\\s+"; "") | sub("\\s+$"; "") | tonumber), dir: $d}' >> "$METRICS"
+}
+
 metric() {
-    jq -cn --arg n "$1" --arg v "$2" '{name: $n, value: ($v | tonumber), dir: "lo"}' >> "$METRICS" \
-        || die_infra "metric emission failed for $1=$2"
+    metric_emit "$1" "$2" lo || die_infra "metric emission failed for $1=$2"
 }
 
 metric_hi() {
-    jq -cn --arg n "$1" --arg v "$2" '{name: $n, value: ($v | tonumber), dir: "hi"}' >> "$METRICS" \
-        || die_infra "metric_hi emission failed for $1=$2"
+    metric_emit "$1" "$2" hi || die_infra "metric_hi emission failed for $1=$2"
 }
 
 cfg_check() {
