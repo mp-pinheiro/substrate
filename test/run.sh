@@ -19,8 +19,8 @@ SUITES=(
     checkpoint-test claims-table-test contract-drift-test doctor-attestation-test
     engine-rollback-test gitleaks-deep-test gitleaks-scope-test golden-ledger-test
     golden-vectors-test init-idempotent-test maintenance-test parity-test
-    receipt-cross-engine-test receipt-test restructure-test vcs-hooks-test
-    vendor-drift-test vendor-source-test
+    profile-workspace-test receipt-cross-engine-test receipt-test restructure-test
+    vcs-hooks-test vendor-drift-test vendor-source-test
 )
 
 # gitleaks costs ~4.7s of fixed rule compilation per invocation (measured on an EMPTY dir)

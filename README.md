@@ -25,10 +25,12 @@ Substrate currently supports Linux. It expects Go (to build `substrate-engine`),
 ```sh
 cd ~/your/repo
 substrate bootstrap --profile go --checkpoint --accept-baseline
+
 substrate doctor                       # toolchain + config sanity
 # positive control: add "# now we check the thing" to a source file — gate MUST go red; revert
 substrate selftest                     # full negative battery
 ```
+Repositories whose CI is managed elsewhere set `"ci": { "provider": "external" }` in `substrate.json`. Bootstrap then leaves `.github/` ungenerated, removes only workflows marked `# substrate-managed`, and expects the repository pipeline to invoke the same `substrate-engine gate` or `just gate`; external CI is not an enforcement opt-out.
 
 Run `substrate bootstrap --checkpoint` again whenever the kit or repository scaffold changes. Use `substrate update --apply --checkpoint` when only the vendored engine should change.
 

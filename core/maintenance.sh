@@ -12,5 +12,9 @@ maintenance_run() {
     if [ "$rc" -eq 0 ] && [ "${SUBSTRATE_NO_USER_HARNESS:-}" != "1" ] && declare -F install_user_harness >/dev/null 2>&1; then
         install_user_harness || rc=1
     fi
+    if [ "$rc" -eq 0 ] && [ -f substrate.json ] \
+        && [ "$(jq -r '.ci.provider // "github"' substrate.json 2>/dev/null)" = "external" ]; then
+        info "repository CI owns gate execution; invoke substrate-engine gate or just gate"
+    fi
     return "$rc"
 }

@@ -136,6 +136,39 @@ sync_managed_workflow() {
 
 install_ci() {
     local force="$1"; shift
+    local provider
+    provider=$(jq -r '.ci.provider // "github"' substrate.json 2>/dev/null) \
+        || die "could not read ci.provider from substrate.json"
+    case "$provider" in
+        external)
+            if [ -e .github/workflows ] && [ ! -d .github/workflows ]; then
+                warn ".github/workflows exists but is not a directory — external CI left untouched"
+                return 1
+            fi
+            if [ -d .github/workflows ] && [ ! -L .github/workflows ]; then
+                local workflow first
+                for workflow in .github/workflows/*; do
+                    [ -f "$workflow" ] || continue
+                    [ -L "$workflow" ] && continue
+                    first=""
+                    IFS= read -r first < "$workflow" || true
+                    if [ "$first" = "# substrate-managed" ]; then
+                        rm -f "$workflow" \
+                            || { warn "could not remove managed workflow: $workflow"; return 1; }
+                        info "removed managed GitHub workflow: $workflow"
+                    fi
+                done
+            fi
+            info "repository CI owns gate execution; invoke substrate-engine gate or just gate"
+            return 0
+            ;;
+        github)
+            ;;
+        *)
+            die "unsupported ci.provider '$provider' — use 'github' for managed workflows or 'external' for repository-owned CI"
+            ;;
+    esac
+
     local profiles=("$@") p d lines=() l
     for p in "${profiles[@]}"; do
         d=$(profile_dir "$p") || continue

@@ -49,6 +49,8 @@ git commit -qm 'chore: seed repository-owned files'
 
 "$KIT_ROOT/bin/substrate" bootstrap --profile shell --checkpoint --accept-baseline --repo-only >/dev/null 2>&1 \
     || fail "fresh bootstrap failed"
+jq -e '.ci.provider == "github"' substrate.json >/dev/null \
+    || fail "fresh bootstrap did not seed the default GitHub provider"
 [ -f .substrate/VERSION ] || fail ".substrate was not vendored"
 grep -q 'substrate-engine hook' .claude/settings.json || fail "engine-form hooks were not installed"
 [ -x .substrate/install-jj.sh ] || fail "Jujutsu installer was not vendored"
@@ -395,5 +397,58 @@ git config user.name substrate
     || fail "symlinked CLI did not resolve the source kit"
 cmp -s .substrate/VERSION "$KIT_ROOT/VERSION" \
     || fail "symlinked CLI installed a runtime from the wrong kit"
+init_external_repo() {
+    local dir="$1"
+    mkdir -p "$dir" || return 1
+    cd "$dir" || return 1
+    git init -q -b main . || return 1
+    git config user.email substrate@localhost || return 1
+    git config user.name substrate || return 1
+    "$KIT_ROOT/bin/substrate" bootstrap --profile shell --checkpoint --accept-baseline --repo-only >/dev/null 2>&1
+}
+EXT="$T/external-ci"
+init_external_repo "$EXT" || fail "external-ci fixture bootstrap failed"
+printf '%s\n' 'name: repo-owned' 'on:' '  push:' 'jobs:' '  noop:' '    runs-on: ubuntu-latest' '    steps:' '      - run: true' > .github/workflows/repo-owned.yml
+printf '%s\n' 'name: unmarked' 'on:' '  push:' 'jobs:' '  noop:' '    runs-on: ubuntu-latest' '    steps:' '      - run: true' > .github/workflows/unmarked.yml
+jq '.ci.provider = "external"' substrate.json > substrate.json.tmp && mv substrate.json.tmp substrate.json
+git add -A
+git commit -qm 'chore: select external ci'
+"$KIT_ROOT/bin/substrate" bootstrap --repo-only > "$T/external-bootstrap.out" 2>&1 \
+    || { cat "$T/external-bootstrap.out" >&2; fail "external-ci bootstrap failed"; }
+[ ! -e .github/workflows/substrate-gate.yml ] \
+    || fail "external-ci bootstrap left the managed gate workflow"
+[ ! -e .github/workflows/substrate-report.yml ] \
+    || fail "external-ci bootstrap left the managed report workflow"
+[ -f .github/workflows/repo-owned.yml ] \
+    || fail "external-ci bootstrap removed a repo-owned workflow"
+[ -f .github/workflows/unmarked.yml ] \
+    || fail "external-ci bootstrap removed an unmarked workflow"
+grep -q 'repository CI owns gate execution' "$T/external-bootstrap.out" \
+    || fail "external-ci bootstrap did not explain repository-owned execution"
+git add -A
+git commit -qm 'chore: remove managed ci'
+FRESH="$T/external-fresh"
+init_external_repo "$FRESH" || fail "fresh external-ci fixture bootstrap failed"
+jq '.ci.provider = "external"' substrate.json > substrate.json.tmp && mv substrate.json.tmp substrate.json
+rm -rf .github
+git add -A
+git commit -qm 'chore: select external ci before bootstrap'
+"$KIT_ROOT/bin/substrate" bootstrap --repo-only >/dev/null 2>&1 \
+    || fail "external-ci bootstrap recreated no-CI repository state"
+[ ! -e .github ] || fail "external-ci bootstrap created .github"
+cd "$EXT" || exit 9
+status_before=$(git status --short)
+"$KIT_ROOT/bin/substrate" bootstrap --repo-only > "$T/external-idempotent.out" 2>&1 \
+    || { cat "$T/external-idempotent.out" >&2; fail "external-ci bootstrap was not idempotent"; }
+status_after=$(git status --short)
+[ "$status_before" = "$status_after" ] \
+    || { printf 'status before:\\n%s\\nstatus after:\\n%s\\n' "$status_before" "$status_after" >&2; fail "external-ci bootstrap changed an idempotent tree"; }
+jq '.ci.provider = "invalid"' substrate.json > substrate.json.tmp && mv substrate.json.tmp substrate.json
+if "$KIT_ROOT/bin/substrate" bootstrap --repo-only > "$T/external-invalid.out" 2>&1; then
+    fail "invalid ci.provider passed bootstrap"
+fi
+grep -q "unsupported ci.provider" "$T/external-invalid.out" \
+    || fail "invalid ci.provider failure was not actionable"
+jq '.ci.provider = "external"' substrate.json > substrate.json.tmp && mv substrate.json.tmp substrate.json
 
-printf 'bootstrap-test: fresh, sync, ownership, force-adopt, symlink-cli, preservation green\n'
+printf 'bootstrap-test: fresh, sync, ownership, force-adopt, symlink-cli, external-ci, preservation green\n'

@@ -104,6 +104,15 @@ With `--checkpoint`, a green candidate tightens existing baseline ceilings and c
 
 Repository runtime wiring runs after the repository commit. User-scoped harness synchronization runs last under its own lock and receipt; `--repo-only` skips it. A failure in either external phase leaves the repository commit intact and a rerun repairs only the unfinished phase. Maintenance never invokes a push.
 
+## CI provider
+
+`substrate.json` accepts `ci.provider` with two values:
+
+- `github` is the default and installs the managed workflows under `.github/workflows`.
+- `external` installs no GitHub workflow, removes only existing workflows whose first line is `# substrate-managed`, and preserves repository-owned workflows. The repository must invoke the same `substrate-engine gate` or `just gate` itself; external CI is not a gate opt-out.
+
+Any other provider is an infrastructure error. Switching from `github` to `external` is idempotent and does not remove unmarked or `# substrate-repo-owned` files.
+
 ## CLI surface (`bin/substrate`)
 
 - `bootstrap [--profile a,b] [--vcs auto|git|jj] [--force] [--from-worktree] [maintenance flags]` — the canonical installer and synchronizer. A new repo requires profiles; later runs read them from `substrate.json`. It re-vendors `.substrate/`, re-renders workflows marked `# substrate-managed`, merges individual hook commands without dropping foreign commands from mixed groups, refreshes harness and VCS wiring, and synchronizes kit-owned agents and skills into both Claude and omp. It preserves config templates, repo-owned LSP settings, unmarked same-name assets, and local checks. An unmarked workflow is adopted only when it exactly matches generated output or `--force` is explicit; `# substrate-repo-owned` preserves a custom workflow.

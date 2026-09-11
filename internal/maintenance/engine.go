@@ -149,7 +149,7 @@ func RunMaintenance(ctx context.Context, args []string) int {
 		return ExitPreflight
 	}
 
-	id := fmt.Sprintf("%s:%s:%d:%d", c.Operation, base, os.Getpid(), time.Now().UnixNano())
+	id := fmt.Sprintf("%s-%s-%d-%d", c.Operation, base, os.Getpid(), time.Now().UnixNano())
 	if len(id) > 24 {
 		id = id[:24]
 	}

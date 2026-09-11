@@ -66,6 +66,7 @@ seed_config() {
         version: 1,
         profiles: $profiles,
         inventory: "auto",
+        ci: { provider: "github" },
         unscanned: [
             "*.md", "**/*.md", "*.txt", "*.lock", "*.toml",
             "LICENSE*", "VERSION", ".gitignore", ".gitattributes", ".gitmodules",

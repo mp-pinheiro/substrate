@@ -290,3 +290,27 @@ cfg_check_json() {
     jq -c --arg n "${SUBSTRATE_CHECK_NAME:-}" \
         '(.checks.config // {})[$n]'"${1:-}"' // empty' "$CONFIG" 2>/dev/null
 }
+go_workspace_dir() {
+    local check="$1" config_json directory configured go_dir
+    config_json=$(cfg_check_json)
+    directory="."
+    configured=0
+    if [ -n "$config_json" ]; then
+        jq -e 'type == "object"' <<< "$config_json" >/dev/null \
+            || die_infra "$check configuration must be an object"
+        configured=$(jq -r 'if has("directory") then 1 else 0 end' <<< "$config_json")
+        directory=$(jq -r '.directory // "."' <<< "$config_json")
+    fi
+    case "$directory" in
+        "" | /* | .. | ../* | */.. | */../*)
+            die_infra "$check directory must be relative and cannot contain '..': $directory"
+            ;;
+    esac
+    go_dir="$REPO_ROOT/$directory"
+    [ -d "$go_dir" ] || die_infra "$check directory does not exist: $directory"
+    if [ ! -f "$go_dir/go.mod" ]; then
+        [ "$configured" -eq 0 ] && return 1
+        die_infra "$check directory has no go.mod: $directory"
+    fi
+    printf '%s\n' "$go_dir"
+}
