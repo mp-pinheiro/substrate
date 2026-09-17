@@ -14,8 +14,8 @@ var RegistryDigests = map[string]string{
 	"63-vulture.sh":          "459eeafc76eb9ba194b21b1759210761a0d7d09838e4a1bdadd6afa59b12bb0b",
 	"64-constructs.sh":       "f3d21af9f2955a9a322592ac1822f4ebfc83602fc59609c6bea0152ae776d2a2",
 	"71-kit-tsc.sh":          "cabbb616bc9ae844428dcb9e5e792765d7bcf35e419156ebd6e788238e4a0acb",
-	"75-go-build.sh":         "3b9f0570148fc3c191016319bf6f33289c7f26314fd61c2ba3817319d1ae9eb8",
-	"76-golangci.sh":         "cc5db7898c660f2abc9d3264a1ffc1b3aec83adbc50bd5e038c647e170b68b57",
+	"75-go-build.sh":         "e85a46f5f6e0c5100b3d7525aafb590cc4c196b60182e9729c20611f1826f05d",
+	"76-golangci.sh":         "343ab8f3f8366f5a3c9d66c946347f2cbadfa190e7b288b1cb817730915bffb2",
 	"81-engine-ts-parity.sh": "c9031c40d9c238748979173b3eaaca48a4734ff5e2c29ebf66d97ec17e6ee38a",
 	"82-check-registry.sh":   "afa6d494e548c4e81017f60ae34f980b448636510e6a41e9dbe67fd52c5d15bf",
 }
