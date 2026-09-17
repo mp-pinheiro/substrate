@@ -1,24 +1,24 @@
 #!/usr/bin/env bash
-# Compiles and vets the Go module: `go build ./...` then `go vet ./...`.
-# Compiler and vet output are the findings; without go.mod the check is inactive.
 set -uo pipefail
-# shellcheck source=../gate-lib.sh
 source "$SUBSTRATE_DIR/gate-lib.sh"
 
-if [ ! -f "$REPO_ROOT/go.mod" ]; then
+go_dir=$(go_workspace_dir "75-go-build.sh")
+workspace_rc=$?
+if [ "$workspace_rc" -eq 1 ]; then
     warn "no go.mod — go build/vet inactive"
     exit 0
 fi
+[ "$workspace_rc" -eq 0 ] || exit "$workspace_rc"
 require_bin_ci go "profile toolchain — see profiles/go/profile.json" || exit 0
 
 build_output=$(mktemp -d) || die_infra "could not create isolated go build output"
 trap 'rm -rf "$build_output"' EXIT
 
-if ! out=$(go build -o "$build_output/" ./... 2>&1); then
+if ! out=$(cd "$go_dir" && go build -o "$build_output/" ./... 2>&1); then
     printf '%s\n' "$out"
     exit 1
 fi
-if ! out=$(go vet ./... 2>&1); then
+if ! out=$(cd "$go_dir" && go vet ./... 2>&1); then
     printf '%s\n' "$out"
     exit 1
 fi

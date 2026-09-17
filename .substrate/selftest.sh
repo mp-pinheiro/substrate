@@ -16,26 +16,36 @@ bad()  { printf '\033[0;31m[XX]\033[0m selftest: %s\n' "$*"; FAIL=$((FAIL + 1));
 note() { printf '\033[0;34m[+]\033[0m selftest: %s\n' "$*"; }
 
 if [ -d .jj ]; then
-    listing=$(jj file list) || { echo "inventory failed"; exit 2; }
+    listing_cmd=(jj file list -T 'path ++ "\0"')
 else
-    listing=$(git ls-files) || { echo "inventory failed"; exit 2; }
+    listing_cmd=(git ls-files -z)
 fi
 
 SANDBOX=$(mktemp -d)
 trap 'rm -rf "$SANDBOX"' EXIT
 
+inventory="$SANDBOX/.inventory"
+"${listing_cmd[@]}" > "$inventory" || { echo "inventory failed"; exit 2; }
+
 LIST="$SANDBOX/.filelist"
 : > "$LIST"
-while IFS= read -r f; do
+while IFS= read -r -d '' f; do
     [ -f "$f" ] || continue
     cp --parents "$f" "$SANDBOX/"
     printf '%s\n' "$f" >> "$LIST"
-done <<< "$listing"
+done < "$inventory"
 cp -R .substrate "$SANDBOX/.substrate"
 [ -f substrate.json ] && cp substrate.json "$SANDBOX/"
 [ -f substrate-baseline.json ] && cp substrate-baseline.json "$SANDBOX/"
 
 cd "$SANDBOX" || exit 2
+while IFS= read -r -d '' lockfile; do
+    dir=$(dirname "$lockfile")
+    if command -v bun >/dev/null 2>&1; then
+        note "sandbox: bun install --frozen-lockfile in $dir"
+        (cd "$dir" && bun install --frozen-lockfile >/dev/null 2>&1) || note "sandbox: bun install failed in $dir"
+    fi
+done < <(find . -name 'bun.lock' -print0)
 export SUBSTRATE_FILE_LIST="$LIST"
 
 # The sandbox has no .git, so history scanning is impossible; disable it visibly.

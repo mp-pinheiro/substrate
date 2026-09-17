@@ -272,6 +272,7 @@
   "comments:test/matrix-oracle.sh": 0,
   "comments:test/matrix.sh": 0,
   "comments:test/parity-test.sh": 0,
+  "comments:test/profile-workspace-test.sh": 0,
   "comments:test/receipt-cross-engine-test.sh": 0,
   "comments:test/receipt-test.sh": 0,
   "comments:test/report-e2e.sh": 0,
@@ -285,7 +286,7 @@
   "comments:test/vendor-drift-test.sh": 0,
   "comments:test/vendor-source-test.sh": 0,
   "dead_code": 0,
-  "dup_pct": 2.1813639130016975
+  "dup_pct": 2.168651678237055
 },
   "direction": {
   "comments:.claude/agents/enemy.md.substrate-managed.json": "lo",
@@ -560,6 +561,7 @@
   "comments:test/matrix-oracle.sh": "lo",
   "comments:test/matrix.sh": "lo",
   "comments:test/parity-test.sh": "lo",
+  "comments:test/profile-workspace-test.sh": "lo",
   "comments:test/receipt-cross-engine-test.sh": "lo",
   "comments:test/receipt-test.sh": "lo",
   "comments:test/report-e2e.sh": "lo",
