@@ -38,7 +38,7 @@ jobs:
         name: Install core toolchain
         run: bun install -g @ast-grep/cli@0.45.0 jscpd@5.0.14
       - &install_go
-        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
       - name: Install active profile toolchains
@@ -56,7 +56,7 @@ jobs:
         id: gitleaks-key
         run: echo "key=$(.substrate/gitleaks-deep.sh --print-key)" >> "$GITHUB_OUTPUT"
       - name: Restore deep-scan receipt
-        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .git/substrate/gitleaks-deep.json
           key: substrate-gitleaks-${{ runner.os }}-${{ steps.gitleaks-key.outputs.key }}
