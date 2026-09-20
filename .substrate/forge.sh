@@ -146,12 +146,22 @@ forgejo_ref_status() {
         || die "forgejo status lookup failed" 1
 }
 
+dry_run() {
+    [ -n "${SUBSTRATE_FORGE_DRYRUN:-}" ]
+}
+
 release_id_for_tag() {
     forge_curl "$api/repos/$slug/releases/tags/$1" 2>/dev/null | jq -r '.id // empty'
 }
 
 create_release() {
     local tag=$1 name=$2 prerelease=$3 notes_file=$4 target=$5 payload id response code
+    if dry_run; then
+        printf 'DRYRUN create-release host=%s slug=%s tag=%s prerelease=%s target=%s notes=%s bytes\n' \
+            "$api" "$slug" "$tag" "$prerelease" "${target:-<none>}" "$(wc -c < "$notes_file")" >&2
+        printf 'dryrun-%s\n' "$tag"
+        return 0
+    fi
     id=$(release_id_for_tag "$tag")
     if [ -n "$id" ]; then
         printf '%s\n' "$id"
@@ -194,6 +204,12 @@ upload_asset() {
     local id=$1 file=$2 name
     name=$(basename "$file")
     [ -f "$file" ] || die "asset not found: $file" 1
+    if dry_run; then
+        printf 'DRYRUN upload-asset host=%s slug=%s release=%s asset=%s bytes=%s\n' \
+            "$api" "$slug" "$id" "$name" "$(wc -c < "$file")" >&2
+        printf '%s\n' "$name"
+        return 0
+    fi
     drop_existing_asset "$id" "$name"
     if [ "$is_github" -eq 1 ]; then
         forge_curl -H "Content-Type: application/octet-stream" -X POST \
@@ -225,6 +241,11 @@ prune_prereleases() {
         || die "release listing failed on $api/$slug" 1
     while IFS=$'\t' read -r id tag; do
         [ -n "$id" ] || continue
+        if dry_run; then
+            printf 'DRYRUN prune host=%s slug=%s release=%s tag=%s\n' "$api" "$slug" "$id" "$tag" >&2
+            printf 'pruned %s\n' "$tag"
+            continue
+        fi
         forge_curl -X DELETE "$api/repos/$slug/releases/$id" >/dev/null \
             || die "release deletion failed: $tag" 1
         delete_tag "$tag"
