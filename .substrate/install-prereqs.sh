@@ -17,19 +17,8 @@ apt-get install -y -qq --no-install-recommends \
     sudo jq unzip file locales curl ca-certificates openssl git
 
 if ! git_recent; then
-    codename=$(. /etc/os-release 2>/dev/null && printf '%s' "${VERSION_CODENAME:-}")
-    if [ -n "$codename" ] && [ -f /etc/debian_version ]; then
-        printf 'deb http://deb.debian.org/debian %s-backports main\n' "$codename" \
-            > /etc/apt/sources.list.d/substrate-backports.list
-        apt-get update -qq || true
-        apt-get install -y -qq --no-install-recommends -t "${codename}-backports" git || true
-        hash -r
-    fi
-fi
-
-if ! git_recent; then
     apt-get install -y -qq --no-install-recommends \
-        build-essential libcurl4-openssl-dev libexpat1-dev libssl-dev zlib1g-dev gettext
+        build-essential autoconf libcurl4-openssl-dev libexpat1-dev libssl-dev zlib1g-dev gettext
     curl -sSfL -o "$git_archive" "https://www.kernel.org/pub/software/scm/git/git-${git_version}.tar.gz"
     printf '%s  %s\n' "$git_sha256" "$git_archive" | sha256sum -c -
     rm -rf "$git_source"
