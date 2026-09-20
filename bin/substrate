@@ -92,7 +92,8 @@ vendor_core() {
        "$KIT_ROOT"/core/receipt-lib.sh \
        "$KIT_ROOT"/core/gitleaks-lib.sh "$KIT_ROOT"/core/gitleaks-deep.sh \
        "$KIT_ROOT"/core/install-gitleaks.sh "$KIT_ROOT"/core/install-jj.sh \
-       "$KIT_ROOT"/core/install-prereqs.sh "$KIT_ROOT"/core/forge.sh "$staging/" \
+       "$KIT_ROOT"/core/install-prereqs.sh "$KIT_ROOT"/core/forge.sh \
+       "$KIT_ROOT"/core/gh-app-token.sh "$staging/" \
        || die "vendor copy failed: core scripts"
     cp "$KIT_ROOT"/core/checks.d/*.sh "$staging/checks.d/" || die "vendor copy failed: core checks"
     cp "$KIT_ROOT"/VERSION "$staging/VERSION" || die "vendor copy failed: VERSION"

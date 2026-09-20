@@ -31,10 +31,8 @@ read-only mirror of `main`.
 
 ## Release channels
 
-Releases are built once on Forgejo (`.github/workflows/substrate-release.yml`) and published to both
-forges with identical assets; GitHub never rebuilds. Stable releases are `workflow_dispatch`-driven and
-tagged `vX.Y.Z`; nightlies run at 07:00 UTC, are marked pre-release, tagged `vX.Y.Z-nightly.YYYYMMDD`,
-and are pruned after 14 days. Both require a green gate status on the released revision.
+Stable releases are tagged `vX.Y.Z`. Nightlies are pre-releases tagged `vX.Y.Z-nightly.YYYYMMDD`, cut at
+07:00 UTC from a green revision and pruned after 14 days.
 
 ```sh
 go install github.com/mp-pinheiro/substrate/cmd/substrate@latest                  # newest stable
@@ -44,12 +42,6 @@ go install github.com/mp-pinheiro/substrate/cmd/substrate@v0.1.0-nightly.2026092
 Each release also carries `substrate_<version>_linux_{amd64,arm64}.tar.gz` (containing `substrate` plus a
 `substrate-engine` symlink) and `SHA256SUMS`, downloadable from the Forgejo release page or
 `https://github.com/mp-pinheiro/substrate/releases`.
-
-Mirroring the release to GitHub needs a credential with `contents: write` on `mp-pinheiro/substrate`,
-since Forgejo never exposes the push mirror's own credential to a workflow. Preferred: a GitHub App
-(the same one that authors `poketcg-pc` releases) installed on the repository, with `MIRROR_APP_ID` and
-`MIRROR_APP_PRIVATE_KEY` as Forgejo secrets — the job mints a short-lived installation token per run.
-A classic PAT in `MIRROR_GITHUB_TOKEN` is accepted as a fallback and takes precedence when both are set.
 
 ## Requirements
 

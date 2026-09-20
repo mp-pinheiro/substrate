@@ -19,46 +19,6 @@ jobs:
           persist-credentials: false
       - name: Install container prerequisites
         run: .substrate/install-prereqs.sh
-      - name: Resolve the GitHub mirror credential
-        id: mirror-auth
-        env:
-          MIRROR_GITHUB_TOKEN: ${{ secrets.MIRROR_GITHUB_TOKEN }}
-          MIRROR_APP_ID: ${{ secrets.MIRROR_APP_ID }}
-          MIRROR_APP_PRIVATE_KEY: ${{ secrets.MIRROR_APP_PRIVATE_KEY }}
-        run: |
-          if [ -n "${MIRROR_GITHUB_TOKEN:-}" ]; then
-            echo "::add-mask::$MIRROR_GITHUB_TOKEN"
-            echo "MIRROR_TOKEN=$MIRROR_GITHUB_TOKEN" >> "$GITHUB_ENV"
-            exit 0
-          fi
-          if [ -z "${MIRROR_APP_ID:-}" ] || [ -z "${MIRROR_APP_PRIVATE_KEY:-}" ]; then
-            echo "::error::no GitHub mirror credential — set MIRROR_APP_ID + MIRROR_APP_PRIVATE_KEY (GitHub App) or MIRROR_GITHUB_TOKEN (PAT); a release that exists only on Forgejo breaks go install"
-            exit 1
-          fi
-          b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
-          now=$(date +%s)
-          header=$(printf '{"alg":"RS256","typ":"JWT"}' | b64url)
-          payload=$(printf '{"iat":%d,"exp":%d,"iss":"%s"}' "$((now - 60))" "$((now + 540))" "$MIRROR_APP_ID" | b64url)
-          key=$(mktemp)
-          chmod 600 "$key"
-          printf '%s\n' "$MIRROR_APP_PRIVATE_KEY" > "$key"
-          signature=$(printf '%s.%s' "$header" "$payload" | openssl dgst -sha256 -sign "$key" | b64url)
-          rm -f "$key"
-          jwt="$header.$payload.$signature"
-          installation=$(curl -sSf -H "Authorization: Bearer $jwt" -H 'Accept: application/vnd.github+json' \
-            https://api.github.com/repos/mp-pinheiro/substrate/installation | jq -r '.id // empty')
-          if [ -z "$installation" ]; then
-            echo "::error::the GitHub App is not installed on mp-pinheiro/substrate — install it, then re-dispatch"
-            exit 1
-          fi
-          token=$(curl -sSf -X POST -H "Authorization: Bearer $jwt" -H 'Accept: application/vnd.github+json' \
-            "https://api.github.com/app/installations/$installation/access_tokens" | jq -r '.token // empty')
-          if [ -z "$token" ]; then
-            echo "::error::the GitHub App installation returned no access token"
-            exit 1
-          fi
-          echo "::add-mask::$token"
-          echo "MIRROR_TOKEN=$token" >> "$GITHUB_ENV"
       - name: Require a green gate on this revision
         id: gate-status
         env:
@@ -75,6 +35,20 @@ jobs:
           fi
           echo "::error::gate status for $GITHUB_SHA is '${status:-unknown}' — a stable release requires a green gate"
           exit 1
+      - name: Mint the GitHub mirror token
+        if: steps.gate-status.outputs.status == 'success'
+        env:
+          GH_APP_ID: ${{ secrets.GH_APP_ID }}
+          GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          GH_MIRROR_REPO: mp-pinheiro/substrate
+        run: |
+          if [ -z "${GH_APP_ID:-}" ] || [ -z "${GH_APP_PRIVATE_KEY:-}" ]; then
+            echo "::error::GH_APP_ID / GH_APP_PRIVATE_KEY are not configured — the GitHub App mints the mirror credential"
+            exit 1
+          fi
+          token=$(.substrate/gh-app-token.sh)
+          echo "::add-mask::$token"
+          echo "MIRROR_TOKEN=$token" >> "$GITHUB_ENV"
       - name: Resolve release identity
         id: identity
         if: steps.gate-status.outputs.status == 'success'
@@ -90,15 +64,8 @@ jobs:
             prerelease=false
           fi
           tag="v$version"
-          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
-            echo "::error::tag $tag already exists in this checkout"
-            exit 1
-          fi
-          if curl -sSf -o /dev/null \
-              -H "Authorization: token $MIRROR_TOKEN" \
-              "https://api.github.com/repos/mp-pinheiro/substrate/releases/tags/$tag" 2>/dev/null; then
-            echo "::error::release $tag already exists on the GitHub mirror"
-            exit 1
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "::notice::tag $tag already exists in this checkout — resuming publication for it"
           fi
           {
             echo "base=$base"
@@ -156,13 +123,19 @@ jobs:
             .substrate/forge.sh prune-prereleases "v${BASE}-nightly." 14
           }
           publish "$GITHUB_SHA"
-          mirror_tree=$(curl -sSf -H "Authorization: token $MIRROR_TOKEN" \
-            "https://api.github.com/repos/mp-pinheiro/substrate/commits/main" | jq -r '.commit.tree.sha')
-          if [ "$mirror_tree" != "$(git rev-parse 'HEAD^{tree}')" ]; then
-            echo "::error::mirror main tree differs from the released revision — wait for the push mirror, then re-dispatch"
+          code=000
+          for delay in 0 5 15 30 60; do
+            [ "$delay" = 0 ] || sleep "$delay"
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 \
+              -H "Authorization: Bearer $MIRROR_TOKEN" \
+              "https://api.github.com/repos/mp-pinheiro/substrate/git/ref/tags/$TAG")
+            [ "$code" = "200" ] && break
+          done
+          if [ "$code" != "200" ]; then
+            echo "::error::$TAG never reached the GitHub mirror (HTTP $code) — refusing to POST, GitHub would create the tag at main instead. Re-dispatch once the mirror has synced."
             exit 1
           fi
           export SUBSTRATE_FORGE_API=https://api.github.com
           export SUBSTRATE_FORGE_SLUG=mp-pinheiro/substrate
           export SUBSTRATE_FORGE_TOKEN="$MIRROR_TOKEN"
-          publish main
+          publish "$TAG"
