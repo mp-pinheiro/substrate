@@ -12,12 +12,12 @@ trap 'rm -rf "$T"' EXIT
 
 GOBIN="$T/bin" go install ./cmd/substrate || fail "cmd/substrate build failed"
 
-export HOME="$T/home"
-mkdir -p "$HOME" || fail "scratch home"
+export HOME="$T/home" SUBSTRATE_KIT_CACHE="$T/cache"
+mkdir -p "$HOME" "$SUBSTRATE_KIT_CACHE" || fail "scratch home"
 "$T/bin/substrate" version >/dev/null 2>&1
 
-root=$(find "$HOME/.cache/substrate/kit" -mindepth 1 -maxdepth 1 -type d | head -1)
-[ -n "$root" ] || fail "the binary materialized no kit under the scratch cache"
+root=$(find "$SUBSTRATE_KIT_CACHE/substrate/kit" -mindepth 1 -maxdepth 1 -type d -not -name '*.tmp' | head -1)
+[ -n "$root" ] || fail "the binary materialized no kit under $SUBSTRATE_KIT_CACHE"
 
 for tree in bin core profiles skills agents; do
     (cd "$KIT_ROOT" && git ls-files --cached --others --exclude-standard "$tree" \
