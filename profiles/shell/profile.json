@@ -17,7 +17,10 @@
   ],
   "ci": [
     "sudo apt-get update -qq",
-    "sudo apt-get install -y -qq shellcheck zsh"
+    "sudo apt-get install -y -qq zsh xz-utils",
+    "curl -sSfL -o /tmp/shellcheck.tar.xz \"https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.$(uname -m).tar.xz\"",
+    "printf '%s  /tmp/shellcheck.tar.xz\\n' \"$([ \"$(uname -m)\" = aarch64 ] && echo 12b331c1d2db6b9eb13cfca64306b1b157a86eb69db83023e261eaa7e7c14588 || echo 8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198)\" | sha256sum -c -",
+    "sudo tar -xJf /tmp/shellcheck.tar.xz --strip-components=1 -C /usr/local/bin shellcheck-v0.11.0/shellcheck"
   ],
   "templates": [],
   "checks": ["60-shellcheck.sh"],

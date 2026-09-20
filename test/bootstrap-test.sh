@@ -61,8 +61,8 @@ grep -qx '# substrate-managed' .github/workflows/substrate-gate.yml \
     || fail "gate workflow is not marked as managed"
 managed_matches .github/workflows/substrate-report.yml "$KIT_ROOT/core/ci/github-report.yml" \
     || fail "report workflow does not match its source"
-grep -q 'shellcheck zsh' .github/workflows/substrate-gate.yml \
-    || fail "shell profile toolchain missing from gate workflow"
+grep -q 'shellcheck-v0.11.0/shellcheck' .github/workflows/substrate-gate.yml \
+    || fail "pinned shell profile toolchain missing from gate workflow"
 grep -q 'run: .substrate/install-prereqs.sh' .github/workflows/substrate-gate.yml \
     || fail "Forgejo container prerequisites missing from gate workflow"
 [ -x .substrate/install-prereqs.sh ] \
@@ -201,7 +201,7 @@ cmp -s .substrate/report.sh "$KIT_ROOT/core/report.sh" \
     || fail "vendored report did not synchronize"
 managed_matches .github/workflows/substrate-report.yml "$KIT_ROOT/core/ci/github-report.yml" \
     || fail "managed report workflow did not synchronize"
-grep -q 'shellcheck zsh' .github/workflows/substrate-gate.yml \
+grep -q 'shellcheck-v0.11.0/shellcheck' .github/workflows/substrate-gate.yml \
     || fail "managed gate workflow did not re-render"
 cmp -s checks.d/85-local.sh .substrate/checks.d/85-local.sh \
     || fail "repo-local check did not synchronize"
