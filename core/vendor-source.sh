@@ -77,8 +77,10 @@ guard_vendor_source_git() {
 }
 
 write_vendor_provenance() {
+    local version="${SUBSTRATE_KIT_VERSION:-}"
+    [ -n "$version" ] || version=$(cat "$KIT_ROOT/VERSION")
     jq -n --arg kitRevision "$VENDOR_KIT_REVISION" --arg source "$VENDOR_KIT_SOURCE" \
-        --arg version "$(cat "$KIT_ROOT/VERSION")" \
+        --arg version "$version" \
         '{kitRevision:$kitRevision,source:$source,version:$version}' > "$1/vendor.json"
 }
 

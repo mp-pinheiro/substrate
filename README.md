@@ -15,8 +15,9 @@ go install github.com/mp-pinheiro/substrate/cmd/substrate@latest
 The binary carries the whole kit (`bin/`, `core/`, `profiles/`, `skills/`, `agents/`) and materializes it
 on first use under `${XDG_CACHE_HOME:-~/.cache}/substrate/kit/<version>-<digest>`; consumers need no kit
 clone. `SUBSTRATE_KIT_CACHE` relocates that directory (use it when the default cache is mounted `noexec`).
-The same binary answers to `substrate-engine` when invoked under that name, so a symlink beside it gives
-CI the engine entrypoint.
+The same binary answers to `substrate-engine` when invoked under that name, and the first CLI run drops a
+`substrate-engine` symlink beside itself so installed Git hooks, `just gate`, and CI find the engine on
+`PATH` without a second install.
 
 Working on the kit itself still wants a checkout:
 

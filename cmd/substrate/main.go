@@ -19,7 +19,7 @@ var (
 	kitRevision = ""
 )
 
-func resolveIdentity() (string, string) {
+func resolveIdentity() (string, string, string) {
 	v, ch := version, channel
 	if v == "0.0.0-dev" {
 		if bi, ok := debug.ReadBuildInfo(); ok {
@@ -30,13 +30,13 @@ func resolveIdentity() (string, string) {
 		}
 	}
 	if ch == "dev" {
-		return v, ch
+		return v, ch, v
 	}
-	return v + "+" + ch, ch
+	return v + "+" + ch, ch, v
 }
 
 func main() {
-	reported, ch := resolveIdentity()
+	reported, ch, bare := resolveIdentity()
 	if filepath.Base(os.Args[0]) == "substrate-engine" {
 		exportKitRoot()
 		os.Exit(enginecli.Run(os.Args[1:], reported))
@@ -45,7 +45,7 @@ func main() {
 		exportKitRoot()
 		os.Exit(enginecli.Run(os.Args[2:], reported))
 	}
-	os.Exit(runCLI(os.Args[1:], reported, ch))
+	os.Exit(runCLI(os.Args[1:], bare, ch))
 }
 
 func exportKitRoot() {
@@ -59,7 +59,20 @@ func exportKitRoot() {
 	_ = os.Setenv("SUBSTRATE_KIT_ROOT", root)
 }
 
-func runCLI(args []string, reported, ch string) int {
+func ensureEngineAlias() {
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	alias := filepath.Join(filepath.Dir(exe), "substrate-engine")
+	if _, err := os.Lstat(alias); err == nil {
+		return
+	}
+	_ = os.Symlink(exe, alias)
+}
+
+func runCLI(args []string, installVersion, ch string) int {
+	ensureEngineAlias()
 	root, err := kit.Root()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "substrate: cannot materialize the embedded kit: %v\n", err)
@@ -83,7 +96,7 @@ func runCLI(args []string, reported, ch string) int {
 		"SUBSTRATE_ENGINE_BIN="+shim,
 		"SUBSTRATE_KIT_SOURCE="+ch,
 		"SUBSTRATE_KIT_REVISION="+kitRevision,
-		"SUBSTRATE_KIT_VERSION="+reported,
+		"SUBSTRATE_KIT_VERSION="+installVersion,
 	)
 	if err := cmd.Run(); err != nil {
 		var exitErr *exec.ExitError

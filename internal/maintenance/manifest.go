@@ -18,7 +18,8 @@ func resolveKitRoot() (string, error) {
 		return "", fmt.Errorf("resolve kit root: %w", err)
 	}
 	candidate := filepath.Dir(filepath.Dir(exe))
-	if info, statErr := os.Stat(filepath.Join(candidate, "bin", "substrate")); statErr != nil || info.IsDir() {
+	marker := filepath.Join(candidate, "core", "vendor-source.sh")
+	if info, statErr := os.Stat(marker); statErr != nil || info.IsDir() {
 		return "", fmt.Errorf("resolve kit root: no kit at %s — set SUBSTRATE_KIT_ROOT", candidate)
 	}
 	return candidate, nil

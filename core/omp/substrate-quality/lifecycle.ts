@@ -45,12 +45,8 @@ function registerSessionLifecycle(pi: ExtensionAPI): void {
 		}
 		const pendingOwned = status?.pendingOwned ?? [];
 		const dirtyPaths = status?.dirtyPaths ?? [];
-		if (pendingOwned.length === 0) {
-			ctx.ui.notify("[substrate] no pending agent-owned changes; nothing to checkpoint", "info");
-			return;
-		}
 		const hardProtected = await hardProtectedPending(root, pendingOwned);
-		if (hardProtected.length === pendingOwned.length) {
+		if (pendingOwned.length > 0 && hardProtected.length === pendingOwned.length) {
 			ctx.ui.notify(
 				`[substrate — hand to user] pending paths are policy-protected and can never be agent-committed: ${pendingOwned.join(", ")}. Ask the user to commit them; no checkpoint retry will succeed.`,
 				"warning",

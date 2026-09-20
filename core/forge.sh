@@ -1,12 +1,4 @@
 #!/usr/bin/env bash
-# Host-detecting issue/status client for the maintenance report queue and the
-# plan audit oracles. Picks GitHub (gh CLI) or a Forgejo-shaped host (curl
-# against the Gitea-compatible /api/v1) purely from the resolved API host —
-# no repo config, no env flag.
-#   upsert-issue <label> <title> <body-file>   ensure label + issue; print number
-#   open-issue <label>                         print newest open issue number, or nothing
-#   issue-json <number>                        print that issue's API JSON object
-#   ref-status <ref>                           print success|failure|pending, or nothing
 set -uo pipefail
 
 die() { printf 'forge: %s\n' "$1" >&2; exit "${2:-1}"; }
@@ -143,8 +135,17 @@ forgejo_ref_status() {
         || die "forgejo status lookup failed" 1
 }
 
+release_id_for_tag() {
+    forge_curl "$api/repos/$slug/releases/tags/$1" 2>/dev/null | jq -r '.id // empty'
+}
+
 create_release() {
     local tag=$1 name=$2 prerelease=$3 notes_file=$4 target=$5 payload id
+    id=$(release_id_for_tag "$tag")
+    if [ -n "$id" ]; then
+        printf '%s\n' "$id"
+        return 0
+    fi
     payload=$(jq -n --arg tag "$tag" --arg name "$name" --arg target "$target" \
         --argjson prerelease "$prerelease" --rawfile body "$notes_file" \
         '{tag_name:$tag,name:$name,body:$body,prerelease:$prerelease,target_commitish:$target,draft:false}') \
@@ -156,10 +157,24 @@ create_release() {
     printf '%s\n' "$id"
 }
 
+drop_existing_asset() {
+    local id=$1 name=$2 existing
+    existing=$(forge_curl "$api/repos/$slug/releases/$id/assets" 2>/dev/null \
+        | jq -r --arg n "$name" 'if type == "array" then (.[] | select(.name == $n) | .id) else empty end' \
+        | head -1)
+    [ -n "$existing" ] || return 0
+    if [ "$is_github" -eq 1 ]; then
+        forge_curl -X DELETE "$api/repos/$slug/releases/assets/$existing" >/dev/null 2>&1 || true
+    else
+        forge_curl -X DELETE "$api/repos/$slug/releases/$id/assets/$existing" >/dev/null 2>&1 || true
+    fi
+}
+
 upload_asset() {
     local id=$1 file=$2 name
     name=$(basename "$file")
     [ -f "$file" ] || die "asset not found: $file" 1
+    drop_existing_asset "$id" "$name"
     if [ "$is_github" -eq 1 ]; then
         forge_curl -H "Content-Type: application/octet-stream" -X POST \
             --data-binary @"$file" \
