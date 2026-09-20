@@ -66,13 +66,14 @@ jobs:
               git rev-list -n1 "$want"
               return 0
             fi
-            sha=$(curl -s -H "Authorization: Bearer $MIRROR_TOKEN" \
-              "https://api.github.com/repos/mp-pinheiro/substrate/git/ref/tags/$want" \
-              | jq -r 'if .object.type == "tag" then empty else (.object.sha // empty) end')
-            if [ -z "$sha" ]; then
+            local ref
+            ref=$(curl -s -H "Authorization: Bearer $MIRROR_TOKEN" \
+              "https://api.github.com/repos/mp-pinheiro/substrate/git/ref/tags/$want")
+            sha=$(printf '%s' "$ref" | jq -r '.object.sha // empty')
+            if [ -n "$sha" ] && [ "$(printf '%s' "$ref" | jq -r '.object.type // empty')" = tag ]; then
               sha=$(curl -s -H "Authorization: Bearer $MIRROR_TOKEN" \
-                "https://api.github.com/repos/mp-pinheiro/substrate/git/refs/tags/$want" \
-                | jq -r 'if type == "array" then (.[0].object.sha // empty) else empty end')
+                "https://api.github.com/repos/mp-pinheiro/substrate/git/tags/$sha" \
+                | jq -r '.object.sha // empty')
             fi
             printf '%s' "$sha"
           }
@@ -97,11 +98,17 @@ jobs:
           fi
           tag="v$version"
           existing=$(resolve_tag_target "$tag")
+          skip=false
           if [ -n "$existing" ] && [ "$existing" != "$GITHUB_SHA" ]; then
-            echo "::error::$tag already points at $existing; republishing it from $GITHUB_SHA would overwrite its artifacts. Bump VERSION for the next stable, or wait for tomorrow's nightly date."
-            exit 1
+            if [ "$GITHUB_EVENT_NAME" = schedule ]; then
+              echo "::notice::$tag was already published today at $existing — nothing to cut"
+              skip=true
+            else
+              echo "::error::$tag already points at $existing; republishing it from $GITHUB_SHA would overwrite its artifacts. Bump VERSION for the next stable, or wait for tomorrow's nightly date."
+              exit 1
+            fi
           fi
-          if [ -n "$existing" ]; then
+          if [ -n "$existing" ] && [ "$existing" = "$GITHUB_SHA" ]; then
             echo "::notice::$tag already exists at this revision — resuming publication for it"
           fi
           {
@@ -111,13 +118,14 @@ jobs:
             echo "channel=$channel"
             echo "prerelease=$prerelease"
             echo "tag=$tag"
+            echo "skip=$skip"
           } >> "$GITHUB_OUTPUT"
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
-        if: steps.gate-status.outputs.status == 'success'
+        if: steps.gate-status.outputs.status == 'success' && steps.identity.outputs.skip != 'true'
         with:
           go-version-file: go.mod
       - name: Build release artifacts
-        if: steps.gate-status.outputs.status == 'success'
+        if: steps.gate-status.outputs.status == 'success' && steps.identity.outputs.skip != 'true'
         env:
           VERSION: ${{ steps.identity.outputs.version }}
           CHANNEL: ${{ steps.identity.outputs.channel }}
@@ -133,7 +141,7 @@ jobs:
           sha256sum substrate_*.tar.gz > SHA256SUMS
           cat SHA256SUMS
       - name: Compose release notes
-        if: steps.gate-status.outputs.status == 'success'
+        if: steps.gate-status.outputs.status == 'success' && steps.identity.outputs.skip != 'true'
         env:
           TAG: ${{ steps.identity.outputs.tag }}
         run: |
@@ -146,7 +154,7 @@ jobs:
           printf '\nRevision: %s\n' "$GITHUB_SHA" >> notes.md
           cat notes.md
       - name: Publish to Forgejo and the GitHub mirror
-        if: steps.gate-status.outputs.status == 'success'
+        if: steps.gate-status.outputs.status == 'success' && steps.identity.outputs.skip != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.identity.outputs.tag }}
