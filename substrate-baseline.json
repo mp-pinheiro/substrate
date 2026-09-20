@@ -33,6 +33,7 @@
   "comments:core/gitleaks-deep.sh": 0,
   "comments:core/gitleaks-lib.sh": 0,
   "comments:core/install-assets.sh": 0,
+  "comments:core/install-git.sh": 0,
   "comments:core/install-gitleaks.sh": 0,
   "comments:core/install-jj.sh": 0,
   "comments:core/install-lib.sh": 0,
@@ -293,7 +294,7 @@
   "comments:test/vendor-drift-test.sh": 0,
   "comments:test/vendor-source-test.sh": 0,
   "dead_code": 0,
-  "dup_pct": 2.123294059128921,
+  "dup_pct": 2.1222384488705215,
   "oversized_files": 0
 },
   "direction": {
@@ -330,6 +331,7 @@
   "comments:core/gitleaks-deep.sh": "lo",
   "comments:core/gitleaks-lib.sh": "lo",
   "comments:core/install-assets.sh": "lo",
+  "comments:core/install-git.sh": "lo",
   "comments:core/install-gitleaks.sh": "lo",
   "comments:core/install-jj.sh": "lo",
   "comments:core/install-lib.sh": "lo",
@@ -592,13 +594,5 @@
   "dead_code": "lo",
   "dup_pct": "lo",
   "oversized_files": "lo"
-},
-  "accepted": {
-  "dup_pct": {
-  "at": "2026-09-20",
-  "from": 2.122568214307912,
-  "reason": "Deleting the dead bookworm-backports block shrank a scanned file, so the identical duplicated lines became a larger fraction (2.122568 to 2.123294). Extracting a composite action to remove the cross-file YAML clones was costed and rejected as unverifiable on Forgejo. Tracked as issue 24.",
-  "to": 2.123294059128921
-}
 }
 }
