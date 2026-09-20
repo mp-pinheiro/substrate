@@ -89,7 +89,7 @@ for pjson in .substrate/profiles/*/profile.json; do
     while IFS= read -r fixture_rel; do
         [ -n "$fixture_rel" ] || continue
         fixture="$(dirname "$pjson")/$fixture_rel"
-        target="substrate-selftest-$(basename "$fixture")"
+        target="substrate-selftest-$(basename "${fixture%.txt}")"
         cp "$fixture" "$target"
         printf '%s\n' "$target" >> "$LIST"
         out=$($GATE 2>&1)

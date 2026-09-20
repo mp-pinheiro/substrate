@@ -17,11 +17,11 @@
   ],
   "templates": [{ "src": "golangci.yml", "dest": ".golangci.yml" }],
   "checks": ["75-go-build.sh", "76-golangci.sh"],
-  "slop_fixtures": ["fixtures/slop.go"],
+  "slop_fixtures": ["fixtures/slop.go.txt"],
   "check_fixtures": [
-    { "file": "fixtures/bad-vet.go", "fails": "75-go-build.sh" },
-    { "file": "fixtures/bad-lint.go", "fails": "76-golangci.sh" },
-    { "file": "fixtures/bad-forbidigo.go", "fails": "76-golangci.sh", "dest": "internal/lib/bad-forbidigo.go" }
+    { "file": "fixtures/bad-vet.go.txt", "fails": "75-go-build.sh" },
+    { "file": "fixtures/bad-lint.go.txt", "fails": "76-golangci.sh" },
+    { "file": "fixtures/bad-forbidigo.go.txt", "fails": "76-golangci.sh", "dest": "internal/lib/bad-forbidigo.go" }
   ],
   "lsp": {
     "gopls": { "bin": "gopls", "hint": "go install golang.org/x/tools/gopls@latest" }

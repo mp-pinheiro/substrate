@@ -262,6 +262,7 @@
   "comments:test/hostile-home.sh": 0,
   "comments:test/init-idempotent-test.sh": 0,
   "comments:test/jj-hooks-test.sh": 0,
+  "comments:test/kit-embed-test.sh": 0,
   "comments:test/lib/ab-diff.sh": 0,
   "comments:test/lib/ab-hooks-fixtures.sh": 0,
   "comments:test/lib/ab-hooks-scenarios.sh": 0,
@@ -294,7 +295,7 @@
   "comments:test/vendor-drift-test.sh": 0,
   "comments:test/vendor-source-test.sh": 0,
   "dead_code": 0,
-  "dup_pct": 2.1184206445209517,
+  "dup_pct": 2.1157956692791426,
   "oversized_files": 0
 },
   "direction": {
@@ -560,6 +561,7 @@
   "comments:test/hostile-home.sh": "lo",
   "comments:test/init-idempotent-test.sh": "lo",
   "comments:test/jj-hooks-test.sh": "lo",
+  "comments:test/kit-embed-test.sh": "lo",
   "comments:test/lib/ab-diff.sh": "lo",
   "comments:test/lib/ab-hooks-fixtures.sh": "lo",
   "comments:test/lib/ab-hooks-scenarios.sh": "lo",

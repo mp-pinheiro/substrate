@@ -55,6 +55,7 @@ for name in "${profiles[@]}"; do
                 clean.*) dest="sample.${base#clean.}" ;;
                 *) continue ;;
             esac
+            dest="${dest%.txt}"
             mkdir -p "$(dirname "./$dest")"
             cp "$s" "./$dest"
         done
@@ -104,7 +105,7 @@ for name in "${profiles[@]}"; do
             fi
             src="$pdir/$bad_rel"
             if [ -z "$bad_dest" ]; then
-                bad_dest="substrate-matrix-bad-$(basename "$bad_rel")"
+                bad_dest="substrate-matrix-bad-$(basename "${bad_rel%.txt}")"
             fi
             mkdir -p "$(dirname "./$bad_dest")" 2>/dev/null || true
             if [ -d "$src" ]; then

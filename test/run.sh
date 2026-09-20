@@ -18,7 +18,7 @@ SUITES=(
     ab-hooks-test ab-stop-test baseline-test bootstrap-test changed-scan-test
     checkpoint-test claims-table-test contract-drift-test doctor-attestation-test
     engine-rollback-test gitleaks-deep-test gitleaks-scope-test golden-ledger-test
-    golden-vectors-test init-idempotent-test maintenance-test parity-test
+    golden-vectors-test init-idempotent-test kit-embed-test maintenance-test parity-test
     profile-workspace-test receipt-cross-engine-test receipt-test restructure-test
     vcs-hooks-test vendor-drift-test vendor-source-test
 )
