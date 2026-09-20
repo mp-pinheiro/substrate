@@ -62,6 +62,7 @@ jobs:
         run: |
           base=$(cat VERSION)
           requested="${{ inputs.channel }}"
+          [ -n "$requested" ] || requested="${{ github.event.inputs.channel }}"
           if [ "$GITHUB_EVENT_NAME" = schedule ] || [ "$requested" = nightly ]; then
             version="${base}-nightly.$(date -u +%Y%m%d)"
             channel=nightly
