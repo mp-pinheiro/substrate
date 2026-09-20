@@ -18,9 +18,21 @@ if [ -f "$API_DIR/force-code" ]; then
     printf '{"message":"stubbed failure"}\n%s' "$(cat "$API_DIR/force-code")"
     exit 0
 fi
+method=GET
+prev=""
+for a in "$@"; do [ "$prev" = -X ] && method=$a; prev=$a; done
+case "$url" in
+    */push_mirrors-sync) printf '204'; exit 0 ;;
+esac
+if [ "$method" = POST ] && case "$url" in */git/refs) true;; *) false;; esac; then
+    code=$(cat "$API_DIR/tag-code" 2>/dev/null || echo 201)
+    printf '{"message":"stubbed ref post"}\n%s' "$code"
+    exit 0
+fi
 case "$url" in
     */git/ref/tags/*) f="$API_DIR/ref-${url##*/}" ;;
     */git/tags/*)     f="$API_DIR/obj-${url##*/}" ;;
+    */commits/*)      f="$API_DIR/commit-${url##*/}" ;;
     *)                f="" ;;
 esac
 if [ -n "$f" ] && [ -f "$f" ]; then
@@ -163,6 +175,48 @@ cd "$repo" || fail "cannot re-enter the scratch repo"
 identity workflow_dispatch "" && fail "an empty VERSION must be refused, not published as v"
 ann | grep -q 'missing or empty' || fail "empty VERSION must be named: $(ann)"
 ok "an empty VERSION file is refused before anything is tagged"
+
+mirror_tag() {
+    : > "$T/ann"
+    env RELEASE_TAG="$1" RELEASE_HEAD_SHA="$2" RELEASE_MIRROR_TOKEN=stub \
+        RELEASE_MIRROR_WAITS="0 0" \
+        "$KIT_ROOT/core/release-mirror-tag.sh" > "$T/ann" 2>&1
+}
+
+tag_sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+printf '{"sha":"%s"}' "$tag_sha" > "$T/api/commit-$tag_sha"
+echo 201 > "$T/api/tag-code"
+mirror_tag v9.9.9 "$tag_sha" || fail "creating a fresh mirror tag exited $?: $(ann)"
+ann | grep -q "created v9.9.9 on the mirror" || fail "creation must be announced: $(ann)"
+ok "a fresh mirror tag is created at the released revision"
+
+echo 422 > "$T/api/tag-code"
+printf '{"object":{"sha":"tagobject11111111111111111111111111111111","type":"tag"}}' \
+    > "$T/api/ref-v9.9.9"
+printf '{"object":{"sha":"%s","type":"commit"}}' "$tag_sha" \
+    > "$T/api/obj-tagobject11111111111111111111111111111111"
+mirror_tag v9.9.9 "$tag_sha" \
+    || fail "an annotated mirror tag at the released commit must resume, not abort: $(ann)"
+ann | grep -q 'already present on the mirror' || fail "resume must be announced: $(ann)"
+ok "a 422 on an annotated mirror tag dereferences instead of falsely aborting"
+
+other_sha=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+printf '{"sha":"%s"}' "$other_sha" > "$T/api/commit-$other_sha"
+mirror_tag v9.9.9 bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb \
+    && fail "a mirror tag pointing elsewhere must abort the publication"
+ann | grep -q 'already exists on the mirror at' || fail "the collision must be named: $(ann)"
+ok "a mirror tag at a different revision aborts instead of being overwritten"
+
+echo 500 > "$T/api/tag-code"
+mirror_tag v9.9.9 "$tag_sha" && fail "an unexpected status must not be treated as success"
+ann | grep -q 'HTTP 500' || fail "the status must be named: $(ann)"
+rm -f "$T/api/tag-code" "$T/api/ref-v9.9.9"
+ok "an unexpected mirror status aborts with the status named"
+
+mirror_tag v9.9.9 cccccccccccccccccccccccccccccccccccccccc \
+    && fail "a revision absent from the mirror must abort before tagging"
+ann | grep -q 'has not reached the GitHub mirror' || fail "the wait failure must be named: $(ann)"
+ok "a revision that never reaches the mirror aborts instead of tagging the wrong commit"
 
 notes="$T/notes.md"
 echo "release notes" > "$notes"

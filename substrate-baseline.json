@@ -49,6 +49,8 @@
   "comments:core/push-gate.sh": 0,
   "comments:core/receipt-lib.sh": 0,
   "comments:core/release-identity.sh": 0,
+  "comments:core/release-mirror-lib.sh": 0,
+  "comments:core/release-mirror-tag.sh": 0,
   "comments:core/report.sh": 0,
   "comments:core/selftest.sh": 0,
   "comments:core/substrate-launch.sh": 0,
@@ -297,7 +299,7 @@
   "comments:test/vendor-drift-test.sh": 0,
   "comments:test/vendor-source-test.sh": 0,
   "dead_code": 0,
-  "dup_pct": 2.094513784538011,
+  "dup_pct": 2.088046468969734,
   "oversized_files": 0
 },
   "direction": {
@@ -350,6 +352,8 @@
   "comments:core/push-gate.sh": "lo",
   "comments:core/receipt-lib.sh": "lo",
   "comments:core/release-identity.sh": "lo",
+  "comments:core/release-mirror-lib.sh": "lo",
+  "comments:core/release-mirror-tag.sh": "lo",
   "comments:core/report.sh": "lo",
   "comments:core/selftest.sh": "lo",
   "comments:core/substrate-launch.sh": "lo",
