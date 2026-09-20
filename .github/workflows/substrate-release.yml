@@ -63,8 +63,7 @@ jobs:
           RELEASE_EVENT: ${{ github.event_name }}
           RELEASE_CHANNEL: ${{ inputs.channel || github.event.inputs.channel }}
           RELEASE_HEAD_SHA: ${{ github.sha }}
-          RELEASE_MIRROR_TOKEN: ${{ env.MIRROR_TOKEN }}
-        run: .substrate/release-identity.sh >> "$GITHUB_OUTPUT"
+        run: .substrate/release-identity.sh
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         if: steps.gate-status.outputs.status == 'success' && steps.identity.outputs.skip != 'true'
         with:
