@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+"$(dirname "${BASH_SOURCE[0]}")/install-git.sh"
+
 case "$(uname -s):$(uname -m)" in
     Linux:x86_64)
         jj_arch=x86_64-unknown-linux-musl

@@ -121,16 +121,18 @@ grep -q 'does not identify a published kit' .github/workflows/substrate-gate.yml
     || fail "consumer report workflow carries unsupported Forgejo permissions"
 grep -q 'echo "$GITHUB_WORKSPACE/build" >> "$GITHUB_PATH"' .github/workflows/substrate-gate.yml \
     || fail "Substrate engine path is not exported to later steps"
-grep -q 'git_version=2.47.3' .substrate/install-prereqs.sh \
-    || fail "prerequisite installer does not pin its Git source version"
-grep -q 'git_archive="/tmp/git-${git_version}.tar.gz"' .substrate/install-prereqs.sh \
-    || fail "prerequisite installer does not download its pinned Git source"
-grep -q 'c073471530e92b716641ea2b381fcd0ece53eea9a76a9c5415f93f89e870dd5f' .substrate/install-prereqs.sh \
-    || fail "prerequisite installer does not verify its Git source hash"
-grep -q 'make -C "$git_source" install' .substrate/install-prereqs.sh \
-    || fail "prerequisite installer does not install its built Git"
-grep -q 'Git >= 2.41 is required by the pinned Jujutsu' .substrate/install-prereqs.sh \
-    || fail "prerequisite installer does not enforce the Jujutsu Git requirement"
+grep -q 'git_version=2.47.3' .substrate/install-git.sh \
+    || fail "git installer does not pin its source version"
+grep -q 'git_archive="/tmp/git-${git_version}.tar.gz"' .substrate/install-git.sh \
+    || fail "git installer does not download its pinned source"
+grep -q 'c073471530e92b716641ea2b381fcd0ece53eea9a76a9c5415f93f89e870dd5f' .substrate/install-git.sh \
+    || fail "git installer does not verify its source hash"
+grep -q 'make -C "$git_source" install' .substrate/install-git.sh \
+    || fail "git installer does not install its built Git"
+grep -q 'Git >= 2.41 is required by the pinned Jujutsu' .substrate/install-git.sh \
+    || fail "git installer does not enforce the Jujutsu Git requirement"
+grep -q 'install-git.sh' .substrate/install-jj.sh \
+    || fail "Jujutsu installer does not ensure a compatible Git"
 cmp -s .claude/skills/review/SKILL.md "$KIT_ROOT/skills/review/SKILL.md" \
     || fail "Claude skill was not installed"
 cmp -s .omp/skills/review/SKILL.md "$KIT_ROOT/skills/review/SKILL.md" \
