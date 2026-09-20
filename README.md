@@ -45,6 +45,12 @@ Each release also carries `substrate_<version>_linux_{amd64,arm64}.tar.gz` (cont
 `substrate-engine` symlink) and `SHA256SUMS`, downloadable from the Forgejo release page or
 `https://github.com/mp-pinheiro/substrate/releases`.
 
+Mirroring the release to GitHub needs a credential with `contents: write` on `mp-pinheiro/substrate`,
+since Forgejo never exposes the push mirror's own credential to a workflow. Preferred: a GitHub App
+(the same one that authors `poketcg-pc` releases) installed on the repository, with `MIRROR_APP_ID` and
+`MIRROR_APP_PRIVATE_KEY` as Forgejo secrets — the job mints a short-lived installation token per run.
+A classic PAT in `MIRROR_GITHUB_TOKEN` is accepted as a fallback and takes precedence when both are set.
+
 ## Requirements
 
 Substrate currently supports Linux. It expects Go (to build `substrate-engine`), Bash, Git, `jq`, `yq`, Bun, and gitleaks; profile-specific tools vary. Run `substrate doctor` for the exact dependencies required by the selected profiles. Jujutsu is optional.

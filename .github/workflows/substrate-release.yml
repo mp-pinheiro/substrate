@@ -19,6 +19,46 @@ jobs:
           persist-credentials: false
       - name: Install container prerequisites
         run: .substrate/install-prereqs.sh
+      - name: Resolve the GitHub mirror credential
+        id: mirror-auth
+        env:
+          MIRROR_GITHUB_TOKEN: ${{ secrets.MIRROR_GITHUB_TOKEN }}
+          MIRROR_APP_ID: ${{ secrets.MIRROR_APP_ID }}
+          MIRROR_APP_PRIVATE_KEY: ${{ secrets.MIRROR_APP_PRIVATE_KEY }}
+        run: |
+          if [ -n "${MIRROR_GITHUB_TOKEN:-}" ]; then
+            echo "::add-mask::$MIRROR_GITHUB_TOKEN"
+            echo "MIRROR_TOKEN=$MIRROR_GITHUB_TOKEN" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          if [ -z "${MIRROR_APP_ID:-}" ] || [ -z "${MIRROR_APP_PRIVATE_KEY:-}" ]; then
+            echo "::error::no GitHub mirror credential — set MIRROR_APP_ID + MIRROR_APP_PRIVATE_KEY (GitHub App) or MIRROR_GITHUB_TOKEN (PAT); a release that exists only on Forgejo breaks go install"
+            exit 1
+          fi
+          b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
+          now=$(date +%s)
+          header=$(printf '{"alg":"RS256","typ":"JWT"}' | b64url)
+          payload=$(printf '{"iat":%d,"exp":%d,"iss":"%s"}' "$((now - 60))" "$((now + 540))" "$MIRROR_APP_ID" | b64url)
+          key=$(mktemp)
+          chmod 600 "$key"
+          printf '%s\n' "$MIRROR_APP_PRIVATE_KEY" > "$key"
+          signature=$(printf '%s.%s' "$header" "$payload" | openssl dgst -sha256 -sign "$key" | b64url)
+          rm -f "$key"
+          jwt="$header.$payload.$signature"
+          installation=$(curl -sSf -H "Authorization: Bearer $jwt" -H 'Accept: application/vnd.github+json' \
+            https://api.github.com/repos/mp-pinheiro/substrate/installation | jq -r '.id // empty')
+          if [ -z "$installation" ]; then
+            echo "::error::the GitHub App is not installed on mp-pinheiro/substrate — install it, then re-dispatch"
+            exit 1
+          fi
+          token=$(curl -sSf -X POST -H "Authorization: Bearer $jwt" -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/app/installations/$installation/access_tokens" | jq -r '.token // empty')
+          if [ -z "$token" ]; then
+            echo "::error::the GitHub App installation returned no access token"
+            exit 1
+          fi
+          echo "::add-mask::$token"
+          echo "MIRROR_TOKEN=$token" >> "$GITHUB_ENV"
       - name: Require a green gate on this revision
         id: gate-status
         env:
@@ -38,13 +78,7 @@ jobs:
       - name: Resolve release identity
         id: identity
         if: steps.gate-status.outputs.status == 'success'
-        env:
-          MIRROR_GITHUB_TOKEN: ${{ secrets.MIRROR_GITHUB_TOKEN }}
         run: |
-          if [ -z "${MIRROR_GITHUB_TOKEN:-}" ]; then
-            echo "::error::MIRROR_GITHUB_TOKEN is not configured — a release that exists only on Forgejo breaks go install"
-            exit 1
-          fi
           base=$(cat VERSION)
           if [ "$GITHUB_EVENT_NAME" = schedule ]; then
             version="${base}-nightly.$(date -u +%Y%m%d)"
@@ -61,7 +95,7 @@ jobs:
             exit 1
           fi
           if curl -sSf -o /dev/null \
-              -H "Authorization: token $MIRROR_GITHUB_TOKEN" \
+              -H "Authorization: token $MIRROR_TOKEN" \
               "https://api.github.com/repos/mp-pinheiro/substrate/releases/tags/$tag" 2>/dev/null; then
             echo "::error::release $tag already exists on the GitHub mirror"
             exit 1
@@ -110,7 +144,6 @@ jobs:
         if: steps.gate-status.outputs.status == 'success'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MIRROR_GITHUB_TOKEN: ${{ secrets.MIRROR_GITHUB_TOKEN }}
           TAG: ${{ steps.identity.outputs.tag }}
           PRERELEASE: ${{ steps.identity.outputs.prerelease }}
           BASE: ${{ steps.identity.outputs.base }}
@@ -123,7 +156,7 @@ jobs:
             .substrate/forge.sh prune-prereleases "v${BASE}-nightly." 14
           }
           publish "$GITHUB_SHA"
-          mirror_tree=$(curl -sSf -H "Authorization: token $MIRROR_GITHUB_TOKEN" \
+          mirror_tree=$(curl -sSf -H "Authorization: token $MIRROR_TOKEN" \
             "https://api.github.com/repos/mp-pinheiro/substrate/commits/main" | jq -r '.commit.tree.sha')
           if [ "$mirror_tree" != "$(git rev-parse 'HEAD^{tree}')" ]; then
             echo "::error::mirror main tree differs from the released revision — wait for the push mirror, then re-dispatch"
@@ -131,5 +164,5 @@ jobs:
           fi
           export SUBSTRATE_FORGE_API=https://api.github.com
           export SUBSTRATE_FORGE_SLUG=mp-pinheiro/substrate
-          export SUBSTRATE_FORGE_TOKEN="$MIRROR_GITHUB_TOKEN"
+          export SUBSTRATE_FORGE_TOKEN="$MIRROR_TOKEN"
           publish main
