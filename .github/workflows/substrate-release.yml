@@ -63,10 +63,17 @@ jobs:
           base=$(cat VERSION)
           requested="${{ inputs.channel }}"
           [ -n "$requested" ] || requested="${{ github.event.inputs.channel }}"
+          released_sha=""
+          if git rev-parse -q --verify "refs/tags/v$base" >/dev/null; then
+            released_sha=$(git rev-parse "refs/tags/v$base^{commit}")
+          fi
+          if [ -z "$released_sha" ]; then
+            released_sha=$(curl -s -H "Authorization: Bearer $MIRROR_TOKEN" \
+              "https://api.github.com/repos/mp-pinheiro/substrate/git/ref/tags/v$base" \
+              | jq -r '.object.sha // empty')
+          fi
           nightly_base="$base"
-          if git rev-parse -q --verify "refs/tags/v$base" >/dev/null \
-              || curl -s -o /dev/null -f -H "Authorization: Bearer $MIRROR_TOKEN" \
-                   "https://api.github.com/repos/mp-pinheiro/substrate/releases/tags/v$base"; then
+          if [ -n "$released_sha" ]; then
             IFS=. read -r major minor _patch <<< "$base"
             nightly_base="${major}.$((minor + 1)).0"
           fi
@@ -78,10 +85,14 @@ jobs:
             version="$base"
             channel=release
             prerelease=false
+            if [ -n "$released_sha" ] && [ "$released_sha" != "$GITHUB_SHA" ]; then
+              echo "::error::v$base is already released at $released_sha; republishing it from $GITHUB_SHA would overwrite its artifacts. Bump VERSION for the next stable, or dispatch channel=nightly."
+              exit 1
+            fi
           fi
           tag="v$version"
-          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
-            echo "::notice::tag $tag already exists in this checkout — resuming publication for it"
+          if [ -n "$released_sha" ] && [ "$released_sha" = "$GITHUB_SHA" ]; then
+            echo "::notice::$tag already exists at the released revision — resuming publication for it"
           fi
           {
             echo "base=$base"
