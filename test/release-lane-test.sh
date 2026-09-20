@@ -179,7 +179,7 @@ ok "an empty VERSION file is refused before anything is tagged"
 mirror_tag() {
     : > "$T/ann"
     env RELEASE_TAG="$1" RELEASE_HEAD_SHA="$2" RELEASE_MIRROR_TOKEN=stub \
-        RELEASE_MIRROR_WAITS="0 0" \
+        RELEASE_MIRROR_WAITS="${3:-0 0}" \
         "$KIT_ROOT/core/release-mirror-tag.sh" > "$T/ann" 2>&1
 }
 
@@ -246,5 +246,51 @@ ok "dry-run publishes nothing, needs no credentials, and reports the exact relea
 forge create-release v0.2.0 v0.2.0 false "$T/does-not-exist.md" "$head_sha" >/dev/null 2>&1 \
     && fail "dry-run must reject a missing notes file exactly as the live path does"
 ok "dry-run is no more permissive than the live path about missing inputs"
+
+cutoff_old=$(date -u -d '-30 days' +%Y-%m-%dT%H:%M:%SZ)
+cutoff_new=$(date -u -d '-1 days' +%Y-%m-%dT%H:%M:%SZ)
+cat > "$T/releases.json" <<JSON
+[
+  {"id":1,"tag_name":"v0.2.0-nightly.20260101","prerelease":true,"created_at":"$cutoff_old"},
+  {"id":2,"tag_name":"v0.2.0-nightly.20260919","prerelease":true,"created_at":"$cutoff_new"},
+  {"id":3,"tag_name":"v0.2.0","prerelease":false,"created_at":"$cutoff_old"},
+  {"id":4,"tag_name":"v0.9.0-nightly.20260101","prerelease":true,"created_at":"$cutoff_old"},
+  {"id":5,"tag_name":"v0.2.0-nightly.undated","prerelease":true,"created_at":null}
+]
+JSON
+pruned=$(env -u GH_TOKEN -u GITHUB_TOKEN SUBSTRATE_FORGE_DRYRUN=1 \
+    GITHUB_API_URL=https://api.github.com GITHUB_REPOSITORY=mp-pinheiro/substrate \
+    SUBSTRATE_FORGE_RELEASES_JSON="$T/releases.json" \
+    bash "$KIT_ROOT/core/forge.sh" prune-prereleases v0.2.0-nightly. 14 2>/dev/null)
+[ "$pruned" = "pruned v0.2.0-nightly.20260101" ] \
+    || fail "prune must select only the aged nightly for this base, got: $pruned"
+ok "prune deletes only aged prereleases of its own base, sparing stables and other bases"
+
+printf '%s' "$pruned" | grep -q undated \
+    && fail "a release with no created_at must never be selected for deletion"
+ok "a prerelease with a missing timestamp is spared instead of deleted"
+
+cat > "$T/bin/curl" <<'FLAKY'
+#!/usr/bin/env bash
+url=""
+for a in "$@"; do case "$a" in https://*) url=$a;; esac; done
+case "$url" in
+    */push_mirrors-sync) printf '204'; exit 0 ;;
+    */commits/*)
+        n=$(cat "$API_DIR/attempts" 2>/dev/null || echo 0)
+        n=$((n + 1)); echo "$n" > "$API_DIR/attempts"
+        [ "$n" -lt 3 ] && exit 28
+        printf '{"sha":"ok"}\n200'; exit 0 ;;
+    */git/refs) printf '{}\n201'; exit 0 ;;
+esac
+printf '{"message":"Not Found"}\n404'
+FLAKY
+chmod +x "$T/bin/curl" || fail "flaky shim"
+rm -f "$T/api/attempts"
+mirror_tag v9.9.9 dddddddddddddddddddddddddddddddddddddddd "0 0 0" \
+    || fail "a transient transport error must not abort the publish: $(ann)"
+[ "$(cat "$T/api/attempts")" = 3 ] \
+    || fail "the wait loop must retry past transport errors, attempts=$(cat "$T/api/attempts")"
+ok "transient curl failures are retried instead of aborting the release"
 
 ok "release lane verified locally — no forge round-trip required"

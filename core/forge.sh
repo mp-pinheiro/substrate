@@ -238,21 +238,30 @@ prune_prereleases() {
     local prefix=$1 keep_days=$2 cutoff releases id tag
     cutoff=$(date -u -d "-$keep_days days" +%Y-%m-%dT%H:%M:%SZ) \
         || die "cannot compute the retention cutoff" 1
-    if dry_run; then
+    if [ -n "${SUBSTRATE_FORGE_RELEASES_JSON:-}" ]; then
+        releases=$(cat "$SUBSTRATE_FORGE_RELEASES_JSON") \
+            || die "cannot read the injected release listing" 1
+    elif dry_run; then
         printf 'DRYRUN prune host=%s slug=%s prefix=%s cutoff=%s (listing skipped)\n' \
             "$api" "$slug" "$prefix" "$cutoff" >&2
         return 0
+    else
+        releases=$(forge_curl "$api/repos/$slug/releases?per_page=100&limit=100") \
+            || die "release listing failed on $api/$slug" 1
     fi
-    releases=$(forge_curl "$api/repos/$slug/releases?per_page=100&limit=100") \
-        || die "release listing failed on $api/$slug" 1
     while IFS=$'\t' read -r id tag; do
         [ -n "$id" ] || continue
+        if dry_run; then
+            printf 'DRYRUN prune host=%s slug=%s release=%s tag=%s\n' "$api" "$slug" "$id" "$tag" >&2
+            printf 'pruned %s\n' "$tag"
+            continue
+        fi
         forge_curl -X DELETE "$api/repos/$slug/releases/$id" >/dev/null \
             || die "release deletion failed: $tag" 1
         delete_tag "$tag"
         printf 'pruned %s\n' "$tag"
     done < <(printf '%s' "$releases" | jq -r --arg prefix "$prefix" --arg cutoff "$cutoff" \
-        '.[] | select(.prerelease == true and (.tag_name | startswith($prefix)) and .created_at < $cutoff) | [(.id|tostring), .tag_name] | @tsv')
+        '.[] | select(.prerelease == true and (.tag_name | startswith($prefix)) and (.created_at // "9999") < $cutoff) | [(.id|tostring), .tag_name] | @tsv')
 }
 
 cmd=${1:-}
