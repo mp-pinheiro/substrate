@@ -37,13 +37,16 @@ resolve_tag_target() {
     [ -n "$token" ] \
         || die "no mirror token available to resolve $want — refusing to publish without a tag-collision check"
     ref=$(mirror_get "https://api.github.com/repos/${mirror_repo}/git/ref/tags/$want") || rc=$?
-    [ "${rc:-0}" -ne 44 ] || return 0
+    case "${rc:-0}" in
+        0) ;;
+        44) return 0 ;;
+        *) exit "$rc" ;;
+    esac
     sha=$(printf '%s' "$ref" | jq -r '.object.sha // empty')
     type=$(printf '%s' "$ref" | jq -r '.object.type // empty')
     [ -n "$sha" ] || die "mirror returned a tag ref for $want with no sha"
     if [ "$type" = tag ]; then
-        ref=$(mirror_get "https://api.github.com/repos/${mirror_repo}/git/tags/$sha") \
-            || die "annotated tag $want could not be dereferenced on the mirror"
+        ref=$(mirror_get "https://api.github.com/repos/${mirror_repo}/git/tags/$sha") || exit $?
         sha=$(printf '%s' "$ref" | jq -r '.object.sha // empty')
         [ -n "$sha" ] || die "annotated tag $want dereferenced to no commit"
     fi

@@ -38,7 +38,8 @@ cd "$repo" || fail "cannot enter the scratch repo"
 git init -q -b main . || fail "git init"
 git config user.email t@t && git config user.name t
 echo 0.2.0 > VERSION
-git add VERSION && git commit -qm init || fail "seed commit"
+git add VERSION || fail "stage VERSION"
+git commit -qm init || fail "seed commit"
 head_sha=$(git rev-parse HEAD)
 
 identity() {
@@ -118,6 +119,8 @@ ok "annotated tags from the mirror API dereference to the commit, not the tag ob
 echo 500 > "$T/api/force-code"
 identity workflow_dispatch "" && fail "a 500 from the mirror must not be read as an absent tag"
 ann | grep -q 'HTTP 500' || fail "the failure must name the status: $(ann)"
+[ "$(ann | grep -c '^::error::')" = 1 ] \
+    || fail "an outage must log one honest annotation, not a misleading follow-up: $(ann)"
 echo 401 > "$T/api/force-code"
 identity workflow_dispatch "" && fail "a 401 from the mirror must not be read as an absent tag"
 rm -f "$T/api/force-code"
@@ -130,6 +133,24 @@ env RELEASE_EVENT=workflow_dispatch RELEASE_HEAD_SHA="$mirror_commit" RELEASE_DA
 ann | grep -q 'no mirror token' || fail "the missing token must be named: $(ann)"
 ok "a missing mirror token fails closed rather than publishing unchecked"
 
+
+real_base=$(cat "$KIT_ROOT/VERSION") || fail "cannot read the kit VERSION"
+real_head=$(cd "$KIT_ROOT" && git rev-parse HEAD) || fail "cannot resolve the kit HEAD"
+printf '{"object":{"sha":"%s","type":"commit"}}' "$real_head" > "$T/api/ref-v$real_base"
+IFS=. read -r rmaj rmin _ <<< "$real_base"
+expect_nightly="${rmaj}.$((rmin + 1)).0-nightly.20260921"
+cd "$KIT_ROOT" || fail "cannot enter the kit"
+: > "$T/out"
+env RELEASE_EVENT=schedule RELEASE_HEAD_SHA="$real_head" RELEASE_DATE=20260921 \
+    RELEASE_MIRROR_TOKEN=stub RELEASE_OUTPUT="$T/out" \
+    bash "$KIT_ROOT/core/release-identity.sh" > "$T/ann" 2>&1 \
+    || fail "tomorrow's cron against the real VERSION exited $?: $(ann)"
+[ "$(field version)" = "$expect_nightly" ] \
+    || fail "real-repo cron must cut $expect_nightly, got: $(cat "$T/out")"
+[ "$(field skip)" = false ] || fail "real-repo cron must not skip: $(cat "$T/out")"
+[ "$(field prerelease)" = true ] || fail "real-repo cron must be a prerelease: $(cat "$T/out")"
+rm -f "$T/api/ref-v$real_base"
+ok "tomorrow's cron against the real VERSION and a published v$real_base cuts $expect_nightly"
 cd "$repo" || fail "cannot re-enter the scratch repo"
 : > VERSION
 identity workflow_dispatch "" && fail "an empty VERSION must be refused, not published as v"
