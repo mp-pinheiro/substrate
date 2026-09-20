@@ -26,7 +26,7 @@ git clone https://github.com/mp-pinheiro/substrate.git ~/git/substrate
 export PATH="$HOME/git/substrate/bin:$PATH"
 ```
 
-The canonical remote is `https://forgejo.yfrit.com/mpp/substrate`; this GitHub repository is a
+The canonical remote is `https://forgejo.yfrit.com/fairfruit/substrate`; this GitHub repository is a
 read-only mirror of `main`.
 
 ## Release channels
