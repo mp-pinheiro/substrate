@@ -9,12 +9,40 @@ This project is not affiliated with Parity Technologies or its Substrate blockch
 ## Install the kit
 
 ```sh
+go install github.com/mp-pinheiro/substrate/cmd/substrate@latest
+```
+
+The binary carries the whole kit (`bin/`, `core/`, `profiles/`, `skills/`, `agents/`) and materializes it
+on first use under `${XDG_CACHE_HOME:-~/.cache}/substrate/kit/<version>-<digest>`; consumers need no kit
+clone. `SUBSTRATE_KIT_CACHE` relocates that directory (use it when the default cache is mounted `noexec`).
+The same binary answers to `substrate-engine` when invoked under that name, so a symlink beside it gives
+CI the engine entrypoint.
+
+Working on the kit itself still wants a checkout:
+
+```sh
 git clone https://github.com/mp-pinheiro/substrate.git ~/git/substrate
 export PATH="$HOME/git/substrate/bin:$PATH"
 ```
 
 The canonical remote is `https://forgejo.yfrit.com/mpp/substrate`; this GitHub repository is a
 read-only mirror of `main`.
+
+## Release channels
+
+Releases are built once on Forgejo (`.github/workflows/substrate-release.yml`) and published to both
+forges with identical assets; GitHub never rebuilds. Stable releases are `workflow_dispatch`-driven and
+tagged `vX.Y.Z`; nightlies run at 07:00 UTC, are marked pre-release, tagged `vX.Y.Z-nightly.YYYYMMDD`,
+and are pruned after 14 days. Both require a green gate status on the released revision.
+
+```sh
+go install github.com/mp-pinheiro/substrate/cmd/substrate@latest                  # newest stable
+go install github.com/mp-pinheiro/substrate/cmd/substrate@v0.1.0-nightly.20260920 # a nightly
+```
+
+Each release also carries `substrate_<version>_linux_{amd64,arm64}.tar.gz` (containing `substrate` plus a
+`substrate-engine` symlink) and `SHA256SUMS`, downloadable from the Forgejo release page or
+`https://github.com/mp-pinheiro/substrate/releases`.
 
 ## Requirements
 
@@ -55,13 +83,13 @@ Profile mappings currently cover YAML/JSON, C++, Go, Lua, Python, shell, Svelte,
 | unclaimed-source | tracked files no profile claims and the ledger doesn't sanction — silence is a decision |
 | comments | comment slop (narration, restating, banners, TODO chatter) via AST-backed detection; per-file ratchet |
 | duplication | copy/paste growth (jscpd) vs baseline |
-| budgets | file-size growth vs baseline; hard cap configurable |
+| budgets | new files over the per-file line target; the count of oversized files is ratcheted |
 | data-validity | JSON/YAML that does not parse |
 | gitleaks | secrets in pending Git/jj work; full reachable history is explicit (`gate --deep`) and CI-owned |
 | profile checks | language toolchain findings (shellcheck, ruff, golangci-lint, sqlfluff, tflint, tsc, ...) |
 | vendor-drift (kit repo) | `.substrate/` diverging from `core/` |
 
-Everything fails closed: a broken or missing detector is a red gate ("cannot pass blind"), never a silent skip. Budgets and ratchets are separate: `budgets.max_file_lines` is a hard cap (the generated default is 750), while `metric` (lower is better) and `metric_hi` (higher is better, e.g. coverage) are ratchets. Values within the file-line cap are never ratchet regressions, and `max_file_lines` cannot be accepted with `--accept-regression`; request a reviewed `substrate.json` policy change instead. `--tighten` (used by every checkpoint) tightens ratchets component-wise and prunes legacy budget keys. Escape hatches are line-scoped markers (`gate:allow-comment`, `gate:allow-*`), the `unscanned` ledger, `checks.config` (per-check runtime overrides), and `scopes` (per-path profile restriction) — all diff-visible.
+Everything fails closed: a broken or missing detector is a red gate ("cannot pass blind"), never a silent skip. `budgets.max_file_lines` is a per-file line target (the generated default is 500) and never fails the gate by itself; the ratcheted debt metric is `oversized_files`, the count of claimed files above the target, so legacy files are grandfathered by the baseline and each new oversized file is red. `metric` (lower is better) and `metric_hi` (higher is better, e.g. coverage) are the other ratchets. `max_file_lines` is reported but never persisted in the baseline and cannot be accepted with `--accept-regression`; accept `oversized_files` instead, or change the target through a reviewed `substrate.json` policy change. `--tighten` (used by every checkpoint) tightens ratchets component-wise and prunes legacy budget keys. Escape hatches are line-scoped markers (`gate:allow-comment`, `gate:allow-*`), the `unscanned` ledger, `checks.config` (per-check runtime overrides), and `scopes`.
 
 ## Profiles
 

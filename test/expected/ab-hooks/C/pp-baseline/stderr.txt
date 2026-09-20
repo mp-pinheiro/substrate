@@ -1,1 +1,1 @@
-blocked: baseline changes only via the gate (--update-baseline)
+blocked: baseline changes are checkpoint/baseline-transaction owned; use the sanctioned checkpoint workflow

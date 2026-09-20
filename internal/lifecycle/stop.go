@@ -102,16 +102,13 @@ func (e *Engine) Stop(ctx context.Context, payload []byte) Result {
 	}
 	current := e.snapshot(ctx)
 	decision := evaluateStop(state, current, stopHookActive(payload))
-	if len(decision.Pending) == 0 {
-		return stopSystemMessage("[substrate] no pending agent-owned changes; nothing to checkpoint")
-	}
 	protected := 0
 	for _, path := range decision.Pending {
 		if _, blocked := policy.CheckHard(path); blocked {
 			protected++
 		}
 	}
-	if protected == len(decision.Pending) {
+	if len(decision.Pending) > 0 && protected == len(decision.Pending) {
 		return stopSystemMessage(fmt.Sprintf("[substrate — hand to user] pending paths are policy-protected and can never be agent-committed: %s. Ask the user to commit them; no checkpoint retry will succeed.", strings.Join(decision.Pending, ", ")))
 	}
 

@@ -13,6 +13,11 @@ guard_vendor_source() {
     VENDOR_KIT_SOURCE=worktree
     [ "$from_worktree" -ne 1 ] || return 0
     [ "${SUBSTRATE_VENDOR_FROM_WORKTREE:-}" != 1 ] || return 0
+    if [ -n "${SUBSTRATE_KIT_SOURCE:-}" ] && [ "${SUBSTRATE_KIT_SOURCE}" != dev ]; then
+        VENDOR_KIT_SOURCE="$SUBSTRATE_KIT_SOURCE"
+        VENDOR_KIT_REVISION="${SUBSTRATE_KIT_REVISION:-$SUBSTRATE_KIT_SOURCE}"
+        return 0
+    fi
     kit=$(cd "$KIT_ROOT" && pwd -P) || die "cannot resolve the kit root at $KIT_ROOT"
     [ "$(pwd -P)" != "$kit" ] || return 0
     if [ -d "$KIT_ROOT/.jj" ]; then

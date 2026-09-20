@@ -23,7 +23,7 @@ The interfaces every component implements. Change these deliberately — everyth
   "unscanned": ["*.md", "*.json", "LICENSE", "docs/**"],
   "protected_paths": ["*.env", "secrets/**"],
   "comment": { "allow_tags": ["SAFETY:", "WHY:", "PERF:", "HACK:"] },
-  "budgets": { "max_file_lines": 750 },
+  "budgets": { "max_file_lines": 500 },
   "checks": { "disabled": [] },
   "ratchet": { "never_accept": ["dead_code"] },
   "contracts": [{ "name": "api", "regen": "bun run generate", "paths": ["src/generated"] }]
@@ -77,7 +77,7 @@ Runner inputs (set by the caller, not by a check): `SUBSTRATE_FILE_LIST` scopes 
 - exit 1 — findings; the report is stdout, every line actionable (`file:line — problem — fix`)
 - exit >=2 — infrastructure failure; the runner fails the gate with "cannot pass blind"
 
-Ratcheted measurements: `metric <name> <value>` (lower is better) and `metric_hi <name> <value>` (higher is better — coverage, type-coverage). The runner compares these against `baseline.metrics[name]` using `baseline.direction[name]` (absent = lower): regressions fail, improvements print a lock-in hint, `--update-baseline` writes emitted values only on green, and `--tighten` adjusts existing ratchet ceilings after a green checkpoint. Ratchets and budgets are disjoint: `budgets.max_file_lines` is a hard per-file cap, and values at or below the cap are never ratchet regressions. `max_file_lines` is not persisted in ratchet baseline metrics and cannot be accepted with `--accept-regression`.
+Ratcheted measurements: `metric <name> <value>` (lower is better) and `metric_hi <name> <value>` (higher is better — coverage, type-coverage). The runner compares these against `baseline.metrics[name]` using `baseline.direction[name]` (absent = lower): regressions fail, improvements print a lock-in hint, `--update-baseline` writes emitted values only on green, and `--tighten` adjusts existing ratchet ceilings after a green checkpoint. `budgets.max_file_lines` is the per-file line target, not a hard cap: exceeding it never fails `30-budgets` on its own. The ratcheted debt metric is `oversized_files`, the count of claimed files above the target — it may not increase, so legacy files are grandfathered by the baseline while every new oversized file is red. `max_file_lines` itself is reported (and warned about at >=80% of the target) but is never persisted in the baseline and can never be accepted with `--accept-regression`; accept `oversized_files` instead when a reviewed regression is unavoidable.
 
 Per-path profile scoping: `substrate.json`'s `scopes` map restricts which profiles are active per path prefix. A file under `app/` is only claimed if its profile is in `scopes["app/"].profiles`. Files outside all scopes are unaffected. Scope-excluded files are not flagged by `05-unclaimed-source.sh`.
 
@@ -85,7 +85,7 @@ Ordering: core checks 05–59, profile checks 60–79, repo-local checks 80–99
 
 ## Baseline (`substrate-baseline.json`, repo root, tracked)
 
-The baseline stores only ratchet metrics, their directions, and reviewed acceptance records. The checkpoint transaction tightens existing ratchets only after a green run, stages the new JSON beside the original, and atomically replaces it before committing. Initial debt adoption remains explicit. A hard-budget change is a policy decision in `substrate.json`, not a ratchet acceptance.
+The baseline stores only ratchet metrics, their directions, and reviewed acceptance records. The checkpoint transaction tightens existing ratchets only after a green run, stages the new JSON beside the original, and atomically replaces it before committing. Initial debt adoption remains explicit. Changing `budgets.max_file_lines` is a policy decision in `substrate.json`; the resulting `oversized_files` count is the ratchet.
 
 - `hooks/protect-paths.sh` — PreToolUse(Write|Edit) stdin JSON; blocks: any symlink write (message names the target), baseline, `.substrate/`, `CLAUDE.md`/governance, `protected_paths` globs. Exit 2 = blocked.
 - `hooks/changed-files-scan.sh` — PostToolUse(Bash|Write|Edit|MultiEdit|NotebookEdit|Task); scans every changed path in the working tree (jj diff or git status), not the tool's declared target, so bash/eval writes are covered; runs the comment ratchet per changed scannable file (pass-only memo in `$TMPDIR`) and flags `protected_paths` writes the write-time hook could not intercept. Report on stderr, exit 2 = blocking feedback.

@@ -172,20 +172,45 @@ fi
 grep -q 'never-acceptable' "$T/never.out" || fail "never-acceptable rejection was not stated"
 printf '{"probe:alpha":3,"probe:beta":35}\n' > .git/probe-metrics.json
 
-printf '# budget-test: 749\n' > budget.yaml
-seq 748 >> budget.yaml
-git add budget.yaml
-substrate-engine gate --tighten > "$T/budget-749.out" 2>&1 || fail "749-line budget unexpectedly failed: $(cat "$T/budget-749.out")"
-printf '# budget-test: 750\n' > budget.yaml
-seq 749 >> budget.yaml
-substrate-engine gate --tighten > "$T/budget-750.out" 2>&1 || fail "750-line budget unexpectedly failed: $(cat "$T/budget-750.out")"
-printf '# budget-test: 751\n' > budget.yaml
-seq 750 >> budget.yaml
-if substrate-engine gate --tighten > "$T/headroom.out" 2>&1; then
-    fail "751-line budget unexpectedly passed"
+jq '.budgets.max_file_lines = 200' substrate.json > substrate.json.tmp \
+    && mv substrate.json.tmp substrate.json \
+    || fail "budget target reseed failed"
+substrate-engine gate --tighten > "$T/over-seed.out" 2>&1 \
+    || fail "target reseed run failed: $(cat "$T/over-seed.out")"
+jq -e '.metrics.oversized_files == 0' substrate-baseline.json >/dev/null \
+    || fail "fixture already carries oversized files — the count assertions would be vacuous"
+
+printf '# over-target: alpha\n' > big.yaml
+seq 400 >> big.yaml
+git add big.yaml
+if substrate-engine gate --tighten > "$T/over-1.out" 2>&1; then
+    fail "a new over-target file did not red the ratchet"
 fi
-grep -q 'hard cap' "$T/headroom.out" || fail "hard cap not displayed for over-cap metric"
-grep -q 'budget.yaml' "$T/headroom.out" || fail "over-cap culprit path missing"
+grep -q 'oversized_files: 1 (best 0)' "$T/over-1.out" || fail "the ratchet did not report oversized_files"
+grep -q '1 file(s) over the 200-line target' "$T/over-1.out" || fail "the budgets check did not list the offender count"
+grep -q 'big.yaml (401)' "$T/over-1.out" || fail "the budgets check did not name the offender"
+
+substrate-engine gate --tighten --accept-regression=oversized_files \
+    --reason='grandfathering one legacy oversized file for the count model' > "$T/over-accept.out" 2>&1 \
+    || fail "oversized_files regression acceptance was refused: $(cat "$T/over-accept.out")"
+jq -e '.metrics.oversized_files == 1' substrate-baseline.json >/dev/null \
+    || fail "accepted oversized_files did not land in the baseline"
+
+rm big.yaml
+printf '# over-target: beta\n' > other.yaml
+seq 400 >> other.yaml
+git add -A
+substrate-engine gate --tighten > "$T/over-2.out" 2>&1 \
+    || fail "swapping one over-target file for another red the gate: $(cat "$T/over-2.out")"
+jq -e '.metrics.oversized_files == 1' substrate-baseline.json >/dev/null \
+    || fail "an unchanged oversized count moved the ceiling"
+
+rm other.yaml
+git add -A
+substrate-engine gate --tighten > "$T/over-3.out" 2>&1 \
+    || fail "removing the over-target file red the gate: $(cat "$T/over-3.out")"
+jq -e '.metrics.oversized_files == 0' substrate-baseline.json >/dev/null \
+    || fail "removing the over-target file did not tighten oversized_files"
 
 before=$(sha256sum substrate-baseline.json)
 if substrate-engine gate --tighten --accept-regression=max_file_lines --reason='hard budget requires a refactor instead of ratchet acceptance' --json > "$T/budget-accept.out" 2>&1; then
@@ -199,10 +224,11 @@ jq '.metrics.max_file_lines = 749 | .direction.max_file_lines = "lo" | .accepted
     && mv substrate-baseline.json.tmp substrate-baseline.json \
     || fail "legacy max_file_lines baseline seed failed"
 printf '# budget-test: green\n' > budget.yaml
-seq 748 >> budget.yaml
+seq 10 >> budget.yaml
+git add -A
 substrate-engine gate --tighten >/dev/null 2>&1 || fail "green budget migration failed"
 jq -e '(.metrics | has("max_file_lines") | not) and (.direction | has("max_file_lines") | not) and (.accepted | has("max_file_lines") | not)' substrate-baseline.json >/dev/null \
     || fail "legacy max_file_lines baseline keys were not pruned"
 
-printf 'baseline-test: hard max_file_lines budget and migration green\n'
-ok "hard budget boundary, rejection, and legacy migration"
+printf 'baseline-test: oversized_files count ratchet and legacy migration green\n'
+ok "oversized-count ratchet, max_file_lines rejection, and legacy migration"

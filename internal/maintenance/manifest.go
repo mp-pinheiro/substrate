@@ -17,7 +17,11 @@ func resolveKitRoot() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve kit root: %w", err)
 	}
-	return filepath.Dir(filepath.Dir(exe)), nil
+	candidate := filepath.Dir(filepath.Dir(exe))
+	if info, statErr := os.Stat(filepath.Join(candidate, "bin", "substrate")); statErr != nil || info.IsDir() {
+		return "", fmt.Errorf("resolve kit root: no kit at %s — set SUBSTRATE_KIT_ROOT", candidate)
+	}
+	return candidate, nil
 }
 
 func ManifestAdd(path string) (string, error) {

@@ -57,16 +57,29 @@ printf "PYTHON: %s\n" "$(profile_files python | LC_ALL=C sort | tr "\n" " ")"
     env -u CLAIMS bash -c "$verdict_script" > "$WORK/fallback.txt" || fail "$ENGINE fallback verdicts failed"
 
     expected_max=0
+    claimed_lines=()
     while IFS= read -r line; do
         case "$line" in
             'y y '*)
                 f=${line#y y ? }
                 lines=$(wc -l < "$f")
+                claimed_lines+=("$lines")
                 [ "$lines" -gt "$expected_max" ] && expected_max=$lines
                 ;;
         esac
     done < "$WORK/fallback.txt"
     [ "$expected_max" -gt 3 ] || fail "$ENGINE fixture lost its line-mode workflow claims (expected_max=$expected_max)"
+
+    cap=$((expected_max - 1))
+    jq --argjson cap "$cap" '.budgets.max_file_lines = $cap' substrate.json > substrate.json.tmp \
+        && mv substrate.json.tmp substrate.json \
+        || fail "$ENGINE budget cap seed failed"
+    expected_over=0
+    for lines in "${claimed_lines[@]}"; do
+        [ "$lines" -gt "$cap" ] && expected_over=$((expected_over + 1))
+    done
+    [ "$expected_over" -ge 1 ] \
+        || fail "$ENGINE fixture has no file over the seeded cap — the count assertion would be vacuous"
 
     export SUBSTRATE_CLAIMS_OUT="$WORK/claims.tsv"
     substrate-engine gate --update-baseline >/dev/null 2>&1 || fail "$ENGINE gate --update-baseline failed"
@@ -78,9 +91,9 @@ printf "PYTHON: %s\n" "$(profile_files python | LC_ALL=C sort | tr "\n" " ")"
     diff -u "$WORK/fallback.txt" "$WORK/table.txt" > "$WORK/verdicts.diff" \
         || fail "$ENGINE table and fallback verdicts diverge: $(cat "$WORK/verdicts.diff")"
 
-    actual_max=$(jq -r '.metrics.max_file_lines' substrate-baseline.json)
-    [ "$actual_max" = "$expected_max" ] \
-        || fail "$ENGINE budgets max under the table ($actual_max) diverges from fallback ($expected_max)"
+    actual_over=$(jq -r '.metrics.oversized_files' substrate-baseline.json)
+    [ "$actual_over" = "$expected_over" ] \
+        || fail "$ENGINE oversized_files under the table ($actual_over) diverges from fallback ($expected_over)"
 
     printf 'claims-table-test: %s leg table/fallback parity across %s files green\n' "$ENGINE" "$(grep -c . "$INVENTORY")"
 done

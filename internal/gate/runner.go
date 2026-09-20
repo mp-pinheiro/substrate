@@ -100,7 +100,7 @@ func Run(ctx context.Context, args []string) int {
 		return rc
 	}
 	if flags.AcceptRegression && strings.Contains(","+flags.AcceptKeys+",", ",max_file_lines,") {
-		const next = "max_file_lines is a hard budget, not a ratchet; split the file or request a reviewed substrate.json policy change"
+		const next = "max_file_lines is an informational measurement; accept oversized_files instead when a reviewed regression is unavoidable"
 		report := recovery.Report{Status: "blocked", Code: "gate.budget-acceptance", Owner: "user", Retry: "terminal", Summary: "max_file_lines cannot be accepted as a regression", Details: []string{next}, Next: next}
 		return emitFailure(flags, report, 1)
 	}

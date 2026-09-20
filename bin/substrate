@@ -10,6 +10,7 @@ info()    { printf '\033[0;34m[+]\033[0m %s\n' "$*"; }
 success() { printf '\033[0;32m[ok]\033[0m %s\n' "$*"; }
 warn()    { printf '\033[0;33m[!]\033[0m %s\n' "$*"; }
 die()     { warn "$*"; exit 2; }
+engine_bin() { printf '%s\n' "${SUBSTRATE_ENGINE_BIN:-substrate-engine}"; }
 
 usage() {
     cat <<'EOF'
@@ -22,6 +23,7 @@ usage: substrate <command> [args]
   checkpoint --message <message> --path <path>... [--accept-regression=<metric>[,<metric>] --reason <text>]  gate, tighten, commit locally
   restructure --op split|describe|squash --revision <rev> --message <m> ...  reshape agent commits
   doctor                                    config, langmap freshness, toolchain
+  version                                   print the engine/kit version and channel
   verify                                    active OMP runtime + bounded local gate
   update [--apply] [--force] [--from-worktree]  inspect or re-vendor the engine only
   engine pin [--bin PATH]                    RELEASE ACTION: pin .substrate/engine.json to a built binary (not for dev rebuilds)
@@ -89,7 +91,8 @@ vendor_core() {
        "$KIT_ROOT"/core/maintenance.sh \
        "$KIT_ROOT"/core/receipt-lib.sh \
        "$KIT_ROOT"/core/gitleaks-lib.sh "$KIT_ROOT"/core/gitleaks-deep.sh \
-       "$KIT_ROOT"/core/install-gitleaks.sh "$KIT_ROOT"/core/install-jj.sh "$KIT_ROOT"/core/forge.sh "$staging/" \
+       "$KIT_ROOT"/core/install-gitleaks.sh "$KIT_ROOT"/core/install-jj.sh \
+       "$KIT_ROOT"/core/install-prereqs.sh "$KIT_ROOT"/core/forge.sh "$staging/" \
        || die "vendor copy failed: core scripts"
     cp "$KIT_ROOT"/core/checks.d/*.sh "$staging/checks.d/" || die "vendor copy failed: core checks"
     cp "$KIT_ROOT"/VERSION "$staging/VERSION" || die "vendor copy failed: VERSION"
@@ -324,7 +327,11 @@ cmd_update() {
 }
 
 cmd_gate() {
-    command -v substrate-engine >/dev/null 2>&1 || die "substrate-engine not found — run: substrate doctor"
+    if [ -n "${SUBSTRATE_ENGINE_BIN:-}" ]; then
+        [ -x "$SUBSTRATE_ENGINE_BIN" ] || die "SUBSTRATE_ENGINE_BIN is not executable: $SUBSTRATE_ENGINE_BIN"
+    else
+        command -v substrate-engine >/dev/null 2>&1 || die "substrate-engine not found — run: substrate doctor"
+    fi
     if [ "${1:-}" = --deep ]; then
         shift
         [ "$#" -le 1 ] || usage
@@ -333,10 +340,10 @@ cmd_gate() {
             *) usage ;;
         esac
         [ -x .substrate/gitleaks-deep.sh ] || die "deep scan runtime missing — run: substrate update --apply"
-        substrate-engine gate || return
+        "$(engine_bin)" gate || return
         exec .substrate/gitleaks-deep.sh "$@"
     fi
-    exec substrate-engine gate "$@"
+    exec "$(engine_bin)" gate "$@"
 }
 
 cmd_engine() {
@@ -392,8 +399,9 @@ case "${1:-}" in
     bootstrap) shift; cmd_bootstrap "$@" ;;
     init)     shift; cmd_init "$@" ;;
     gate)     shift; cmd_gate "$@" ;;
-    checkpoint) shift; exec substrate-engine checkpoint "$@" ;;
-    restructure) shift; exec substrate-engine restructure "$@" ;;
+    version)  shift; exec "$(engine_bin)" version "$@" ;;
+    checkpoint) shift; exec "$(engine_bin)" checkpoint "$@" ;;
+    restructure) shift; exec "$(engine_bin)" restructure "$@" ;;
     baseline)
         shift
         args=()
@@ -406,7 +414,7 @@ case "${1:-}" in
                 *) usage ;;
             esac
         done
-        exec substrate-engine gate "${args[@]}" ;;
+        exec "$(engine_bin)" gate "${args[@]}" ;;
     doctor)   shift; cmd_doctor "$@" ;;
     verify)   shift; cmd_verify "$@" ;;
     update)   shift; cmd_update "$@" ;;

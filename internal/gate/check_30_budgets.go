@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -39,7 +40,12 @@ func check30Budgets(ctx context.Context, inv []string, claims []byte, env map[st
 	}
 
 	max := 0
-	maxFile := ""
+	capLines := int(cfg.Budgets.MaxFileLines)
+	type offender struct {
+		path  string
+		lines int
+	}
+	over := make([]offender, 0, 8)
 
 	for _, f := range inv {
 		if exempt[f] || isUnscanned2(f, unscanned) || !isClaimed(claims, f) {
@@ -58,19 +64,37 @@ func check30Budgets(ctx context.Context, inv []string, claims []byte, env map[st
 		}
 		if lines > max {
 			max = lines
-			maxFile = f
+		}
+		if lines > capLines {
+			over = append(over, offender{path: f, lines: lines})
 		}
 	}
 
-	cap := int(cfg.Budgets.MaxFileLines)
-	metrics := []MetricRecord{{
-		Name:     "max_file_lines",
-		RawValue: []byte(strconv.Itoa(max)),
-		Dir:      "lo",
-	}}
-
-	if max > cap {
-		return 1, metrics, fmt.Sprintf("%s: %d lines exceeds the hard cap %d — split it (budgets.max_file_lines in substrate.json)", maxFile, max, cap), nil
+	metrics := []MetricRecord{
+		{Name: "max_file_lines", RawValue: []byte(strconv.Itoa(max)), Dir: "lo"},
+		{Name: "oversized_files", RawValue: []byte(strconv.Itoa(len(over))), Dir: "lo"},
 	}
-	return 0, metrics, "", nil
+
+	if len(over) == 0 {
+		return 0, metrics, "", nil
+	}
+	sort.Slice(over, func(i, j int) bool {
+		if over[i].lines != over[j].lines {
+			return over[i].lines > over[j].lines
+		}
+		return over[i].path < over[j].path
+	})
+	shown := over
+	if len(shown) > 10 {
+		shown = shown[:10]
+	}
+	names := make([]string, 0, len(shown))
+	for _, o := range shown {
+		names = append(names, fmt.Sprintf("%s (%d)", o.path, o.lines))
+	}
+	msg := fmt.Sprintf("%d file(s) over the %d-line target (ratcheted as oversized_files): %s", len(over), capLines, strings.Join(names, ", "))
+	if len(over) > len(shown) {
+		msg += fmt.Sprintf(", +%d more", len(over)-len(shown))
+	}
+	return 0, metrics, msg, nil
 }

@@ -102,7 +102,7 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 			let reason: string | undefined;
 			if (acceptRegression.includes("max_file_lines")) {
 				return blockedToolResult(
-					"max_file_lines is a hard budget, not a ratchet; split the file or request a reviewed substrate.json policy change",
+					"max_file_lines is an informational measurement; accept oversized_files instead when a reviewed regression is unavoidable",
 				);
 			}
 			if ("acceptRegressionReason" in params && params.acceptRegressionReason !== undefined) {

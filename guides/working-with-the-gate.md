@@ -30,10 +30,11 @@ Plans are gated artifacts: exactly one `state:` line, acceptance items in execut
 You copy-pasted something jscpd can see. Extract the shared shape into a helper and call it from both sites. `substrate report` lists the worst clusters with file:line spans.
 
 ```
-src/big.py: 751 lines exceeds the hard cap 750 — split it (budgets.max_file_lines in substrate.json)
-[!] FAIL 30-budgets
+2 file(s) over the 500-line target (ratcheted as oversized_files): src/big.py (751), src/wide.py (612)
+oversized_files: 2 (best 1)
+[!] FAIL ratchet: metrics regressed beyond their grandfathered baseline
 ```
-Split the file. `max_file_lines` is a hard budget, not a ratchet, and cannot be accepted with `--accept-regression`; raising the cap requires a reviewed `substrate.json` policy change.
+Split the new offender. `budgets.max_file_lines` is a target, not a hard cap: the gate ratchets `oversized_files`, the count of claimed files above it, so grandfathered files stay green and each new one reds. `max_file_lines` itself is reported only and cannot be accepted with `--accept-regression`; when a reviewed regression is unavoidable, accept `oversized_files`.
 
 Ratchet findings are separate:
 ```

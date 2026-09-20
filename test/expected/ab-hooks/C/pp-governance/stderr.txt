@@ -1,1 +1,1 @@
-blocked: CLAUDE.md is the governance doc — propose the edit to the user instead
+blocked: CLAUDE.md is governance policy — present the change to the user

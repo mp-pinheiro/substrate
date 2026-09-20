@@ -55,7 +55,7 @@ Initial baseline creation remains explicit:
 substrate baseline
 ```
 
-`max_file_lines` is a hard budget, not a ratchet. Files at or below the 750-line cap pass regardless of historical baseline; split files above it or request a reviewed `substrate.json` policy change. Ordinary ratchet regressions require an explicit keyed acceptance and written reason.
+`budgets.max_file_lines` is the per-file line target, not a hard cap. The gate ratchets `oversized_files`, the count of claimed files above the target: existing offenders are grandfathered by the baseline, a new one reds the gate. Split it, accept `oversized_files` with a written reason, or request a reviewed `substrate.json` target change. Ordinary ratchet regressions require an explicit keyed acceptance and written reason.
 
 ## 4. Push
 

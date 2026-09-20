@@ -245,8 +245,15 @@ golden_replay_metrics() {
     [ -s "$out" ] || golden_fail "no metrics emitted — the fixture lost its metric-producing checks"
 }
 
-# Rebuilds the baseline from the replayed JSONL and byte-matches
-# internal/gate/baseline.go's marshalBaseline (flat 2-space indent, no compounding).
+golden_assert_replay_subset() {
+    local replay="$1" sink="$2" line
+    while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        grep -Fqx -- "$line" "$sink" \
+            || golden_fail "replayed metric absent from the gate's sink (check is not runner-independent): $line"
+    done < "$replay"
+}
+
 golden_render_go_baseline() {
     local metrics_json="$1" direction_json="$2" out="$3"
     {
@@ -283,9 +290,9 @@ golden_render_go_baseline() {
 
 golden_assert_baseline_reproducible() {
     local metrics="$1" baseline="$2" current direction tmp
-    current=$(jq -sc 'map({(.name): .value}) | add // {} | to_entries | sort_by(.key) | from_entries' "$metrics") \
+    current=$(jq -sc 'map(select(.name != "max_file_lines")) | map({(.name): .value}) | add // {} | to_entries | sort_by(.key) | from_entries' "$metrics") \
         || golden_fail "metrics aggregation failed"
-    direction=$(jq -sc 'map({(.name): (.dir // "lo")}) | add // {} | to_entries | sort_by(.key) | from_entries' "$metrics") \
+    direction=$(jq -sc 'map(select(.name != "max_file_lines")) | map({(.name): (.dir // "lo")}) | add // {} | to_entries | sort_by(.key) | from_entries' "$metrics") \
         || golden_fail "direction aggregation failed"
     tmp=$(mktemp) || golden_fail "mktemp failed"
     golden_render_go_baseline "$current" "$direction" "$tmp" || golden_fail "baseline rebuild failed"
@@ -352,13 +359,12 @@ golden_regenerate() {
     golden_build_fixture "$GOLDEN_ROOT"
     golden_run_gate "$GOLDEN_ROOT" "$claims" "$sink"
     golden_replay_metrics "$GOLDEN_ROOT" "$claims" "$metrics"
-    golden_assert_baseline_reproducible "$metrics" "$GOLDEN_ROOT/$GOLDEN_BASELINE"
-    golden_assert_coverage "$claims" "$metrics"
+    golden_assert_replay_subset "$metrics" "$sink"
+    golden_assert_baseline_reproducible "$sink" "$GOLDEN_ROOT/$GOLDEN_BASELINE"
+    golden_assert_coverage "$claims" "$sink"
     cp "$GOLDEN_ROOT/$GOLDEN_BASELINE" "$out/$GOLDEN_BASELINE_VECTOR" \
         || golden_fail "baseline copy failed"
-    cmp -s "$sink" "$metrics" \
-        || golden_fail "SUBSTRATE_METRICS_OUT differs from replay — metrics sink captured wrong bytes"
-    cp "$metrics" "$out/$GOLDEN_METRICS" || golden_fail "metrics copy failed"
+    cp "$sink" "$out/$GOLDEN_METRICS" || golden_fail "metrics copy failed"
     cp "$claims" "$out/$GOLDEN_CLAIMS" || golden_fail "claims copy failed"
 }
 

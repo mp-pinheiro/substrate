@@ -158,6 +158,8 @@ cmd_doctor() {
             case "$engine_version" in
                 0.0.0-*)
                     warn "engine pin: dev build $engine_version not attested — build with: just engine (stamped)" ;;
+                *+release|*+nightly|*+module)
+                    success "engine pin: $engine_version verified out-of-band (release SHA256SUMS / Go checksum database) — engine.json attests kit-local builds only" ;;
                 *)
                     if [ -n "${SUBSTRATE_ENGINE_BIN:-}" ]; then
                         warn "engine pin: SUBSTRATE_ENGINE_BIN override not attested — pin covers the vendored install only"

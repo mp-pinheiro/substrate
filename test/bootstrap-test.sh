@@ -63,8 +63,12 @@ managed_matches .github/workflows/substrate-report.yml "$KIT_ROOT/core/ci/github
     || fail "report workflow does not match its source"
 grep -q 'shellcheck zsh' .github/workflows/substrate-gate.yml \
     || fail "shell profile toolchain missing from gate workflow"
-grep -q 'apt-get install -y -qq --no-install-recommends sudo jq unzip file locales' .github/workflows/substrate-gate.yml \
+grep -q 'run: .substrate/install-prereqs.sh' .github/workflows/substrate-gate.yml \
     || fail "Forgejo container prerequisites missing from gate workflow"
+[ -x .substrate/install-prereqs.sh ] \
+    || fail "container prerequisite installer was not vendored"
+grep -q 'apt-get install -y -qq --no-install-recommends' .substrate/install-prereqs.sh \
+    || fail "prerequisite installer does not install container packages"
 prereq_match=$(grep -n -m1 'name: Install container prerequisites' .github/workflows/substrate-gate.yml)
 gitleaks_match=$(grep -n -m1 'name: Install Gitleaks' .github/workflows/substrate-gate.yml)
 [ -n "$prereq_match" ] && [ -n "$gitleaks_match" ] \
@@ -101,22 +105,32 @@ checkout_line=${checkout_step%%:*}
 build_line=${build_step%%:*}
 [ "$kit_line" -lt "$checkout_line" ] && [ "$checkout_line" -lt "$build_line" ] \
     || fail "Substrate kit workflow steps are out of order"
+grep -q "if: steps.substrate-kit.outputs.source == 'trunk'" .github/workflows/substrate-gate.yml \
+    || fail "kit build steps are not gated on trunk provenance"
+grep -q 'name: Install published substrate engine' .github/workflows/substrate-gate.yml \
+    || fail "published-kit engine install missing from gate workflow"
+grep -q 'go install "github.com/mp-pinheiro/substrate/cmd/substrate@v' .github/workflows/substrate-gate.yml \
+    || fail "published-kit install does not resolve the module by version"
+grep -q "if: steps.substrate-kit.outputs.source != 'trunk'" .github/workflows/substrate-gate.yml \
+    || fail "published-kit engine install is not gated on published provenance"
+grep -q 'does not identify a published kit' .github/workflows/substrate-gate.yml \
+    || fail "kit provenance resolution does not reject unpublished kits"
 ! grep -q '^permissions:' .github/workflows/substrate-gate.yml \
     || fail "consumer gate workflow carries unsupported Forgejo permissions"
 ! grep -q '^permissions:' .github/workflows/substrate-report.yml \
     || fail "consumer report workflow carries unsupported Forgejo permissions"
 grep -q 'echo "$GITHUB_WORKSPACE/build" >> "$GITHUB_PATH"' .github/workflows/substrate-gate.yml \
     || fail "Substrate engine path is not exported to later steps"
-grep -q 'git_version=2.47.3' .github/workflows/substrate-gate.yml \
-    || fail "Forgejo workflow does not pin its Git source version"
-grep -q 'git_archive="/tmp/git-${git_version}.tar.gz"' .github/workflows/substrate-gate.yml \
-    || fail "Forgejo workflow does not download its pinned Git source"
-grep -q 'c073471530e92b716641ea2b381fcd0ece53eea9a76a9c5415f93f89e870dd5f' .github/workflows/substrate-gate.yml \
-    || fail "Forgejo workflow does not verify its Git source hash"
-grep -q 'make -C "$git_source" install' .github/workflows/substrate-gate.yml \
-    || fail "Forgejo workflow does not install its built Git"
-grep -q 'Git >= 2.41 is required by the pinned Jujutsu' .github/workflows/substrate-gate.yml \
-    || fail "Forgejo workflow does not enforce the Jujutsu Git requirement"
+grep -q 'git_version=2.47.3' .substrate/install-prereqs.sh \
+    || fail "prerequisite installer does not pin its Git source version"
+grep -q 'git_archive="/tmp/git-${git_version}.tar.gz"' .substrate/install-prereqs.sh \
+    || fail "prerequisite installer does not download its pinned Git source"
+grep -q 'c073471530e92b716641ea2b381fcd0ece53eea9a76a9c5415f93f89e870dd5f' .substrate/install-prereqs.sh \
+    || fail "prerequisite installer does not verify its Git source hash"
+grep -q 'make -C "$git_source" install' .substrate/install-prereqs.sh \
+    || fail "prerequisite installer does not install its built Git"
+grep -q 'Git >= 2.41 is required by the pinned Jujutsu' .substrate/install-prereqs.sh \
+    || fail "prerequisite installer does not enforce the Jujutsu Git requirement"
 cmp -s .claude/skills/review/SKILL.md "$KIT_ROOT/skills/review/SKILL.md" \
     || fail "Claude skill was not installed"
 cmp -s .omp/skills/review/SKILL.md "$KIT_ROOT/skills/review/SKILL.md" \

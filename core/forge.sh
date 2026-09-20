@@ -11,9 +11,13 @@ set -uo pipefail
 
 die() { printf 'forge: %s\n' "$1" >&2; exit "${2:-1}"; }
 
+forge_curl() {
+    curl -sSf -H "Authorization: token $token" "$@"
+}
+
 resolve_host() {
-    api=${GITHUB_API_URL:-}
-    slug=${GITHUB_REPOSITORY:-}
+    api=${SUBSTRATE_FORGE_API:-${GITHUB_API_URL:-}}
+    slug=${SUBSTRATE_FORGE_SLUG:-${GITHUB_REPOSITORY:-}}
     if [ -n "$api" ] && [ -n "$slug" ]; then
         return 0
     fi
@@ -50,7 +54,7 @@ resolve_host() {
 }
 
 resolve_token() {
-    token=${GITHUB_TOKEN:-${GH_TOKEN:-}}
+    token=${SUBSTRATE_FORGE_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}
     if [ -z "$token" ] && [ "$api" = "https://api.github.com" ]; then
         token=$(gh auth token 2>/dev/null) || true
     fi
@@ -139,8 +143,63 @@ forgejo_ref_status() {
         || die "forgejo status lookup failed" 1
 }
 
+create_release() {
+    local tag=$1 name=$2 prerelease=$3 notes_file=$4 target=$5 payload id
+    payload=$(jq -n --arg tag "$tag" --arg name "$name" --arg target "$target" \
+        --argjson prerelease "$prerelease" --rawfile body "$notes_file" \
+        '{tag_name:$tag,name:$name,body:$body,prerelease:$prerelease,target_commitish:$target,draft:false}') \
+        || die "release payload build failed" 1
+    id=$(printf '%s' "$payload" | forge_curl -H "Content-Type: application/json" \
+        -X POST --data-binary @- "$api/repos/$slug/releases" | jq -r '.id // empty') \
+        || die "release creation failed on $api/$slug" 1
+    [ -n "$id" ] || die "release creation returned no id on $api/$slug" 1
+    printf '%s\n' "$id"
+}
+
+upload_asset() {
+    local id=$1 file=$2 name
+    name=$(basename "$file")
+    [ -f "$file" ] || die "asset not found: $file" 1
+    if [ "$is_github" -eq 1 ]; then
+        forge_curl -H "Content-Type: application/octet-stream" -X POST \
+            --data-binary @"$file" \
+            "https://uploads.github.com/repos/$slug/releases/$id/assets?name=$name" >/dev/null \
+            || die "asset upload failed: $name" 1
+    else
+        forge_curl -X POST -F "attachment=@$file" \
+            "$api/repos/$slug/releases/$id/assets?name=$name" >/dev/null \
+            || die "asset upload failed: $name" 1
+    fi
+    printf '%s\n' "$name"
+}
+
+delete_tag() {
+    local tag=$1
+    if [ "$is_github" -eq 1 ]; then
+        forge_curl -X DELETE "$api/repos/$slug/git/refs/tags/$tag" >/dev/null 2>&1 || true
+    else
+        forge_curl -X DELETE "$api/repos/$slug/tags/$tag" >/dev/null 2>&1 || true
+    fi
+}
+
+prune_prereleases() {
+    local prefix=$1 keep_days=$2 cutoff releases id tag
+    cutoff=$(date -u -d "-$keep_days days" +%Y-%m-%dT%H:%M:%SZ) \
+        || die "cannot compute the retention cutoff" 1
+    releases=$(forge_curl "$api/repos/$slug/releases?per_page=100&limit=100") \
+        || die "release listing failed on $api/$slug" 1
+    while IFS=$'\t' read -r id tag; do
+        [ -n "$id" ] || continue
+        forge_curl -X DELETE "$api/repos/$slug/releases/$id" >/dev/null \
+            || die "release deletion failed: $tag" 1
+        delete_tag "$tag"
+        printf 'pruned %s\n' "$tag"
+    done < <(printf '%s' "$releases" | jq -r --arg prefix "$prefix" --arg cutoff "$cutoff" \
+        '.[] | select(.prerelease == true and (.tag_name | startswith($prefix)) and .created_at < $cutoff) | [(.id|tostring), .tag_name] | @tsv')
+}
+
 cmd=${1:-}
-[ -n "$cmd" ] || die "usage: forge.sh <upsert-issue|open-issue|issue-json|ref-status> ..." 2
+[ -n "$cmd" ] || die "usage: forge.sh <upsert-issue|open-issue|issue-json|ref-status|create-release|upload-asset|prune-prereleases> ..." 2
 shift
 
 resolve_host
@@ -165,6 +224,18 @@ case "$cmd" in
     ref-status)
         [ $# -eq 1 ] || die "usage: forge.sh ref-status <ref>" 2
         if [ "$is_github" -eq 1 ]; then github_ref_status "$1"; else forgejo_ref_status "$1"; fi
+        ;;
+    create-release)
+        [ $# -eq 5 ] || die "usage: forge.sh create-release <tag> <name> <prerelease> <notes-file> <target-commitish>" 2
+        create_release "$1" "$2" "$3" "$4" "$5"
+        ;;
+    upload-asset)
+        [ $# -eq 2 ] || die "usage: forge.sh upload-asset <release-id> <file>" 2
+        upload_asset "$1" "$2"
+        ;;
+    prune-prereleases)
+        [ $# -eq 2 ] || die "usage: forge.sh prune-prereleases <tag-prefix> <keep-days>" 2
+        prune_prereleases "$1" "$2"
         ;;
     *)
         die "unknown subcommand: $cmd" 2

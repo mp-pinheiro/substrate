@@ -10,9 +10,20 @@ cd "$KIT_ROOT" || exit 9
 
 fail() { printf 'vendor-drift-test FAIL: %s\n' "$1" >&2; exit 1; }
 
-for f in gate-lib.sh engine-shim.sh VERSION; do
+for f in gate-lib.sh engine-shim.sh forge.sh install-prereqs.sh VERSION; do
     [ -f ".substrate/$f" ] || fail "retained file .substrate/$f is missing"
 done
+
+while IFS= read -r core_file; do
+    name=$(basename "$core_file")
+    [ -f ".substrate/$name" ] || continue
+    cmp -s "$core_file" ".substrate/$name" \
+        || fail ".substrate/$name drifted from $core_file — run: substrate update --apply --from-worktree"
+done < <(find core -maxdepth 1 -name '*.sh' | LC_ALL=C sort)
+
+while IFS= read -r ref; do
+    [ -e "$ref" ] || fail "$ref is referenced by CI but was never vendored"
+done < <(grep -rhoE '\.substrate/[A-Za-z0-9._-]+\.sh' .github/workflows core/ci | LC_ALL=C sort -u)
 
 for f in gate.sh checkpoint.sh restructure.sh comment-ratchet.sh \
          maintenance-lib.sh maintenance-cli.sh maintenance-receipt.sh \

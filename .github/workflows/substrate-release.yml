@@ -1,0 +1,135 @@
+# substrate-repo-owned
+name: substrate-release
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '0 7 * * *'
+concurrency:
+  group: substrate-release-${{ github.workflow }}
+  cancel-in-progress: false
+jobs:
+  release:
+    if: ${{ !startsWith(github.server_url, 'https://github.com') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install container prerequisites
+        run: .substrate/install-prereqs.sh
+      - name: Require a green gate on this revision
+        id: gate-status
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          status=$(.substrate/forge.sh ref-status "$GITHUB_SHA")
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          if [ "$status" = success ]; then
+            exit 0
+          fi
+          if [ "$GITHUB_EVENT_NAME" = schedule ]; then
+            echo "::notice::gate status for $GITHUB_SHA is '${status:-unknown}' — nothing to publish tonight"
+            exit 0
+          fi
+          echo "::error::gate status for $GITHUB_SHA is '${status:-unknown}' — a stable release requires a green gate"
+          exit 1
+      - name: Resolve release identity
+        id: identity
+        if: steps.gate-status.outputs.status == 'success'
+        env:
+          MIRROR_GITHUB_TOKEN: ${{ secrets.MIRROR_GITHUB_TOKEN }}
+        run: |
+          if [ -z "${MIRROR_GITHUB_TOKEN:-}" ]; then
+            echo "::error::MIRROR_GITHUB_TOKEN is not configured — a release that exists only on Forgejo breaks go install"
+            exit 1
+          fi
+          base=$(cat VERSION)
+          if [ "$GITHUB_EVENT_NAME" = schedule ]; then
+            version="${base}-nightly.$(date -u +%Y%m%d)"
+            channel=nightly
+            prerelease=true
+          else
+            version="$base"
+            channel=release
+            prerelease=false
+          fi
+          tag="v$version"
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "::error::tag $tag already exists in this checkout"
+            exit 1
+          fi
+          if curl -sSf -o /dev/null \
+              -H "Authorization: token $MIRROR_GITHUB_TOKEN" \
+              "https://api.github.com/repos/mp-pinheiro/substrate/releases/tags/$tag" 2>/dev/null; then
+            echo "::error::release $tag already exists on the GitHub mirror"
+            exit 1
+          fi
+          {
+            echo "base=$base"
+            echo "version=$version"
+            echo "channel=$channel"
+            echo "prerelease=$prerelease"
+            echo "tag=$tag"
+          } >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        if: steps.gate-status.outputs.status == 'success'
+        with:
+          go-version-file: go.mod
+      - name: Build release artifacts
+        if: steps.gate-status.outputs.status == 'success'
+        env:
+          VERSION: ${{ steps.identity.outputs.version }}
+          CHANNEL: ${{ steps.identity.outputs.channel }}
+        run: |
+          for arch in amd64 arm64; do
+            CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath -buildvcs=false \
+              -ldflags "-X main.version=$VERSION -X main.channel=$CHANNEL -X main.kitRevision=$GITHUB_SHA" \
+              -o dist/substrate ./cmd/substrate
+            ln -sf substrate dist/substrate-engine
+            tar -czf "substrate_${VERSION}_linux_${arch}.tar.gz" -C dist substrate substrate-engine
+            rm -rf dist
+          done
+          sha256sum substrate_*.tar.gz > SHA256SUMS
+          cat SHA256SUMS
+      - name: Compose release notes
+        if: steps.gate-status.outputs.status == 'success'
+        env:
+          TAG: ${{ steps.identity.outputs.tag }}
+        run: |
+          previous=$(git describe --tags --abbrev=0 2>/dev/null) || previous=""
+          if [ -n "$previous" ]; then
+            git log "$previous..HEAD" --pretty='* %s' > notes.md
+          else
+            git log -20 --pretty='* %s' > notes.md
+          fi
+          printf '\nRevision: %s\n' "$GITHUB_SHA" >> notes.md
+          cat notes.md
+      - name: Publish to Forgejo and the GitHub mirror
+        if: steps.gate-status.outputs.status == 'success'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MIRROR_GITHUB_TOKEN: ${{ secrets.MIRROR_GITHUB_TOKEN }}
+          TAG: ${{ steps.identity.outputs.tag }}
+          PRERELEASE: ${{ steps.identity.outputs.prerelease }}
+          BASE: ${{ steps.identity.outputs.base }}
+        run: |
+          publish() {
+            id=$(.substrate/forge.sh create-release "$TAG" "$TAG" "$PRERELEASE" notes.md "$1")
+            for asset in substrate_*.tar.gz SHA256SUMS; do
+              .substrate/forge.sh upload-asset "$id" "$asset"
+            done
+            .substrate/forge.sh prune-prereleases "v${BASE}-nightly." 14
+          }
+          publish "$GITHUB_SHA"
+          mirror_tree=$(curl -sSf -H "Authorization: token $MIRROR_GITHUB_TOKEN" \
+            "https://api.github.com/repos/mp-pinheiro/substrate/commits/main" | jq -r '.commit.tree.sha')
+          if [ "$mirror_tree" != "$(git rev-parse 'HEAD^{tree}')" ]; then
+            echo "::error::mirror main tree differs from the released revision — wait for the push mirror, then re-dispatch"
+            exit 1
+          fi
+          export SUBSTRATE_FORGE_API=https://api.github.com
+          export SUBSTRATE_FORGE_SLUG=mp-pinheiro/substrate
+          export SUBSTRATE_FORGE_TOKEN="$MIRROR_GITHUB_TOKEN"
+          publish main

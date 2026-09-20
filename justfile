@@ -9,6 +9,9 @@ battery *ARGS:
 engine:
     go build -trimpath -buildvcs=false -ldflags "-X main.version=$(cat VERSION)" -o build/substrate-engine ./cmd/substrate-engine
 
+cli:
+    go build -trimpath -buildvcs=false -ldflags "-X main.version=$(cat VERSION)" -o build/substrate ./cmd/substrate
+
 test-engine:
     go build -trimpath -buildvcs=false -ldflags "-X main.version=$(cat VERSION)" ./... && go vet ./... && go test ./internal/...
     bash test/ab-hooks-test.sh
