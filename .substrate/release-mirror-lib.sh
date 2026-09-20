@@ -10,21 +10,30 @@ exec 3>&1
 die() { printf '::error::%s\n' "$1" >&3; exit 1; }
 notice() { printf '::notice::%s\n' "$1" >&3; }
 
-mirror_call() {
-    local method=$1 url=$2 data=${3:-} raw
+mirror_try() {
+    local method=$1 url=$2 data=${3:-} raw rc=0
     if [ -n "$data" ]; then
         raw=$(curl -sS -o - -w '\n%{http_code}' --max-time "$mirror_timeout" -X "$method" \
             -H "Authorization: Bearer $mirror_token" -H 'Accept: application/vnd.github+json' \
-            -d "$data" "$url" 2>/dev/null) \
-            || die "mirror request could not reach $url — refusing to guess its outcome"
+            -d "$data" "$url" 2>/dev/null) || rc=$?
     else
         raw=$(curl -sS -o - -w '\n%{http_code}' --max-time "$mirror_timeout" -X "$method" \
             -H "Authorization: Bearer $mirror_token" -H 'Accept: application/vnd.github+json' \
-            "$url" 2>/dev/null) \
-            || die "mirror request could not reach $url — refusing to guess its outcome"
+            "$url" 2>/dev/null) || rc=$?
+    fi
+    if [ "$rc" -ne 0 ]; then
+        MIRROR_CODE=000
+        MIRROR_BODY=""
+        return 0
     fi
     MIRROR_CODE=${raw##*$'\n'}
     MIRROR_BODY=${raw%$'\n'*}
+}
+
+mirror_call() {
+    mirror_try "$@"
+    [ "$MIRROR_CODE" != 000 ] \
+        || die "mirror request could not reach $2 — refusing to guess its outcome"
 }
 
 mirror_get() {

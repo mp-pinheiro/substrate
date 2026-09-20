@@ -27,7 +27,7 @@ await_revision() {
     local delay
     for delay in $waits; do
         [ "$delay" = 0 ] || sleep "$delay"
-        mirror_call GET "https://api.github.com/repos/${mirror_repo}/commits/$head_sha"
+        mirror_try GET "https://api.github.com/repos/${mirror_repo}/commits/$head_sha"
         [ "$MIRROR_CODE" = 200 ] && return 0
     done
     die "$head_sha has not reached the GitHub mirror (HTTP $MIRROR_CODE) — the Forgejo release is published; re-dispatch once the mirror carries the revision"
