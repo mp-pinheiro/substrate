@@ -63,8 +63,15 @@ jobs:
           base=$(cat VERSION)
           requested="${{ inputs.channel }}"
           [ -n "$requested" ] || requested="${{ github.event.inputs.channel }}"
+          nightly_base="$base"
+          if git rev-parse -q --verify "refs/tags/v$base" >/dev/null \
+              || curl -s -o /dev/null -f -H "Authorization: Bearer $MIRROR_TOKEN" \
+                   "https://api.github.com/repos/mp-pinheiro/substrate/releases/tags/v$base"; then
+            IFS=. read -r major minor _patch <<< "$base"
+            nightly_base="${major}.$((minor + 1)).0"
+          fi
           if [ "$GITHUB_EVENT_NAME" = schedule ] || [ "$requested" = nightly ]; then
-            version="${base}-nightly.$(date -u +%Y%m%d)"
+            version="${nightly_base}-nightly.$(date -u +%Y%m%d)"
             channel=nightly
             prerelease=true
           else
@@ -78,6 +85,7 @@ jobs:
           fi
           {
             echo "base=$base"
+            echo "nightlybase=$nightly_base"
             echo "version=$version"
             echo "channel=$channel"
             echo "prerelease=$prerelease"
@@ -123,6 +131,7 @@ jobs:
           TAG: ${{ steps.identity.outputs.tag }}
           PRERELEASE: ${{ steps.identity.outputs.prerelease }}
           BASE: ${{ steps.identity.outputs.base }}
+          NIGHTLY_BASE: ${{ steps.identity.outputs.nightlybase }}
         run: |
           publish() {
             id=$(.substrate/forge.sh create-release "$TAG" "$TAG" "$PRERELEASE" notes.md "$1")
@@ -130,6 +139,8 @@ jobs:
               .substrate/forge.sh upload-asset "$id" "$asset"
             done
             .substrate/forge.sh prune-prereleases "v${BASE}-nightly." 14
+            [ "$NIGHTLY_BASE" = "$BASE" ] \
+              || .substrate/forge.sh prune-prereleases "v${NIGHTLY_BASE}-nightly." 14
           }
           publish "$GITHUB_SHA"
           sync_code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 -X POST \
