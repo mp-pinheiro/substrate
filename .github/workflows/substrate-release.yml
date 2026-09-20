@@ -163,4 +163,4 @@ jobs:
           export SUBSTRATE_FORGE_API=https://api.github.com
           export SUBSTRATE_FORGE_SLUG=mp-pinheiro/substrate
           export SUBSTRATE_FORGE_TOKEN="$MIRROR_TOKEN"
-          publish "$TAG"
+          publish ""
