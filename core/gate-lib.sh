@@ -288,8 +288,9 @@ sg_scan() {
 
 cfg_check_json() {
     jq -c --arg n "${SUBSTRATE_CHECK_NAME:-}" \
-        '(.checks.config // {})[$n]'"${1:-}"' // empty' "$CONFIG" 2>/dev/null
+        '(.checks.config // {})[$n] // empty' "$CONFIG" 2>/dev/null
 }
+
 go_workspace_dir() {
     local check="$1" config_json directory configured go_dir
     config_json=$(cfg_check_json)
