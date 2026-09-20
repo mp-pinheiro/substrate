@@ -60,18 +60,27 @@ jobs:
         id: identity
         if: steps.gate-status.outputs.status == 'success'
         run: |
+          resolve_tag_target() {
+            local want=$1 sha=""
+            if git rev-parse -q --verify "refs/tags/$want" >/dev/null; then
+              git rev-list -n1 "$want"
+              return 0
+            fi
+            sha=$(curl -s -H "Authorization: Bearer $MIRROR_TOKEN" \
+              "https://api.github.com/repos/mp-pinheiro/substrate/git/ref/tags/$want" \
+              | jq -r 'if .object.type == "tag" then empty else (.object.sha // empty) end')
+            if [ -z "$sha" ]; then
+              sha=$(curl -s -H "Authorization: Bearer $MIRROR_TOKEN" \
+                "https://api.github.com/repos/mp-pinheiro/substrate/git/refs/tags/$want" \
+                | jq -r 'if type == "array" then (.[0].object.sha // empty) else empty end')
+            fi
+            printf '%s' "$sha"
+          }
+
           base=$(cat VERSION)
           requested="${{ inputs.channel }}"
           [ -n "$requested" ] || requested="${{ github.event.inputs.channel }}"
-          released_sha=""
-          if git rev-parse -q --verify "refs/tags/v$base" >/dev/null; then
-            released_sha=$(git rev-parse "refs/tags/v$base^{commit}")
-          fi
-          if [ -z "$released_sha" ]; then
-            released_sha=$(curl -s -H "Authorization: Bearer $MIRROR_TOKEN" \
-              "https://api.github.com/repos/mp-pinheiro/substrate/git/ref/tags/v$base" \
-              | jq -r '.object.sha // empty')
-          fi
+          released_sha=$(resolve_tag_target "v$base")
           nightly_base="$base"
           if [ -n "$released_sha" ]; then
             IFS=. read -r major minor _patch <<< "$base"
@@ -85,14 +94,15 @@ jobs:
             version="$base"
             channel=release
             prerelease=false
-            if [ -n "$released_sha" ] && [ "$released_sha" != "$GITHUB_SHA" ]; then
-              echo "::error::v$base is already released at $released_sha; republishing it from $GITHUB_SHA would overwrite its artifacts. Bump VERSION for the next stable, or dispatch channel=nightly."
-              exit 1
-            fi
           fi
           tag="v$version"
-          if [ -n "$released_sha" ] && [ "$released_sha" = "$GITHUB_SHA" ]; then
-            echo "::notice::$tag already exists at the released revision — resuming publication for it"
+          existing=$(resolve_tag_target "$tag")
+          if [ -n "$existing" ] && [ "$existing" != "$GITHUB_SHA" ]; then
+            echo "::error::$tag already points at $existing; republishing it from $GITHUB_SHA would overwrite its artifacts. Bump VERSION for the next stable, or wait for tomorrow's nightly date."
+            exit 1
+          fi
+          if [ -n "$existing" ]; then
+            echo "::notice::$tag already exists at this revision — resuming publication for it"
           fi
           {
             echo "base=$base"
