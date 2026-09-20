@@ -1,56 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=core/release-mirror-lib.sh
+. "$lib_dir/release-mirror-lib.sh"
+
 event="${RELEASE_EVENT:-workflow_dispatch}"
 requested="${RELEASE_CHANNEL:-}"
 head_sha="${RELEASE_HEAD_SHA:?RELEASE_HEAD_SHA is required}"
-mirror_repo="${RELEASE_MIRROR_REPO:-mp-pinheiro/substrate}"
 version_file="${RELEASE_VERSION_FILE:-VERSION}"
 today="${RELEASE_DATE:-$(date -u +%Y%m%d)}"
-token="${RELEASE_MIRROR_TOKEN:-${MIRROR_TOKEN:-}}"
 out_file="${RELEASE_OUTPUT:-${GITHUB_OUTPUT:-/dev/stdout}}"
 
-exec 3>&1
-die() { printf '::error::%s\n' "$1" >&3; exit 1; }
-notice() { printf '::notice::%s\n' "$1" >&3; }
-
-mirror_get() {
-    local url=$1 response code
-    response=$(curl -sS -o - -w '\n%{http_code}' \
-        -H "Authorization: Bearer $token" \
-        -H 'Accept: application/vnd.github+json' "$url" 2>/dev/null) \
-        || die "mirror lookup could not reach $url — refusing to guess whether the tag exists"
-    code=${response##*$'\n'}
-    case "$code" in
-        200) printf '%s' "${response%$'\n'*}" ;;
-        404) return 44 ;;
-        *) die "mirror lookup for $url returned HTTP $code — refusing to treat that as an absent tag" ;;
-    esac
-}
-
 resolve_tag_target() {
-    local want=$1 ref sha type rc
+    local want=$1
     if git rev-parse -q --verify "refs/tags/$want" >/dev/null 2>&1; then
         git rev-list -n1 "$want"
         return 0
     fi
-    [ -n "$token" ] \
-        || die "no mirror token available to resolve $want — refusing to publish without a tag-collision check"
-    ref=$(mirror_get "https://api.github.com/repos/${mirror_repo}/git/ref/tags/$want") || rc=$?
-    case "${rc:-0}" in
-        0) ;;
-        44) return 0 ;;
-        *) exit "$rc" ;;
-    esac
-    sha=$(printf '%s' "$ref" | jq -r '.object.sha // empty')
-    type=$(printf '%s' "$ref" | jq -r '.object.type // empty')
-    [ -n "$sha" ] || die "mirror returned a tag ref for $want with no sha"
-    if [ "$type" = tag ]; then
-        ref=$(mirror_get "https://api.github.com/repos/${mirror_repo}/git/tags/$sha") || exit $?
-        sha=$(printf '%s' "$ref" | jq -r '.object.sha // empty')
-        [ -n "$sha" ] || die "annotated tag $want dereferenced to no commit"
-    fi
-    printf '%s' "$sha"
+    mirror_tag_commit "$want"
 }
 
 base=$(cat "$version_file" 2>/dev/null) || base=
