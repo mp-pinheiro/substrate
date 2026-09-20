@@ -156,6 +156,7 @@ release_id_for_tag() {
 
 create_release() {
     local tag=$1 name=$2 prerelease=$3 notes_file=$4 target=$5 payload id response code
+    [ -f "$notes_file" ] || die "notes file not found: $notes_file" 1
     if dry_run; then
         printf 'DRYRUN create-release host=%s slug=%s tag=%s prerelease=%s target=%s notes=%s bytes\n' \
             "$api" "$slug" "$tag" "$prerelease" "${target:-<none>}" "$(wc -c < "$notes_file")" >&2
@@ -237,15 +238,15 @@ prune_prereleases() {
     local prefix=$1 keep_days=$2 cutoff releases id tag
     cutoff=$(date -u -d "-$keep_days days" +%Y-%m-%dT%H:%M:%SZ) \
         || die "cannot compute the retention cutoff" 1
+    if dry_run; then
+        printf 'DRYRUN prune host=%s slug=%s prefix=%s cutoff=%s (listing skipped)\n' \
+            "$api" "$slug" "$prefix" "$cutoff" >&2
+        return 0
+    fi
     releases=$(forge_curl "$api/repos/$slug/releases?per_page=100&limit=100") \
         || die "release listing failed on $api/$slug" 1
     while IFS=$'\t' read -r id tag; do
         [ -n "$id" ] || continue
-        if dry_run; then
-            printf 'DRYRUN prune host=%s slug=%s release=%s tag=%s\n' "$api" "$slug" "$id" "$tag" >&2
-            printf 'pruned %s\n' "$tag"
-            continue
-        fi
         forge_curl -X DELETE "$api/repos/$slug/releases/$id" >/dev/null \
             || die "release deletion failed: $tag" 1
         delete_tag "$tag"
@@ -259,7 +260,8 @@ cmd=${1:-}
 shift
 
 resolve_host
-resolve_token
+token=""
+dry_run || resolve_token
 
 is_github=0
 [ "$api" = "https://api.github.com" ] && is_github=1
