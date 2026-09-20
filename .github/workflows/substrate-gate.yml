@@ -104,6 +104,13 @@ jobs:
       - &install_toolchain
         name: Install active profile toolchains
         run: test/ci-toolchain.sh --active
+      - &cache_git
+        name: Restore prebuilt Git
+        continue-on-error: true
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: /opt/substrate-git
+          key: substrate-git-2.47.3-${{ runner.os }}
       - &install_jj
         name: Install Jujutsu
         run: .substrate/install-jj.sh
@@ -125,6 +132,7 @@ jobs:
       - *setup_bun
       - *install_core
       - *install_toolchain
+      - *cache_git
       - *install_jj
       - *install_go
       - *build_engine
@@ -139,6 +147,7 @@ jobs:
       - *install_prereqs
       - *setup_bun
       - *install_core
+      - *cache_git
       - *install_jj
       - *install_toolchain
       - *install_go
@@ -158,6 +167,7 @@ jobs:
       - *checkout_shallow
       - *install_prereqs
       - *setup_bun
+      - *cache_git
       - *install_jj
       - name: Install Gitleaks
         run: .substrate/install-gitleaks.sh
