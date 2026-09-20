@@ -31,12 +31,13 @@ read-only mirror of `main`.
 
 ## Release channels
 
-Stable releases are tagged `vX.Y.Z`. Nightlies are pre-releases tagged `vX.Y.Z-nightly.YYYYMMDD`, cut at
-07:00 UTC from a green revision and pruned after 14 days.
+Stable releases are tagged `vX.Y.Z`. Nightlies are pre-releases cut at 07:00 UTC from a green revision
+and pruned after 14 days; once `vX.Y.Z` has shipped they are tagged against the next minor
+(`vX.Y+1.0-nightly.YYYYMMDD`) so a nightly always sorts above the stable it builds on.
 
 ```sh
 go install github.com/mp-pinheiro/substrate/cmd/substrate@latest                  # newest stable
-go install github.com/mp-pinheiro/substrate/cmd/substrate@v0.1.0-nightly.20260920 # a nightly
+go install github.com/mp-pinheiro/substrate/cmd/substrate@v0.2.0-nightly.20260920 # a nightly
 ```
 
 Each release also carries `substrate_<version>_linux_{amd64,arm64}.tar.gz` (containing `substrate` plus a
