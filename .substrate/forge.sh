@@ -131,7 +131,18 @@ forgejo_issue_json() {
 }
 
 forgejo_ref_status() {
-    forgejo_curl "$api/repos/$slug/commits/$1/status" | jq -r '.state // empty' \
+    local prefix="${SUBSTRATE_STATUS_CONTEXT:-substrate-gate}"
+    forgejo_curl "$api/repos/$slug/commits/$1/statuses?limit=100" \
+        | jq -r --arg p "$prefix" '
+            [.[] | select((.context // "") | startswith($p))]
+            | group_by(.context)
+            | map(max_by(.updated_at // .created_at // ""))
+            | map(.status)
+            | if length == 0 then ""
+              elif any(. == "failure" or . == "error") then "failure"
+              elif any(. == "pending") then "pending"
+              elif any(. == "success") then "success"
+              else "skipped" end' \
         || die "forgejo status lookup failed" 1
 }
 
