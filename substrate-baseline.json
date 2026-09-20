@@ -51,6 +51,7 @@
   "comments:core/release-identity.sh": 0,
   "comments:core/release-mirror-lib.sh": 0,
   "comments:core/release-mirror-tag.sh": 0,
+  "comments:core/release-publish.sh": 0,
   "comments:core/report.sh": 0,
   "comments:core/selftest.sh": 0,
   "comments:core/substrate-launch.sh": 0,
@@ -299,7 +300,7 @@
   "comments:test/vendor-drift-test.sh": 0,
   "comments:test/vendor-source-test.sh": 0,
   "dead_code": 0,
-  "dup_pct": 2.083968999816928,
+  "dup_pct": 2.080097456981879,
   "oversized_files": 0
 },
   "direction": {
@@ -354,6 +355,7 @@
   "comments:core/release-identity.sh": "lo",
   "comments:core/release-mirror-lib.sh": "lo",
   "comments:core/release-mirror-tag.sh": "lo",
+  "comments:core/release-publish.sh": "lo",
   "comments:core/report.sh": "lo",
   "comments:core/selftest.sh": "lo",
   "comments:core/substrate-launch.sh": "lo",

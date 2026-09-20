@@ -105,25 +105,15 @@ jobs:
         if: steps.gate-status.outputs.status == 'success' && steps.identity.outputs.skip != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.identity.outputs.tag }}
-          PRERELEASE: ${{ steps.identity.outputs.prerelease }}
-          BASE: ${{ steps.identity.outputs.base }}
-          NIGHTLY_BASE: ${{ steps.identity.outputs.nightlybase }}
           RELEASE_TAG: ${{ steps.identity.outputs.tag }}
+          RELEASE_PRERELEASE: ${{ steps.identity.outputs.prerelease }}
+          RELEASE_BASE: ${{ steps.identity.outputs.base }}
+          RELEASE_NIGHTLY_BASE: ${{ steps.identity.outputs.nightlybase }}
           RELEASE_HEAD_SHA: ${{ github.sha }}
         run: |
-          publish() {
-            id=$(.substrate/forge.sh create-release "$TAG" "$TAG" "$PRERELEASE" notes.md "$1")
-            for asset in substrate_*.tar.gz SHA256SUMS; do
-              .substrate/forge.sh upload-asset "$id" "$asset"
-            done
-            .substrate/forge.sh prune-prereleases "v${BASE}-nightly." 14
-            [ "$NIGHTLY_BASE" = "$BASE" ] \
-              || .substrate/forge.sh prune-prereleases "v${NIGHTLY_BASE}-nightly." 14
-          }
-          publish "$GITHUB_SHA"
+          .substrate/release-publish.sh "$GITHUB_SHA"
           .substrate/release-mirror-tag.sh
           export SUBSTRATE_FORGE_API=https://api.github.com
           export SUBSTRATE_FORGE_SLUG=mp-pinheiro/substrate
           export SUBSTRATE_FORGE_TOKEN="$MIRROR_TOKEN"
-          publish ""
+          .substrate/release-publish.sh ""

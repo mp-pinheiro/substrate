@@ -255,7 +255,8 @@ cat > "$T/releases.json" <<JSON
   {"id":2,"tag_name":"v0.2.0-nightly.20260919","prerelease":true,"created_at":"$cutoff_new"},
   {"id":3,"tag_name":"v0.2.0","prerelease":false,"created_at":"$cutoff_old"},
   {"id":4,"tag_name":"v0.9.0-nightly.20260101","prerelease":true,"created_at":"$cutoff_old"},
-  {"id":5,"tag_name":"v0.2.0-nightly.undated","prerelease":true,"created_at":null}
+  {"id":5,"tag_name":"v0.2.0-nightly.undated","prerelease":true,"created_at":null},
+  {"id":6,"tag_name":"v0.3.0-nightly.20260101","prerelease":true,"created_at":"$cutoff_old"}
 ]
 JSON
 pruned=$(env -u GH_TOKEN -u GITHUB_TOKEN SUBSTRATE_FORGE_DRYRUN=1 \
@@ -292,5 +293,45 @@ mirror_tag v9.9.9 dddddddddddddddddddddddddddddddddddddddd "0 0 0" \
 [ "$(cat "$T/api/attempts")" = 3 ] \
     || fail "the wait loop must retry past transport errors, attempts=$(cat "$T/api/attempts")"
 ok "transient curl failures are retried instead of aborting the release"
+
+stage="$T/stage"
+mkdir -p "$stage" || fail "stage dir"
+cd "$stage" || fail "cannot enter the stage"
+echo notes > notes.md
+head -c 64 /dev/urandom > substrate_0.2.0_linux_amd64.tar.gz
+head -c 64 /dev/urandom > substrate_0.2.0_linux_arm64.tar.gz
+echo sums > SHA256SUMS
+publish_plan() {
+    env -u GH_TOKEN -u GITHUB_TOKEN -u SUBSTRATE_FORGE_TOKEN \
+        SUBSTRATE_FORGE_DRYRUN=1 GITHUB_API_URL=https://api.github.com \
+        GITHUB_REPOSITORY=mp-pinheiro/substrate \
+        SUBSTRATE_FORGE_RELEASES_JSON="$T/releases.json" \
+        RELEASE_TAG="$1" RELEASE_PRERELEASE="$2" \
+        RELEASE_BASE="$3" RELEASE_NIGHTLY_BASE="$4" \
+        "$KIT_ROOT/core/release-publish.sh" "${5:-}" >/dev/null 2>"$T/plan2"
+}
+publish_plan v0.3.0-nightly.20260921 true 0.2.0 0.3.0 abc123 \
+    || fail "publish orchestration exited $?: $(cat "$T/plan2")"
+plan_out=$(cat "$T/plan2")
+[ "$(printf '%s\n' "$plan_out" | grep -c '^DRYRUN upload-asset')" = 3 ] \
+    || fail "every artifact plus SHA256SUMS must be uploaded: $plan_out"
+printf '%s\n' "$plan_out" | grep -q 'DRYRUN create-release .*tag=v0.3.0-nightly.20260921 prerelease=true target=abc123' \
+    || fail "the release must be created at the given target: $plan_out"
+[ "$(printf '%s\n' "$plan_out" | grep -c 'DRYRUN prune')" = 2 ] \
+    || fail "a bumped nightly base must prune both its own and the previous base: $plan_out"
+ok "publishing uploads every artifact and prunes both nightly bases"
+
+publish_plan v0.2.0 false 0.2.0 0.2.0 abc123 \
+    || fail "stable publish exited $?: $(cat "$T/plan2")"
+plan_out=$(cat "$T/plan2")
+[ "$(printf '%s\n' "$plan_out" | grep -c 'DRYRUN prune')" = 1 ] \
+    || fail "an unbumped base must prune exactly once: $plan_out"
+ok "an unbumped base prunes once instead of twice"
+
+rm -f substrate_*.tar.gz SHA256SUMS
+publish_plan v0.3.0-nightly.20260921 true 0.2.0 0.3.0 abc123 \
+    && fail "publishing with no artifacts must abort rather than cut an empty release"
+ok "a release with no built artifacts is refused"
+cd "$repo" || fail "cannot re-enter the scratch repo"
 
 ok "release lane verified locally — no forge round-trip required"
