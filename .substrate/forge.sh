@@ -151,7 +151,7 @@ release_id_for_tag() {
 }
 
 create_release() {
-    local tag=$1 name=$2 prerelease=$3 notes_file=$4 target=$5 payload id
+    local tag=$1 name=$2 prerelease=$3 notes_file=$4 target=$5 payload id response code
     id=$(release_id_for_tag "$tag")
     if [ -n "$id" ]; then
         printf '%s\n' "$id"
@@ -159,12 +159,21 @@ create_release() {
     fi
     payload=$(jq -n --arg tag "$tag" --arg name "$name" --arg target "$target" \
         --argjson prerelease "$prerelease" --rawfile body "$notes_file" \
-        '{tag_name:$tag,name:$name,body:$body,prerelease:$prerelease,target_commitish:$target,draft:false}') \
+        '{tag_name:$tag,name:$name,body:$body,prerelease:$prerelease,draft:false}
+         + (if $target == "" then {} else {target_commitish:$target} end)') \
         || die "release payload build failed" 1
-    id=$(printf '%s' "$payload" | forge_curl -H "Content-Type: application/json" \
-        -X POST --data-binary @- "$api/repos/$slug/releases" | jq -r '.id // empty') \
-        || die "release creation failed on $api/$slug" 1
-    [ -n "$id" ] || die "release creation returned no id on $api/$slug" 1
+    response=$(mktemp)
+    code=$(printf '%s' "$payload" | curl -sS -o "$response" -w '%{http_code}' \
+        -H "Authorization: token $token" -H "Content-Type: application/json" \
+        -X POST --data-binary @- "$api/repos/$slug/releases")
+    id=$(jq -r '.id // empty' "$response" 2>/dev/null)
+    if [ -z "$id" ]; then
+        printf 'forge: release creation failed on %s/%s (HTTP %s): %s\n' \
+            "$api" "$slug" "$code" "$(head -c 300 "$response")" >&2
+        rm -f "$response"
+        exit 1
+    fi
+    rm -f "$response"
     printf '%s\n' "$id"
 }
 
