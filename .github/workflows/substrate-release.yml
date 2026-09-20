@@ -123,8 +123,15 @@ jobs:
             .substrate/forge.sh prune-prereleases "v${BASE}-nightly." 14
           }
           publish "$GITHUB_SHA"
+          sync_code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 -X POST \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/push_mirrors-sync")
+          case "$sync_code" in
+            200|201|204) echo "requested an immediate push-mirror sync" ;;
+            *) echo "::notice::could not trigger a push-mirror sync (HTTP $sync_code) — waiting for the scheduled one" ;;
+          esac
           code=000
-          for delay in 0 5 15 30 60; do
+          for delay in 0 10 20 30 60 60 120 120 180 180; do
             [ "$delay" = 0 ] || sleep "$delay"
             code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 \
               -H "Authorization: Bearer $MIRROR_TOKEN" \
@@ -132,7 +139,7 @@ jobs:
             [ "$code" = "200" ] && break
           done
           if [ "$code" != "200" ]; then
-            echo "::error::$TAG never reached the GitHub mirror (HTTP $code) — refusing to POST, GitHub would create the tag at main instead. Re-dispatch once the mirror has synced."
+            echo "::error::$TAG never reached the GitHub mirror after ~13 minutes (HTTP $code) — refusing to POST, GitHub would create the tag at main instead. The Forgejo release is published; hit Synchronize Now on the push mirror (or confirm it replicates tags, not just branches), then re-dispatch to finish the GitHub half."
             exit 1
           fi
           export SUBSTRATE_FORGE_API=https://api.github.com
