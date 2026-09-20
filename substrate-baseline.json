@@ -295,7 +295,7 @@
   "comments:test/vendor-drift-test.sh": 0,
   "comments:test/vendor-source-test.sh": 0,
   "dead_code": 0,
-  "dup_pct": 2.1157956692791426,
+  "dup_pct": 2.115468004707923,
   "oversized_files": 0
 },
   "direction": {

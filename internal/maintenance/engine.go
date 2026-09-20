@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/mp-pinheiro/substrate/internal/logx"
+	"github.com/mp-pinheiro/substrate/internal/receipt"
 )
 
 const ExitPreflight = 12
@@ -376,6 +377,10 @@ func RunMaintenance(ctx context.Context, args []string) int {
 		if err := VerifyTransition(base, to, dirtyFingerprint); err != nil {
 			logx.Err().Line("maintenance: maintenance commit exists but its exact-state receipt failed verification: %v", err)
 			return ExitPreflight
+		}
+
+		if _, err := receipt.Write(ctx, c.RepoRoot, "maintenance", commit, c.VCS, "", ""); err != nil {
+			logx.Err().Line("maintenance: commit succeeded but the gate receipt write failed — push will rerun the gate: %v", err)
 		}
 	}
 
