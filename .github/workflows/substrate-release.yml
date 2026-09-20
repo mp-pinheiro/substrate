@@ -1,7 +1,14 @@
 # substrate-repo-owned
 name: substrate-release
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: release cuts a stable vX.Y.Z; nightly cuts a dated pre-release
+        required: false
+        default: release
+        type: choice
+        options: [release, nightly]
   schedule:
     - cron: '0 7 * * *'
 concurrency:
@@ -54,7 +61,8 @@ jobs:
         if: steps.gate-status.outputs.status == 'success'
         run: |
           base=$(cat VERSION)
-          if [ "$GITHUB_EVENT_NAME" = schedule ]; then
+          requested="${{ inputs.channel }}"
+          if [ "$GITHUB_EVENT_NAME" = schedule ] || [ "$requested" = nightly ]; then
             version="${base}-nightly.$(date -u +%Y%m%d)"
             channel=nightly
             prerelease=true
