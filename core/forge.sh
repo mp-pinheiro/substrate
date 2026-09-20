@@ -131,7 +131,7 @@ forgejo_issue_json() {
 }
 
 forgejo_ref_status() {
-    forgejo_curl "$api/repos/$slug/commits/$1/statuses?limit=1" | jq -r '.[0].status // empty' \
+    forgejo_curl "$api/repos/$slug/commits/$1/status" | jq -r '.state // empty' \
         || die "forgejo status lookup failed" 1
 }
 
