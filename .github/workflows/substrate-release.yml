@@ -130,6 +130,10 @@ jobs:
           VERSION: ${{ steps.identity.outputs.version }}
           CHANNEL: ${{ steps.identity.outputs.channel }}
         run: |
+          if [ -z "$VERSION" ] || [ -z "$CHANNEL" ]; then
+            echo "::error::identity produced no version/channel — refusing to build an unnamed release"
+            exit 1
+          fi
           for arch in amd64 arm64; do
             CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath -buildvcs=false \
               -ldflags "-X main.version=$VERSION -X main.channel=$CHANNEL -X main.kitRevision=$GITHUB_SHA" \
