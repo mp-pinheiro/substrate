@@ -140,10 +140,17 @@ printf '{"object":{"sha":"%s","type":"commit"}}' "$real_head" > "$T/api/ref-v$re
 IFS=. read -r rmaj rmin _ <<< "$real_base"
 expect_nightly="${rmaj}.$((rmin + 1)).0-nightly.20260921"
 cd "$KIT_ROOT" || fail "cannot enter the kit"
+runner="$KIT_ROOT/core/release-identity.sh"
+[ -x "$runner" ] || fail "core/release-identity.sh lost its exec bit — CI runs it directly, not via bash"
+if [ -e "$KIT_ROOT/.substrate/release-identity.sh" ]; then
+    [ -x "$KIT_ROOT/.substrate/release-identity.sh" ] \
+        || fail ".substrate/release-identity.sh is not executable — the workflow's direct run would die on it"
+    runner="$KIT_ROOT/.substrate/release-identity.sh"
+fi
 : > "$T/out"
 env RELEASE_EVENT=schedule RELEASE_HEAD_SHA="$real_head" RELEASE_DATE=20260921 \
     RELEASE_MIRROR_TOKEN=stub RELEASE_OUTPUT="$T/out" \
-    bash "$KIT_ROOT/core/release-identity.sh" > "$T/ann" 2>&1 \
+    "$runner" > "$T/ann" 2>&1 \
     || fail "tomorrow's cron against the real VERSION exited $?: $(ann)"
 [ "$(field version)" = "$expect_nightly" ] \
     || fail "real-repo cron must cut $expect_nightly, got: $(cat "$T/out")"
