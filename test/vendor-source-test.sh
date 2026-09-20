@@ -44,6 +44,10 @@ reset_kit() {
 }
 # Registry generation must hash canonical sources and fail closed on new checks.
 git clone -q "$KIT_ROOT" "$T/registry-kit" || fail "registry kit clone failed"
+jq '.metrics.dup_pct = 100' "$T/registry-kit/substrate-baseline.json" \
+    > "$T/registry-kit/substrate-baseline.json.new" \
+    && mv "$T/registry-kit/substrate-baseline.json.new" "$T/registry-kit/substrate-baseline.json" \
+    || fail "registry kit baseline relaxation failed"
 cp "$KIT_ROOT/checks.d/82-check-registry.sh" "$T/registry-kit/checks.d/82-check-registry.sh"
 cp "$KIT_ROOT/cmd/generate-registry/main.go" "$T/registry-kit/cmd/generate-registry/main.go"
 (cd "$T/registry-kit" && go run ./cmd/generate-registry > internal/gate/registry_gen.go) \

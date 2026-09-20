@@ -131,17 +131,35 @@ jobs:
             *) echo "::notice::could not trigger a push-mirror sync (HTTP $sync_code) — waiting for the scheduled one" ;;
           esac
           code=000
-          for delay in 0 10 20 30 60 60 120 120 180 180; do
+          for delay in 0 10 20 30 60 60 120; do
             [ "$delay" = 0 ] || sleep "$delay"
             code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 \
               -H "Authorization: Bearer $MIRROR_TOKEN" \
-              "https://api.github.com/repos/mp-pinheiro/substrate/git/ref/tags/$TAG")
+              "https://api.github.com/repos/mp-pinheiro/substrate/commits/$GITHUB_SHA")
             [ "$code" = "200" ] && break
           done
           if [ "$code" != "200" ]; then
-            echo "::error::$TAG never reached the GitHub mirror after ~13 minutes (HTTP $code) — refusing to POST, GitHub would create the tag at main instead. The Forgejo release is published; hit Synchronize Now on the push mirror (or confirm it replicates tags, not just branches), then re-dispatch to finish the GitHub half."
+            echo "::error::$GITHUB_SHA has not reached the GitHub mirror (HTTP $code) — the Forgejo release is published; re-dispatch once the mirror carries the revision"
             exit 1
           fi
+          tag_code=$(curl -s -o /tmp/tag.json -w '%{http_code}' --max-time 30 -X POST \
+            -H "Authorization: Bearer $MIRROR_TOKEN" -H 'Accept: application/vnd.github+json' \
+            -d "$(jq -n --arg r "refs/tags/$TAG" --arg s "$GITHUB_SHA" '{ref:$r,sha:$s}')" \
+            "https://api.github.com/repos/mp-pinheiro/substrate/git/refs")
+          case "$tag_code" in
+            201) echo "created $TAG on the mirror at $GITHUB_SHA" ;;
+            422)
+              existing=$(curl -s --max-time 30 -H "Authorization: Bearer $MIRROR_TOKEN" \
+                "https://api.github.com/repos/mp-pinheiro/substrate/git/ref/tags/$TAG" | jq -r '.object.sha // empty')
+              if [ "$existing" != "$GITHUB_SHA" ]; then
+                echo "::error::$TAG already exists on the mirror at $existing, not $GITHUB_SHA"
+                exit 1
+              fi
+              echo "$TAG already present on the mirror at the released revision" ;;
+            *)
+              echo "::error::could not create $TAG on the mirror (HTTP $tag_code): $(head -c 200 /tmp/tag.json)"
+              exit 1 ;;
+          esac
           export SUBSTRATE_FORGE_API=https://api.github.com
           export SUBSTRATE_FORGE_SLUG=mp-pinheiro/substrate
           export SUBSTRATE_FORGE_TOKEN="$MIRROR_TOKEN"
