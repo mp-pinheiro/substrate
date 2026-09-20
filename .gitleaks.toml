@@ -1,0 +1,9 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Synthetic canaries in the gitleaks oracle fixtures; the tokens are generated literals that must stay scannable by the check they prove."
+paths = [
+  '''test/gitleaks-scope-test\.sh''',
+  '''test/gitleaks-deep-test\.sh''',
+]

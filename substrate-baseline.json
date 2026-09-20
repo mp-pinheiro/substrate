@@ -293,7 +293,7 @@
   "comments:test/vendor-drift-test.sh": 0,
   "comments:test/vendor-source-test.sh": 0,
   "dead_code": 0,
-  "dup_pct": 2.122568214307912,
+  "dup_pct": 2.123294059128921,
   "oversized_files": 0
 },
   "direction": {
@@ -592,5 +592,13 @@
   "dead_code": "lo",
   "dup_pct": "lo",
   "oversized_files": "lo"
+},
+  "accepted": {
+  "dup_pct": {
+  "at": "2026-09-20",
+  "from": 2.122568214307912,
+  "reason": "Deleting the dead bookworm-backports block shrank a scanned file, so the identical duplicated lines became a larger fraction (2.122568 to 2.123294). Extracting a composite action to remove the cross-file YAML clones was costed and rejected as unverifiable on Forgejo. Tracked as issue 24.",
+  "to": 2.123294059128921
+}
 }
 }
