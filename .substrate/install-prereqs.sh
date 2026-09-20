@@ -10,7 +10,7 @@ git_source="/tmp/git-${git_version}"
 
 apt-get update -qq
 apt-get install -y -qq --no-install-recommends \
-    sudo jq unzip file locales curl ca-certificates \
+    sudo jq unzip file locales curl ca-certificates openssl \
     build-essential libcurl4-openssl-dev libexpat1-dev libssl-dev zlib1g-dev gettext
 
 curl -sSfL -o "$git_archive" "https://www.kernel.org/pub/software/scm/git/git-${git_version}.tar.gz"
