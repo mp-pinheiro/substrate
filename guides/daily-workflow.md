@@ -65,23 +65,6 @@ Push remains a user decision. `jj push` and Git's pre-push hook accept the check
 push blocked: fix the failing gate checks first
 ```
 
-## 4b. Publish (kit maintainers)
-
-`substrate-release` runs on Forgejo only and never rebuilds on GitHub. It reuses the gate status of the
-revision it publishes — the combined state of the `substrate-gate` contexts, not its own run — so a red
-or still-running gate refuses a stable cut and makes a nightly exit quietly.
-
-```sh
-fj actions dispatch substrate-release.yml main                      # stable vX.Y.Z from VERSION
-fj actions dispatch substrate-release.yml main -I channel=nightly   # dated pre-release
-```
-
-The job builds both arches once, publishes to Forgejo, creates the tag on the GitHub mirror pinned to the
-released revision, then uploads the same artifacts there. Re-dispatch is safe: an existing release is
-reused, same-named assets are replaced, and an existing tag is accepted only when it already points at
-the released revision. Mirroring needs `GH_APP_ID` and `GH_APP_PRIVATE_KEY` (a GitHub App installed on
-the mirror); `.substrate/gh-app-token.sh` exchanges them for a token scoped to that one repository.
-
 ## 5. Review (when it matters)
 
 The `review` skill runs the gate, reads the diff, and reports findings only with `file:line` citations — tool-grounded, not vibes. Use it before pushing anything you wouldn't want to debug later.
