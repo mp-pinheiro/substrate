@@ -47,7 +47,7 @@ mkdir -p "$git_source"
 tar -xzf "$git_archive" -C "$git_source" --strip-components=1
 make -C "$git_source" configure
 (cd "$git_source" && ./configure --prefix="$prefix" --without-tcltk)
-make -C "$git_source" -j"$(nproc)"
+make -C "$git_source" -j"${SUBSTRATE_GIT_JOBS:-2}"
 make -C "$git_source" install
 
 link_prefix || {
