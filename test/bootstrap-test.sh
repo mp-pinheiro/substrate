@@ -85,6 +85,8 @@ self_gitleaks_line=${self_gitleaks_match%%:*}
 self_gate_line=${self_gate_match%%:*}
 [ "$self_gitleaks_line" -lt "$self_gate_line" ] \
     || fail "framework gate runs before Gitleaks installation"
+[ "$(grep -c -- '- \*install_gitleaks' "$KIT_ROOT/.github/workflows/substrate-gate.yml")" -eq 5 ] \
+    || fail "not every gate-capable framework job installs Gitleaks"
 grep -q '\.substrate/install-jj\.sh' .github/workflows/substrate-gate.yml \
     || fail "core Jujutsu installer missing from gate workflow"
 grep -q 'name: Resolve Substrate kit revision' .github/workflows/substrate-gate.yml \
