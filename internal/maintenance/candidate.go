@@ -195,11 +195,24 @@ func RenderCandidate(ctx context.Context, candidateDir, renderHome, output strin
 	return nil
 }
 
-func GateCandidate(ctx context.Context, candidateDir, output, callerHome string, c *Context) error {
+func GateCandidate(ctx context.Context, candidateDir, output, callerHome string, c *Context) (resultErr error) {
 	addRes, addErr := xshell.Run(ctx, "git", "-C", candidateDir, "add", "-f", "-A")
 	if addErr != nil || addRes.Code != 0 {
 		return fmt.Errorf("gate candidate: git add: %w (stderr: %s)", addErr, addRes.Stderr)
 	}
+	sourceRoot, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("gate candidate: get source root: %w", err)
+	}
+	dependencyLinks, err := provisionCandidateDependencies(sourceRoot, candidateDir)
+	if err != nil {
+		return fmt.Errorf("gate candidate: provision dependencies: %w", err)
+	}
+	defer func() {
+		if cleanupErr := cleanupCandidateDependencies(dependencyLinks); cleanupErr != nil && resultErr == nil {
+			resultErr = fmt.Errorf("gate candidate: cleanup dependencies: %w", cleanupErr)
+		}
+	}()
 
 	var acceptFlags []string
 	if c.AcceptRegression != "" {
