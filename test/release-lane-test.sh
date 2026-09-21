@@ -328,10 +328,21 @@ plan_out=$(cat "$T/plan2")
     || fail "an unbumped base must prune exactly once: $plan_out"
 ok "an unbumped base prunes once instead of twice"
 
-rm -f substrate_*.tar.gz SHA256SUMS
+rm -f substrate_*.tar.gz
 publish_plan v0.3.0-nightly.20260921 true 0.2.0 0.3.0 abc123 \
-    && fail "publishing with no artifacts must abort rather than cut an empty release"
-ok "a release with no built artifacts is refused"
+    && fail "publishing with no tarballs must abort rather than cut an empty release"
+grep -q 'DRYRUN create-release' "$T/plan2" \
+    && fail "the abort must precede release creation, not follow it: $(cat "$T/plan2")"
+grep -q 'no substrate_.*artifacts' "$T/plan2" || fail "the cause must be named: $(cat "$T/plan2")"
+ok "a release with no built artifacts is refused before anything is created"
+
+head -c 64 /dev/urandom > substrate_0.2.0_linux_amd64.tar.gz
+rm -f SHA256SUMS
+publish_plan v0.3.0-nightly.20260921 true 0.2.0 0.3.0 abc123 \
+    && fail "publishing without SHA256SUMS must abort"
+grep -q 'DRYRUN create-release' "$T/plan2" \
+    && fail "a missing checksum file must abort before release creation: $(cat "$T/plan2")"
+ok "artifacts without SHA256SUMS are refused before anything is created"
 cd "$repo" || fail "cannot re-enter the scratch repo"
 
 ok "release lane verified locally — no forge round-trip required"

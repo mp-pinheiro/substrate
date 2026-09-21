@@ -15,9 +15,13 @@ target="${1:-}"
 [ -f "$notes" ] || { printf '::error::release notes %s not found\n' "$notes" >&2; exit 1; }
 
 shopt -s nullglob
-assets=(substrate_*.tar.gz SHA256SUMS)
+tarballs=(substrate_*.tar.gz)
 shopt -u nullglob
-[ "${#assets[@]}" -gt 0 ] || { printf '::error::no release artifacts to upload\n' >&2; exit 1; }
+[ "${#tarballs[@]}" -gt 0 ] \
+    || { printf '::error::no substrate_*.tar.gz artifacts to upload — refusing to cut an empty release\n' >&2; exit 1; }
+[ -f SHA256SUMS ] \
+    || { printf '::error::SHA256SUMS is missing — refusing to publish unverifiable artifacts\n' >&2; exit 1; }
+assets=("${tarballs[@]}" SHA256SUMS)
 
 id=$("$forge" create-release "$tag" "$tag" "$prerelease" "$notes" "$target")
 for asset in "${assets[@]}"; do
