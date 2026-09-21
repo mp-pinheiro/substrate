@@ -40,12 +40,12 @@ jobs:
       - &build_engine
         name: Build engine
         run: |
-          go build -trimpath -buildvcs=false -o build/substrate-engine ./cmd/substrate-engine
+          go build -trimpath -buildvcs=false -ldflags "-X main.version=$(cat VERSION)" -o build/substrate-engine ./cmd/substrate-engine
           echo "$PWD/build" >> "$GITHUB_PATH"
-      - name: Run gate
-        run: substrate-engine gate
       - name: Install Gitleaks
         run: .substrate/install-gitleaks.sh
+      - name: Run gate
+        run: substrate-engine gate
       - name: Compute deep-scan cache key
         id: gitleaks-key
         run: echo "key=$(.substrate/gitleaks-deep.sh --print-key)" >> "$GITHUB_OUTPUT"

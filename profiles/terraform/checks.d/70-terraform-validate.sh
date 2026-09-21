@@ -21,7 +21,7 @@ while IFS= read -r f; do
 done < <(profile_files terraform)
 [ ${#tf_dirs[@]} -gt 0 ] || exit 0
 
-require_bin_ci terraform "profile toolchain — see profiles/terraform/profile.json" || exit 0
+require_bin terraform "profile toolchain — see profiles/terraform/profile.json"
 
 tmpdir=$(mktemp -d) || die_infra "mktemp failed — cannot build validate sandbox"
 trap 'rm -rf "$tmpdir"' EXIT

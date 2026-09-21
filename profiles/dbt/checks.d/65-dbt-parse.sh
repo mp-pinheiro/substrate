@@ -10,7 +10,7 @@ if [ ! -f "$REPO_ROOT/dbt_project.yml" ]; then
     exit 0
 fi
 
-require_bin_ci dbt "profile toolchain — see profiles/dbt/profile.json" || exit 0
+require_bin dbt "profile toolchain — see profiles/dbt/profile.json"
 
 export DBT_PROFILES_DIR="$SUBSTRATE_DIR/profiles/dbt/profiles"
 out=$(dbt parse --no-version-check 2>&1)

@@ -1,6 +1,3 @@
-"""Validate DAG files under a directory: syntax, importability, DAG presence,
-and dag_id uniqueness. Exit 0 clean, 1 findings, 3 infra (airflow missing in CI)."""
-
 import importlib.util
 import os
 import py_compile
@@ -69,11 +66,8 @@ def main() -> int:
     try:
         from airflow.models import DAG
     except ModuleNotFoundError:
-        if os.environ.get("CI"):
-            print("apache-airflow not importable in CI — toolchain install is broken")
-            return 3
-        if not findings:
-            print("note: deep DAG import checks need apache-airflow installed — syntax-only pass")
+        print("apache-airflow not importable — toolchain install is broken")
+        return 3
     else:
         findings.extend(deep_findings(root, compiled, DAG))
     for line in findings:

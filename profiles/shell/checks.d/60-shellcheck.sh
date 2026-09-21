@@ -65,24 +65,20 @@ sc_parallel() {
 }
 
 if [ ${#executables[@]} -gt 0 ] || [ ${#fragments[@]} -gt 0 ]; then
-    if require_bin_ci shellcheck "profile toolchain — see profiles/shell/profile.json"; then
-        if [ ${#executables[@]} -gt 0 ]; then
-            sc_parallel executables -x -e SC1091 || rc=1
-        fi
-        if [ ${#fragments[@]} -gt 0 ]; then
-            sc_parallel fragments -s bash -e SC1091,SC2154 || rc=1
-        fi
+    require_bin shellcheck "profile toolchain — see profiles/shell/profile.json"
+    if [ ${#executables[@]} -gt 0 ]; then
+        sc_parallel executables -x -e SC1091 || rc=1
+    fi
+    if [ ${#fragments[@]} -gt 0 ]; then
+        sc_parallel fragments -s bash -e SC1091,SC2154 || rc=1
     fi
 fi
 
 if [ ${#zsh_files[@]} -gt 0 ]; then
-    if have zsh; then
-        for f in "${zsh_files[@]}"; do
-            zsh --no-rcs -n "$f" 2>&1 || { printf 'zsh syntax: %s failed\n' "$f"; rc=1; }
-        done
-    else
-        warn "zsh not installed — zsh syntax check skipped"
-    fi
+    require_bin zsh "profile toolchain — see profiles/shell/profile.json"
+    for f in "${zsh_files[@]}"; do
+        zsh --no-rcs -n "$f" 2>&1 || { printf 'zsh syntax: %s failed\n' "$f"; rc=1; }
+    done
 fi
 
 exit "$rc"

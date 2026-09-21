@@ -77,6 +77,14 @@ prereq_line=${prereq_match%%:*}
 gitleaks_line=${gitleaks_match%%:*}
 [ "$prereq_line" -lt "$gitleaks_line" ] \
     || fail "Forgejo container prerequisites run after Gitleaks installation"
+self_gitleaks_match=$(grep -n -m1 'name: Install Gitleaks' "$KIT_ROOT/.github/workflows/substrate-gate.yml")
+self_gate_match=$(grep -n -m1 'name: Run gate' "$KIT_ROOT/.github/workflows/substrate-gate.yml")
+[ -n "$self_gitleaks_match" ] && [ -n "$self_gate_match" ] \
+    || fail "framework gate ordering anchors missing"
+self_gitleaks_line=${self_gitleaks_match%%:*}
+self_gate_line=${self_gate_match%%:*}
+[ "$self_gitleaks_line" -lt "$self_gate_line" ] \
+    || fail "framework gate runs before Gitleaks installation"
 grep -q '\.substrate/install-jj\.sh' .github/workflows/substrate-gate.yml \
     || fail "core Jujutsu installer missing from gate workflow"
 grep -q 'name: Resolve Substrate kit revision' .github/workflows/substrate-gate.yml \
@@ -85,8 +93,8 @@ grep -q 'repository: .*github.repository_owner.*/substrate' .github/workflows/su
     || fail "Substrate kit checkout missing from gate workflow"
 grep -q 'ref: .*steps.substrate-kit.outputs.revision' .github/workflows/substrate-gate.yml \
     || fail "Substrate kit checkout is not pinned to vendor revision"
-grep -q 'go-version-file: .substrate-kit/go.mod' .github/workflows/substrate-gate.yml \
-    || fail "Substrate kit Go module missing from gate workflow"
+grep -q "go-version: '1.27.1'" .github/workflows/substrate-gate.yml \
+    || fail "Substrate engine Go version is not pinned in the gate workflow"
 grep -q 'working-directory: .substrate-kit' .github/workflows/substrate-gate.yml \
     || fail "Substrate engine build directory missing from gate workflow"
 grep -q 'name: Build substrate engine from kit' .github/workflows/substrate-gate.yml \

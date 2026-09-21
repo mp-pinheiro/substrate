@@ -16,7 +16,7 @@ while IFS= read -r f; do
 done < "$INVENTORY"
 [ ${#files[@]} -eq 0 ] && exit 0
 
-require_bin_ci actionlint "https://github.com/rhysd/actionlint (single static binary)" || exit 0
+require_bin actionlint "https://github.com/rhysd/actionlint (single static binary)"
 
 out=$(actionlint -no-color "${files[@]}")
 rc=$?

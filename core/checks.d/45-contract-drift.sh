@@ -26,10 +26,7 @@ while [ "$i" -lt "$count" ]; do
     name=$(jq -r ".contracts[$i].name" "$CONFIG")
     regen=$(jq -r ".contracts[$i].regen" "$CONFIG")
     gen_bin="${regen%% *}"
-    if ! require_bin_ci "$gen_bin" "contract '$name' generator — substrate.json contracts[].regen"; then
-        i=$((i + 1))
-        continue
-    fi
+    require_bin "$gen_bin" "contract '$name' generator — substrate.json contracts[].regen"
     if ! (cd "$scratch" && bash -c "$regen") > "$scratch/.regen-out" 2>&1; then
         cat "$scratch/.regen-out"
         die_infra "contract '$name': regen failed — the gate cannot pass blind"

@@ -11,8 +11,7 @@ fi
 override=$(cfg_check .command)
 if [ -n "$override" ]; then
     if ! find . -maxdepth 3 -type d -name node_modules 2>/dev/null | grep -q .; then
-        warn "node_modules absent — tsc override skipped locally, CI runs it"
-        exit 0
+        die_infra "node_modules absent — install dependencies before running the gate"
     fi
     errf=$(mktemp)
     out=$(eval "$override" 2>"$errf")
@@ -24,14 +23,10 @@ if [ -n "$override" ]; then
     if grep -q 'error TS' <<< "$out"; then
         exit 1
     fi
-    if [ -n "${CI:-}" ]; then
-        die_infra "configured tsc command failed (rc=$rc) — ${err:-no stderr output}"
-    fi
-    warn "configured tsc command failed (rc=$rc) — check skipped locally, CI runs it — ${err:-no stderr output}"
-    exit 0
+    die_infra "configured tsc command failed (rc=$rc) — ${err:-no stderr output}"
 fi
 
-require_bin_ci bun "profile toolchain — https://bun.sh" || exit 0
+require_bin bun "profile toolchain — https://bun.sh"
 
 errf=$(mktemp)
 out=$(bunx --yes -p typescript@6.0.3 tsc --noEmit 2>"$errf")

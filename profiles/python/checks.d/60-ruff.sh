@@ -9,7 +9,7 @@ mapfile -t files < <(profile_files_ext python .py)
 
 [ ${#files[@]} -gt 0 ] || exit 0
 
-require_bin_ci ruff "profile toolchain — see profiles/python/profile.json" || exit 0
+require_bin ruff "profile toolchain — see profiles/python/profile.json"
 
 # only the user-global XDG layer dies here; in-repo hierarchical discovery gate:allow-comment
 # (monorepo pyproject/ruff.toml) stays live — ~/.config is just the XDG

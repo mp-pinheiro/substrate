@@ -233,42 +233,25 @@ have() {
     command -v "$1" >/dev/null 2>&1
 }
 
-# require_bin <bin> <hint> — fatal when absent locally AND in CI; the check decides
-# whether to call this (load-bearing) or downgrade to a CI-only requirement.
 require_bin() {
     have "$1" || die_infra "$1 is required but not installed — $2"
 }
 
-# require_bin_ci <bin> <hint> — warn-and-skip locally, fatal under CI.
-# Caller must treat return 1 as "skip this check" and say so out loud.
-require_bin_ci() {
-    if have "$1"; then
-        return 0
-    fi
-    if [ -n "${CI:-}" ]; then
-        die_infra "$1 missing in CI — toolchain install is broken ($2)"
-    fi
-    warn "$1 not installed — check skipped locally, CI runs it ($2)"
-    return 1
-}
 
 resolve_sg() {
     if have ast-grep; then
         SG=(ast-grep)
     elif have bunx; then
         SG=(bunx --yes @ast-grep/cli@0.45.0)
-    elif [ -n "${CI:-}" ]; then
-        die_infra "ast-grep unavailable in CI (install @ast-grep/cli or bun) — cannot pass blind"
     else
-        warn "ast-grep unavailable — check skipped locally, CI runs it"
-        return 1
+        die_infra "ast-grep is required but unavailable — install @ast-grep/cli or bun"
     fi
 }
 
 sg_scan() {
     local lang="$1" pattern="$2"; shift 2
     SG=()
-    resolve_sg || exit 0
+    resolve_sg
     local errf out rc
     errf=$(mktemp)
     out=$("${SG[@]}" run --lang "$lang" --pattern "$pattern" --json=stream "$@" 2>"$errf")

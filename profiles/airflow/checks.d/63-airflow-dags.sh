@@ -10,7 +10,7 @@ if [ ! -d "$REPO_ROOT/dags" ]; then
     exit 0
 fi
 
-require_bin_ci python3 "profile toolchain — see profiles/airflow/profile.json" || exit 0
+require_bin python3 "profile toolchain — see profiles/airflow/profile.json"
 
 out=$(python3 "$SUBSTRATE_DIR/profiles/airflow/helpers/dag_integrity.py" dags 2>&1)
 rc=$?

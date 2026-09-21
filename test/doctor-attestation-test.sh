@@ -15,7 +15,7 @@ KIT_VERSION=$(cat "$KIT_ROOT/VERSION")
 STAMPED_BIN=$(engine_build fail stamped "$KIT_VERSION") || exit 1
 STAMPED_SHA=$(sha256sum "$STAMPED_BIN" | cut -d ' ' -f 1)
 
-DEV_BIN=$(engine_build fail dev) || exit 1
+DEV_BIN=$(engine_build fail dev "0.0.0-dev") || exit 1
 DEV_VERSION=$("$DEV_BIN" version)
 case "$DEV_VERSION" in
     0.0.0-*) ;;

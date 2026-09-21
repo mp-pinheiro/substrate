@@ -6,7 +6,7 @@ source "$SUBSTRATE_DIR/gate-lib.sh"
 
 [ -n "$(profile_files terraform)" ] || exit 0
 
-require_bin_ci terraform "profile toolchain — see profiles/terraform/profile.json" || exit 0
+require_bin terraform "profile toolchain — see profiles/terraform/profile.json"
 
 out=$(terraform fmt -check -recursive -diff 2>&1)
 rc=$?

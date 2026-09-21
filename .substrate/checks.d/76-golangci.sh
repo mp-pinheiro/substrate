@@ -13,7 +13,7 @@ if [ ! -f "$REPO_ROOT/.golangci.yml" ]; then
     warn "no .golangci.yml — golangci-lint inactive (substrate init installs a template)"
     exit 0
 fi
-require_bin_ci golangci-lint "profile toolchain — see profiles/go/profile.json" || exit 0
+require_bin golangci-lint "profile toolchain — see profiles/go/profile.json"
 
 out=$(cd "$go_dir" && golangci-lint run --timeout 3m --config "$REPO_ROOT/.golangci.yml" 2>&1)
 rc=$?

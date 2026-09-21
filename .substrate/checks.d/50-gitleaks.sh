@@ -11,7 +11,7 @@ inside=$(git rev-parse --is-inside-work-tree 2>/dev/null) \
     || die_infra "no Git worktree - colocate (jj git init --colocate) or disable 50-gitleaks.sh explicitly in substrate.json checks.disabled"
 [ "$inside" = true ] \
     || die_infra "no Git worktree - colocate (jj git init --colocate) or disable 50-gitleaks.sh explicitly in substrate.json checks.disabled"
-have gitleaks || { warn "gitleaks not installed — skipped (CI owns the deep scan)"; exit 0; }
+require_bin gitleaks "install gitleaks before running the gate"
 
 log_opts=$(pending_gitleaks_log_opts) \
     || die_infra "cannot construct the pending Git/JJ scan range"

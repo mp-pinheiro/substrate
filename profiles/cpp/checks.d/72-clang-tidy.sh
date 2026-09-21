@@ -17,7 +17,7 @@ mapfile -t files < <(profile_files cpp cpp)
 
 [ ${#files[@]} -gt 0 ] || exit 0
 
-require_bin_ci clang-tidy "profile toolchain — see profiles/cpp/profile.json" || exit 0
+require_bin clang-tidy "profile toolchain — see profiles/cpp/profile.json"
 
 # gate:allow-comment Only files the compile database can build are lintable;
 # entries resolve file against directory, both possibly relative to the repo

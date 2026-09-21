@@ -52,6 +52,11 @@ cp "$KIT_ROOT/checks.d/82-check-registry.sh" "$T/registry-kit/checks.d/82-check-
 cp "$KIT_ROOT/cmd/generate-registry/main.go" "$T/registry-kit/cmd/generate-registry/main.go"
 (cd "$T/registry-kit" && go run ./cmd/generate-registry > internal/gate/registry_gen.go) \
     || fail "registry generation in clone failed"
+mkdir -p "$T/registry-kit/build"
+(cd "$T/registry-kit" && go build -trimpath -buildvcs=false \
+    -ldflags "-X main.version=$(cat VERSION)" \
+    -o build/substrate-engine ./cmd/substrate-engine) \
+    || fail "registry kit engine build failed"
 cat > "$T/registry-kit/checks.d/89-registry-new.sh" <<'EOF'
 #!/usr/bin/env bash
 set -uo pipefail
@@ -59,11 +64,14 @@ source "$SUBSTRATE_DIR/gate-lib.sh"
 exit 0
 EOF
 chmod +x "$T/registry-kit/checks.d/89-registry-new.sh"
-if (cd "$T/registry-kit" && ./bin/substrate update --apply > "$T/registry-missing.out" 2>&1); then
+if (cd "$T/registry-kit" && SUBSTRATE_ENGINE_BIN="$T/registry-kit/build/substrate-engine" \
+    ./bin/substrate update --apply > "$T/registry-missing.out" 2>&1); then
     fail "update accepted an unregistered repository check"
 fi
-grep -q '89-registry-new.sh not yet in registry' "$T/registry-missing.out" \
-    || fail "missing registry entry was not reported"
+if ! grep -q '89-registry-new.sh not yet in registry' "$T/registry-missing.out"; then
+    cat "$T/registry-missing.out"
+    fail "missing registry entry was not reported"
+fi
 [ ! -e "$T/registry-kit/.substrate/checks.d/89-registry-new.sh" ] \
     || fail "failed update installed the unregistered check"
 
@@ -107,8 +115,11 @@ cat > "$T/registry-kit/substrate-profiles/registry-overlay/profile.json" <<'EOF'
 EOF
 (cd "$T/registry-kit" && go run ./cmd/generate-registry > internal/gate/registry_gen.go) \
     || fail "registry regeneration with overlays failed"
-(cd "$T/registry-kit" && ./bin/substrate update --apply > "$T/registry-success.out" 2>&1) \
-    || fail "update rejected canonical registry sources"
+if ! (cd "$T/registry-kit" && SUBSTRATE_ENGINE_BIN="$T/registry-kit/build/substrate-engine" \
+    ./bin/substrate update --apply > "$T/registry-success.out" 2>&1); then
+    cat "$T/registry-success.out"
+    fail "update rejected canonical registry sources"
+fi
 cmp "$T/registry-kit/core/checks.d/20-duplication.sh" \
     "$T/registry-kit/.substrate/checks.d/20-duplication.sh" \
     || fail "vendored core check differs from canonical source"

@@ -1,6 +1,9 @@
 # substrate-repo-owned
 name: substrate-release
 on:
+  push:
+    branches: [main]
+    paths: [VERSION]
   workflow_dispatch:
     inputs:
       channel:
@@ -30,18 +33,9 @@ jobs:
         id: gate-status
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          status=$(.substrate/forge.sh ref-status "$GITHUB_SHA")
-          echo "status=$status" >> "$GITHUB_OUTPUT"
-          if [ "$status" = success ]; then
-            exit 0
-          fi
-          if [ "$GITHUB_EVENT_NAME" = schedule ]; then
-            echo "::notice::gate status for $GITHUB_SHA is '${status:-unknown}' — nothing to publish tonight"
-            exit 0
-          fi
-          echo "::error::gate status for $GITHUB_SHA is '${status:-unknown}' — a stable release requires a green gate"
-          exit 1
+          RELEASE_EVENT: ${{ github.event_name }}
+          RELEASE_HEAD_SHA: ${{ github.sha }}
+        run: .substrate/release-wait-gate.sh
       - name: Mint the GitHub mirror token
         if: steps.gate-status.outputs.status == 'success'
         env:

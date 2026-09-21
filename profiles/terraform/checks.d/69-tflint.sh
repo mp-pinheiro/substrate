@@ -12,7 +12,7 @@ if [ ! -f "$REPO_ROOT/.tflint.hcl" ]; then
     exit 0
 fi
 
-require_bin_ci tflint "profile toolchain — see profiles/terraform/profile.json" || exit 0
+require_bin tflint "profile toolchain — see profiles/terraform/profile.json"
 
 out=$(tflint --recursive --no-color --config "$REPO_ROOT/.tflint.hcl" 2>&1)
 rc=$?

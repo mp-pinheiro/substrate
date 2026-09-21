@@ -8,7 +8,7 @@ cd "$KIT_ROOT" || exit 2
 # suites vendor from the checkout under test, by definition
 export SUBSTRATE_VENDOR_FROM_WORKTREE=1
 if [ ! -x "$KIT_ROOT/build/substrate-engine" ]; then
-    (cd "$KIT_ROOT" && go build -trimpath -buildvcs=false -o build/substrate-engine ./cmd/substrate-engine) || exit 2
+    (cd "$KIT_ROOT" && go build -trimpath -buildvcs=false -ldflags "-X main.version=$(cat VERSION)" -o build/substrate-engine ./cmd/substrate-engine) || exit 2
 fi
 export PATH="$KIT_ROOT/build:$PATH"
 export SUBSTRATE_ENGINE_BIN="$KIT_ROOT/build/substrate-engine"
@@ -19,8 +19,8 @@ SUITES=(
     checkpoint-test claims-table-test contract-drift-test doctor-attestation-test
     engine-rollback-test gitleaks-deep-test gitleaks-scope-test golden-ledger-test
     golden-vectors-test init-idempotent-test kit-embed-test maintenance-test parity-test
-    profile-workspace-test receipt-cross-engine-test receipt-test release-lane-test
-    restructure-test vcs-hooks-test vendor-drift-test vendor-source-test
+    profile-workspace-test receipt-cross-engine-test receipt-test release-bump-test release-lane-test release-wait-gate-test
+    restructure-test toolchain-parity-test vcs-hooks-test vendor-drift-test vendor-source-test
 )
 
 # gitleaks costs ~4.7s of fixed rule compilation per invocation (measured on an EMPTY dir)
@@ -55,11 +55,9 @@ fi
 run_dir=$(mktemp -d) || exit 2
 trap 'rm -rf "$run_dir"' EXIT
 
-# Dropping the whole PATH entry would take its ~130 siblings (shellcheck, actionlint)
-# with it, so re-expose them as symlinks and omit only gitleaks itself.
-shim="$run_dir/nogl-bin"
+shim="$run_dir/stub-bin"
 mkdir -p "$shim" || exit 2
-nogl_path=""
+fixture_path=""
 IFS=: read -r -a path_parts <<< "$PATH"
 for d in "${path_parts[@]}"; do
     if [ -x "$d/gitleaks" ]; then
@@ -70,16 +68,24 @@ for d in "${path_parts[@]}"; do
         done
         continue
     fi
-    nogl_path="${nogl_path:+$nogl_path:}$d"
+    fixture_path="${fixture_path:+$fixture_path:}$d"
 done
-nogl_path="$shim:$nogl_path"
+cat > "$shim/gitleaks" <<'SH'
+#!/usr/bin/env bash
+if [ "${1:-}" = version ]; then
+    printf '8.30.1-test\n'
+fi
+exit 0
+SH
+chmod +x "$shim/gitleaks"
+fixture_path="$shim:$fixture_path"
 
 started=$(date +%s%N)
 running=0
 for s in "${selected[@]}"; do
     (
         suite_path="$PATH"
-        case "$KEEP_GITLEAKS" in *" $s "*) ;; *) suite_path="$nogl_path" ;; esac
+        case "$KEEP_GITLEAKS" in *" $s "*) ;; *) suite_path="$fixture_path" ;; esac
         t0=$(date +%s%N)
         env PATH="$suite_path" bash "test/$s.sh" > "$run_dir/$s.out" 2>&1
         rc=$?

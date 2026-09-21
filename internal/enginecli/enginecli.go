@@ -40,7 +40,7 @@ func Run(args []string, version string) int {
 		hook.EngineVersion = version
 		return hook.Dispatch(context.Background(), args[1], args[2:], os.Stdin)
 	case "gate":
-		return gate.Run(context.Background(), args[1:])
+		return gate.Run(context.Background(), args[1:], version)
 	case "checkpoint":
 		rc := transaction.RunCheckpoint(context.Background(), args[1:])
 		if rc == transaction.ExitPreflight {

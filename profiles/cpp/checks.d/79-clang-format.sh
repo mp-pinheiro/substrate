@@ -15,7 +15,7 @@ mapfile -t files < <(profile_files cpp cpp)
 
 [ ${#files[@]} -gt 0 ] || exit 0
 
-require_bin_ci clang-format "profile toolchain — see profiles/cpp/profile.json" || exit 0
+require_bin clang-format "profile toolchain — see profiles/cpp/profile.json"
 
 out=$(clang-format --dry-run -Werror -style="file:$REPO_ROOT/.clang-format" "${files[@]}" 2>&1)
 rc=$?

@@ -10,7 +10,7 @@ mapfile -t files < <(profile_files svelte "" scan_target)
 
 [ ${#files[@]} -gt 0 ] || exit 0
 
-require_bin_ci svelte-check "profile toolchain — see profiles/svelte/profile.json" || exit 0
+require_bin svelte-check "profile toolchain — see profiles/svelte/profile.json"
 
 # --no-tsconfig pins the verdict: without it svelte-check walks UP from gate:allow-comment
 # the workspace for the nearest tsconfig, so a file outside the repo could

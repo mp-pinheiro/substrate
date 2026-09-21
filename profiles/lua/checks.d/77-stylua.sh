@@ -10,7 +10,7 @@ mapfile -t files < <(profile_files lua lua)
 
 [ ${#files[@]} -gt 0 ] || exit 0
 
-require_bin_ci stylua "prebuilt binary — https://github.com/JohnnyMorganz/StyLua/releases" || exit 0
+require_bin stylua "prebuilt binary — https://github.com/JohnnyMorganz/StyLua/releases"
 
 st_config="$REPO_ROOT/.stylua.toml"
 if [ ! -f "$st_config" ]; then

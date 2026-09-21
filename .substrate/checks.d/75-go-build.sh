@@ -9,7 +9,7 @@ if [ "$workspace_rc" -eq 1 ]; then
     exit 0
 fi
 [ "$workspace_rc" -eq 0 ] || exit "$workspace_rc"
-require_bin_ci go "profile toolchain — see profiles/go/profile.json" || exit 0
+require_bin go "profile toolchain — see profiles/go/profile.json"
 
 build_output=$(mktemp -d) || die_infra "could not create isolated go build output"
 trap 'rm -rf "$build_output"' EXIT

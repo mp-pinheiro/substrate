@@ -14,6 +14,22 @@ func emitFailure(flags PreflightFlags, report recovery.Report, rc int) int {
 	recovery.Emit(report, flags.JSON)
 	return rc
 }
+func engineIdentityFailure(flags PreflightFlags, err error) int {
+	report := recovery.Report{
+		Status:  "blocked",
+		Code:    "gate.infrastructure",
+		Owner:   "user",
+		Retry:   "terminal",
+		Summary: "gate engine provenance does not match the vendored kit",
+		Details: []string{err.Error()},
+		Next:    "install the engine pinned by .substrate/engine.json, then rerun the gate",
+	}
+	if flags.JSON {
+		return emitFailure(flags, report, 12)
+	}
+	fmt.Fprintf(os.Stderr, "gate: %v\n", err)
+	return 12
+}
 
 func gateFailure(flags PreflightFlags, results []CheckResult, ratchet *RatchetResult) recovery.Report {
 	details := make([]string, 0)
@@ -56,7 +72,7 @@ func ratchetWarnings(r *RatchetResult) []string {
 	return append([]string(nil), r.BudgetWarn...)
 }
 
-func Run(ctx context.Context, args []string) int {
+func Run(ctx context.Context, args []string, version string) int {
 	subDir, repoRoot, err := ResolveRoots()
 	if err != nil {
 		if containsJSON(args) {
@@ -74,6 +90,13 @@ func Run(ctx context.Context, args []string) int {
 			fmt.Fprintf(os.Stderr, "gate: %v\n", err)
 		}
 		return 12
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		return engineIdentityFailure(flags, fmt.Errorf("engine provenance: resolve executable: %w", err))
+	}
+	if err := verifyEngineIdentity(repoRoot, version, executable); err != nil {
+		return engineIdentityFailure(flags, err)
 	}
 	for _, r := range rest {
 		if r == "--list-checks" {

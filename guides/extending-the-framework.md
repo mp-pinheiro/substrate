@@ -4,7 +4,7 @@ How to add checks and hooks without weakening the system, and how the kit lands 
 
 ## Design rules
 
-1. **Fail closed.** A detector that breaks must fail the gate, never read as "no findings". Exit `1` = findings, `>=2` = infrastructure failure; the runner fails the gate with `cannot pass blind`. Never `2>/dev/null` a detector; missing tools warn-skip locally only where CI is guaranteed to run the check (`require_bin_ci`).
+1. **Fail closed.** A detector that breaks or is unavailable must fail the gate locally and in CI. Exit `1` = findings, `>=2` = infrastructure failure; the runner fails the gate with `cannot pass blind`. Never discard detector errors or condition enforcement on `CI`.
 2. **Block-and-report, never silently mutate.** Hooks reject with the offending lines and the fix; they do not rewrite the agent's output. The rejection message is a prompt — write it so the reader knows exactly what to do instead.
 3. **Ratchet, don't absolutize.** Brownfield debt gets grandfathered in `substrate-baseline.json`; only regressions fail. The writer refuses on a red gate; loosening requires `--accept-regression` and a recorded reason committed to the baseline diff. `ratchet.never_accept` forbids accepting specific metrics. File size follows the same rule: `budgets.max_file_lines` is a target whose breach count (`oversized_files`) is ratcheted, and regression lines show target headroom.
 4. **Escape hatches are line-scoped and visible in diffs** (`gate:allow-*` markers, the `unscanned` ledger). Never add a config-wide off switch.
@@ -28,7 +28,7 @@ set -uo pipefail
 # shellcheck source=../gate-lib.sh
 source "$SUBSTRATE_DIR/gate-lib.sh"
 
-require_bin_ci mytool "install: https://..." || exit 0
+require_bin mytool "install: https://..."
 out=$(mytool --pinned-config "$SUBSTRATE_DIR/profiles/x/templates/cfg" ...) || die_infra "mytool failed — the gate cannot pass blind"
 [ -z "$findings" ] || { printf '%s\n' "$findings"; exit 1; }
 metric myratchet "$value"

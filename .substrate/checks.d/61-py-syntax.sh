@@ -10,7 +10,7 @@ mapfile -t files < <(profile_files python)
 
 [ ${#files[@]} -gt 0 ] || exit 0
 
-require_bin_ci python3 "profile toolchain — see profiles/python/profile.json" || exit 0
+require_bin python3 "profile toolchain — see profiles/python/profile.json"
 
 cache=$(mktemp -d)
 export PYTHONPYCACHEPREFIX="$cache"

@@ -17,7 +17,7 @@ mapfile -t files < <(profile_files typescript typescript)
 
 # global depcruise, pinned by the ci install line (bunx would re-resolve gate:allow-comment
 # the latest release on every run — version drift in the verdict path).
-require_bin_ci depcruise "profile toolchain — see profiles/typescript/profile.json" || exit 0
+require_bin depcruise "profile toolchain — see profiles/typescript/profile.json"
 
 errf=$(mktemp)
 out=$(depcruise --config "$REPO_ROOT/.dependency-cruiser.cjs" --output-type json "${files[@]}" 2>"$errf")

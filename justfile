@@ -9,6 +9,9 @@ battery *ARGS:
 engine:
     go build -trimpath -buildvcs=false -ldflags "-X main.version=$(cat VERSION)" -o build/substrate-engine ./cmd/substrate-engine
 
+bump level:
+    core/release-bump.sh "{{ level }}"
+
 cli:
     go build -trimpath -buildvcs=false -ldflags "-X main.version=$(cat VERSION)" -o build/substrate ./cmd/substrate
 

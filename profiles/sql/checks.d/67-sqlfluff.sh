@@ -10,7 +10,7 @@ mapfile -t files < <(profile_files sql)
 
 [ ${#files[@]} -gt 0 ] || exit 0
 
-require_bin_ci sqlfluff "profile toolchain — see profiles/sql/profile.json" || exit 0
+require_bin sqlfluff "profile toolchain — see profiles/sql/profile.json"
 
 sf_config="$REPO_ROOT/.sqlfluff"
 if [ ! -f "$sf_config" ]; then

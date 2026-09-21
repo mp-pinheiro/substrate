@@ -13,7 +13,7 @@ if [ ${#files[@]} -eq 0 ]; then
     exit 0
 fi
 
-require_bin_ci vulture "pipx install vulture" || exit 0
+require_bin vulture "pipx install vulture"
 
 out=$(vulture --min-confidence 80 "${files[@]}" 2>&1)
 rc=$?

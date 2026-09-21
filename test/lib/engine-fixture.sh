@@ -31,13 +31,9 @@ engine_fixture_sdk() {
 
 engine_build() {
     local fail_fn="$1" label="$2" version="${3:-}" dir
+    [ -n "$version" ] || version=$(cat "$KIT_ROOT/VERSION")
     dir=$(mktemp -d) || "$fail_fn" "$label build dir"
-    if [ -n "$version" ]; then
-        ( cd "$KIT_ROOT" && go build -trimpath -buildvcs=false -ldflags "-X main.version=$version" -o "$dir/substrate-engine" ./cmd/substrate-engine ) \
-            || "$fail_fn" "$label engine build failed"
-    else
-        ( cd "$KIT_ROOT" && go build -trimpath -buildvcs=false -o "$dir/substrate-engine" ./cmd/substrate-engine ) \
-            || "$fail_fn" "$label engine build failed"
-    fi
+    ( cd "$KIT_ROOT" && go build -trimpath -buildvcs=false -ldflags "-X main.version=$version" -o "$dir/substrate-engine" ./cmd/substrate-engine ) \
+        || "$fail_fn" "$label engine build failed"
     printf '%s\n' "$dir/substrate-engine"
 }

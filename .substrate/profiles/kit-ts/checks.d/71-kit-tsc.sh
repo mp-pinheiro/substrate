@@ -11,7 +11,7 @@ files=()
 mapfile -t files < <(profile_files kit-ts)
 [ ${#files[@]} -gt 0 ] || exit 0
 
-require_bin_ci bunx "bun runtime — https://bun.sh" || exit 0
+require_bin bunx "bun runtime — https://bun.sh"
 
 kit_ts_dir="$REPO_ROOT/substrate-profiles/kit-ts"
 ambient="$kit_ts_dir/types/bun-ambient.d.ts"

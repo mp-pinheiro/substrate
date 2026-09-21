@@ -9,7 +9,7 @@ mapfile -t files < <(profile_files lua lua)
 
 [ ${#files[@]} -gt 0 ] || exit 0
 
-require_bin_ci luacheck "profile toolchain — see profiles/lua/profile.json" || exit 0
+require_bin luacheck "profile toolchain — see profiles/lua/profile.json"
 
 if [ -f "$REPO_ROOT/.luacheckrc" ]; then
     lc_args=(--config "$REPO_ROOT/.luacheckrc")

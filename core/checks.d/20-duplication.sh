@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 # Copy/paste detection over claimed source files (jscpd). Ratcheted via dup_pct.
-# Local jscpd binary preferred (offline-safe); bunx fallback fetches on a cold
-# cache — absent locally = loud skip, absent in CI = fatal (toolchain broken).
 set -uo pipefail
 # shellcheck source=../gate-lib.sh
 source "$SUBSTRATE_DIR/gate-lib.sh"
@@ -9,9 +7,18 @@ source "$SUBSTRATE_DIR/gate-lib.sh"
 if command -v jscpd >/dev/null 2>&1; then
     JSCPD=(jscpd)
 else
-    require_bin_ci bunx "install bun: https://bun.sh (or: bun install -g jscpd@5.0.14)" || exit 0
+    require_bin bunx "install bun: https://bun.sh (or: bun install -g jscpd@5.0.14)"
     JSCPD=(bunx --yes jscpd@5.0.14)
 fi
+version_out=$("${JSCPD[@]}" --version 2>&1)
+version_rc=$?
+if [ "$version_rc" -ne 0 ]; then
+    die_infra "jscpd version probe failed (rc=$version_rc) — install jscpd 5.0.14"
+fi
+case "$version_out" in
+    "cpd 5.0.14"|"jscpd 5.0.14"|"5.0.14") ;;
+    *) die_infra "jscpd 5.0.14 is required, found: $version_out" ;;
+esac
 
 files=()
 # Managed files are generated mirrors; their canonical source remains in scope.
