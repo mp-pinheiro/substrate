@@ -14,17 +14,17 @@ func TestVerifyEngineIdentity(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name        string
-		source      string
-		version     string
-		revision    string
-		alterEngine bool
-		wantError   string
+		name       string
+		source     string
+		version    string
+		revision   string
+		pinVersion string
+		wantError  string
 	}{
 		{name: "worktree match", source: "worktree", version: "0.1.0", revision: "worktree"},
 		{name: "worktree version mismatch", source: "worktree", version: "0.0.0-dev", revision: "worktree", wantError: "worktree requires"},
 		{name: "trunk match", source: "trunk", version: "0.1.0", revision: strings.Repeat("a", 40)},
-		{name: "trunk binary mismatch", source: "trunk", version: "0.1.0", revision: strings.Repeat("a", 40), alterEngine: true, wantError: "running engine sha256"},
+		{name: "trunk pin lifecycle drift", source: "trunk", version: "0.1.0", revision: strings.Repeat("a", 40), pinVersion: "0.0.9"},
 		{name: "trunk revision malformed", source: "trunk", version: "0.1.0", revision: "main", wantError: "invalid trunk kitRevision"},
 		{name: "release match", source: "release", version: "0.1.0+release", revision: "0.1.0"},
 		{name: "release module match", source: "release", version: "0.1.0+module", revision: "0.1.0"},
@@ -46,13 +46,12 @@ func TestVerifyEngineIdentity(t *testing.T) {
 				t.Fatal(err)
 			}
 			sum := sha256.Sum256(original)
-			writeJSON(t, filepath.Join(substrateDir, "vendor.json"), vendorIdentity{KitRevision: tt.revision, Source: tt.source, Version: "0.1.0"})
-			writeJSON(t, filepath.Join(substrateDir, "engine.json"), engineIdentity{Version: "0.1.0", BinarySHA256: hex.EncodeToString(sum[:])})
-			if tt.alterEngine {
-				if err := os.WriteFile(executable, []byte("other engine"), 0o755); err != nil {
-					t.Fatal(err)
-				}
+			pinVersion := tt.pinVersion
+			if pinVersion == "" {
+				pinVersion = "0.1.0"
 			}
+			writeJSON(t, filepath.Join(substrateDir, "vendor.json"), vendorIdentity{KitRevision: tt.revision, Source: tt.source, Version: "0.1.0"})
+			writeJSON(t, filepath.Join(substrateDir, "engine.json"), engineIdentity{Version: pinVersion, BinarySHA256: hex.EncodeToString(sum[:])})
 
 			err := verifyEngineIdentity(root, tt.version, executable)
 			if tt.wantError == "" {

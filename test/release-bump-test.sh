@@ -43,10 +43,10 @@ SH
     cat > "$root/bin/substrate" <<'SH'
 #!/usr/bin/env bash
 [ "${1:-}" = update ] || exit 2
-[ "${FAIL_UPDATE:-0}" = 0 ] || exit 1
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cp "$root/VERSION" "$root/.substrate/VERSION"
 cp "$root/engine.json" "$root/.substrate/engine.json"
+[ "${FAIL_UPDATE:-0}" = 0 ] || exit 1
 SH
     chmod +x "$root/bin/substrate"
     git -C "$root" init -q -b main
@@ -71,6 +71,8 @@ new_repo "$repo" 1.2.3
 PATH="$repo/fake-bin:$PATH" PIN_VERSION=1.2.4 FAIL_UPDATE=1 "$repo/core/release-bump.sh" patch > "$WORK/rollback.out" 2>&1 && fail "failed guarded update was accepted"
 [ "$(cat "$repo/VERSION")" = 1.2.3 ] || fail "failed guarded update did not restore VERSION"
 grep -q '"version":"1.2.3"' "$repo/engine.json" || fail "failed guarded update did not restore engine pin"
+cmp "$repo/VERSION" "$repo/.substrate/VERSION" || fail "failed guarded update did not restore vendored VERSION"
+cmp "$repo/engine.json" "$repo/.substrate/engine.json" || fail "failed guarded update did not restore vendored engine pin"
 
 repo="$WORK/refuse"
 new_repo "$repo" 2.0.0

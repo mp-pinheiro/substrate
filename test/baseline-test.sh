@@ -232,3 +232,13 @@ jq -e '(.metrics | has("max_file_lines") | not) and (.direction | has("max_file_
 
 printf 'baseline-test: oversized_files count ratchet and legacy migration green\n'
 ok "oversized-count ratchet, max_file_lines rejection, and legacy migration"
+
+jq '.metrics.blind_metric = 1 | .direction.blind_metric = "lo"' substrate-baseline.json > substrate-baseline.json.tmp \
+    && mv substrate-baseline.json.tmp substrate-baseline.json \
+    || fail "missing-metric baseline seed failed"
+if substrate-engine gate > "$T/missing-metric.out" 2>&1; then
+    fail "gate accepted a missing global baseline metric"
+fi
+grep -Fq 'blind_metric: metric missing from current run — cannot pass blind' "$T/missing-metric.out" \
+    || fail "missing global metric failure was not actionable"
+ok "missing global baseline metric fails closed"

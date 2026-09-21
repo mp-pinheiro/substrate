@@ -237,14 +237,22 @@ require_bin() {
     have "$1" || die_infra "$1 is required but not installed — $2"
 }
 
+require_bin_ci() {
+    require_bin "$@"
+}
+
 
 resolve_sg() {
+    local version=""
     if have ast-grep; then
+        version=$(ast-grep --version 2>/dev/null) || version=""
+    fi
+    if [[ "$version" == *"0.45.0"* ]]; then
         SG=(ast-grep)
     elif have bunx; then
         SG=(bunx --yes @ast-grep/cli@0.45.0)
     else
-        die_infra "ast-grep is required but unavailable — install @ast-grep/cli or bun"
+        die_infra "ast-grep 0.45.0 is required — install @ast-grep/cli@0.45.0 or bun"
     fi
 }
 

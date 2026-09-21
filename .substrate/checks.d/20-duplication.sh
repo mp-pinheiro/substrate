@@ -4,21 +4,17 @@ set -uo pipefail
 # shellcheck source=../gate-lib.sh
 source "$SUBSTRATE_DIR/gate-lib.sh"
 
+JSCPD=()
 if command -v jscpd >/dev/null 2>&1; then
-    JSCPD=(jscpd)
-else
+    version_out=$(jscpd --version 2>/dev/null) || version_out=""
+    if [[ "$version_out" == *"5.0.14"* ]]; then
+        JSCPD=(jscpd)
+    fi
+fi
+if [ ${#JSCPD[@]} -eq 0 ]; then
     require_bin bunx "install bun: https://bun.sh (or: bun install -g jscpd@5.0.14)"
     JSCPD=(bunx --yes jscpd@5.0.14)
 fi
-version_out=$("${JSCPD[@]}" --version 2>&1)
-version_rc=$?
-if [ "$version_rc" -ne 0 ]; then
-    die_infra "jscpd version probe failed (rc=$version_rc) — install jscpd 5.0.14"
-fi
-case "$version_out" in
-    "cpd 5.0.14"|"jscpd 5.0.14"|"5.0.14") ;;
-    *) die_infra "jscpd 5.0.14 is required, found: $version_out" ;;
-esac
 
 files=()
 # Managed files are generated mirrors; their canonical source remains in scope.
@@ -28,7 +24,7 @@ while IFS= read -r f; do
     [ "$first" = "# substrate-managed" ] && continue
     files+=("$f")
 done < "$INVENTORY"
-[ ${#files[@]} -eq 0 ] && exit 0
+[ ${#files[@]} -eq 0 ] && { metric dup_pct 0; exit 0; }
 
 min_tokens=$(cfg '.duplication.min_tokens')
 [ -n "$min_tokens" ] || min_tokens=35

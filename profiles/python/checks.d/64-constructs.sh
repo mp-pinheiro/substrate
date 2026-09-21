@@ -11,13 +11,7 @@ mapfile -t files < <(profile_files_ext python .py)
 [ ${#files[@]} -gt 0 ] || exit 0
 
 SG=()
-if have ast-grep; then
-    SG=(ast-grep)
-elif have bunx; then
-    SG=(bunx --yes @ast-grep/cli@0.45.0)
-else
-    die_infra "ast-grep unavailable (install ast-grep, or bun for bunx) — cannot scan constructs blind"
-fi
+resolve_sg
 
 # ast-grep run exits 1 on zero matches, so rc is meaningless — a parseable gate:allow-comment
 # JSON array on stdout is the only reliable success signal.

@@ -3,16 +3,16 @@
 package gate
 
 var RegistryDigests = map[string]string{
-	"20-duplication.sh":      "a537ed7a56fc1f842bc417e549911705aef4b5b7c52fceec1ad39d5764750047",
+	"20-duplication.sh":      "f720ad9a1c6c313a7c31007d4496ee5ad74439a7332486e3a3607f97abfa5c9d",
 	"45-contract-drift.sh":   "3f24a1739efdeaeea6c01602667d12d5e0033feca3da1016610ed101ba217f46",
 	"50-gitleaks.sh":         "468ea895c325bc7eb1d186c75f877e062fc0435f5546df19e1e2de19c09271e1",
 	"59-actionlint.sh":       "49d85296e0f1cb30fe1d7c58fdf1a56fa0c0c0af7aa82ce9c4e6780a58c7e28b",
 	"60-ruff.sh":             "6eaa847753a5b88a578c1c2f7ea8855d512d1607d2480ba8a1ca0c1b4d3fd44d",
 	"60-shellcheck.sh":       "f5bc53004d975e56be587fe1af71c5ab93f1c86e3ccf5973313a4dcae75cec65",
 	"61-py-syntax.sh":        "01d2bb78a74e218e298d0a794501c925da078fd20e51d30c01db717a6c7e3bbe",
-	"62-import-linter.sh":    "696e0b43876beb5c2bb95e40cbcc24ec5b56c020e69967d70c8654abaf0d3d78",
+	"62-import-linter.sh":    "a3fa6aa92277dfc247fde45337477e968d881be23dc35abd8bbe4e1f81fb761b",
 	"63-vulture.sh":          "bab9bfcb5492c27aa04456fb6219cd64db5a3f8ddfbe4805ffba7764d4db2121",
-	"64-constructs.sh":       "f3d21af9f2955a9a322592ac1822f4ebfc83602fc59609c6bea0152ae776d2a2",
+	"64-constructs.sh":       "a3f13728b8d4298e37602124caaacc20a0077fb7968bc2d1f34c96d37222bb9f",
 	"71-kit-tsc.sh":          "68fc1fc57bbd384796fbc9945091c164684b01bf8029ecf1018e1295ff1daffc",
 	"75-go-build.sh":         "b1270dae0bd3edd89ead3231e3083906734d6a55ac9546ea9657d8e578ebcba9",
 	"76-golangci.sh":         "53661b0df799d7c9886adb38af9c9537594824e22485ef5eb283c396b7458765",

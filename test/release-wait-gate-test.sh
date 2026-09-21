@@ -46,6 +46,11 @@ run_wait schedule "pending" 1 "$WORK/schedule.out" "$WORK/schedule.state" > "$WO
 grep -qx 'status=pending' "$WORK/schedule.out" || fail "scheduled skip did not expose pending status"
 grep -q 'nothing to publish tonight' "$WORK/schedule.log" || fail "scheduled skip was not announced"
 
+run_wait schedule "failure" 1 "$WORK/schedule-failure.out" "$WORK/schedule-failure.state" > "$WORK/schedule-failure.log" 2>&1 \
+    || fail "scheduled release did not skip a failed gate"
+grep -qx 'status=failure' "$WORK/schedule-failure.out" || fail "scheduled failure did not expose failed status"
+grep -q 'nothing to publish tonight' "$WORK/schedule-failure.log" || fail "scheduled failure skip was not announced"
+
 run_wait workflow_dispatch "pending" 1 "$WORK/timeout.out" "$WORK/timeout.state" > "$WORK/timeout.log" 2>&1 \
     && fail "manual release accepted a gate timeout"
 grep -q 'refusing release' "$WORK/timeout.log" || fail "manual timeout did not fail closed"

@@ -223,6 +223,11 @@ cmd_doctor() {
             warn "core: $bin missing (ast-grep falls back to bunx; bunx needs bun)"
         fi
     done
+    if command -v gitleaks >/dev/null 2>&1; then
+        success "core: gitleaks present"
+    else
+        warn "core: gitleaks missing — run .substrate/install-gitleaks.sh"
+    fi
     local jq_path jq_id
     if jq_path=$(command -v jq); then
         jq_id=$("$jq_path" --version 2>/dev/null) || jq_id=""
@@ -231,16 +236,22 @@ cmd_doctor() {
             *) warn "core: jq at $jq_path reports '${jq_id:-no version}' — every gate artifact is jq-1.7 serialization; a jaq/gojq/1.8 shim changes those bytes: install jq 1.7" ;;
         esac
     fi
-    local pkg
+    local pkg expected identity
     for bin in ast-grep jscpd; do
         case "$bin" in
-            ast-grep) pkg="@ast-grep/cli" ;;
-            *) pkg="$bin" ;;
+            ast-grep) pkg="@ast-grep/cli"; expected="0.45.0" ;;
+            jscpd) pkg="jscpd"; expected="5.0.14" ;;
         esac
+        identity=""
         if command -v "$bin" >/dev/null 2>&1; then
-            success "$bin: local binary (offline-safe)"
+            identity=$("$bin" --version 2>/dev/null) || identity=""
+        fi
+        if [[ "$identity" == *"$expected"* ]]; then
+            success "$bin: pinned local binary $identity"
+        elif command -v bunx >/dev/null 2>&1; then
+            warn "$bin: '${identity:-missing}' differs from $expected — gate uses bunx --yes $pkg@$expected"
         else
-            warn "$bin: bunx fallback — gate fetches from npm on a cold cache (breaks offline); install with: bun install -g $pkg"
+            warn "$bin: $expected unavailable — install with: bun install -g $pkg@$expected"
         fi
     done
     info "kit root $KIT_ROOT"

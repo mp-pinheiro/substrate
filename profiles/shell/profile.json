@@ -13,7 +13,8 @@
     { "interpreters": ["zsh"], "as": ".zsh" }
   ],
   "toolchain": [
-    { "bin": "shellcheck", "hint": "https://github.com/koalaman/shellcheck#installing (static release needs no sudo)" }
+    { "bin": "shellcheck", "hint": "https://github.com/koalaman/shellcheck#installing (static release needs no sudo)" },
+    { "bin": "zsh", "hint": "install zsh from the system package manager" }
   ],
   "ci": [
     "sudo apt-get update -qq",

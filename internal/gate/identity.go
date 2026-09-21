@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-
-	"github.com/mp-pinheiro/substrate/internal/xshell"
 )
 
 type vendorIdentity struct {
@@ -21,7 +19,7 @@ type engineIdentity struct {
 	BinarySHA256 string `json:"binary_sha256"`
 }
 
-func verifyEngineIdentity(repoRoot, version, executable string) error {
+func verifyEngineIdentity(repoRoot, version, _ string) error {
 	vendor, err := readIdentity[vendorIdentity](filepath.Join(repoRoot, ".substrate", "vendor.json"))
 	if err != nil {
 		return err
@@ -30,8 +28,8 @@ func verifyEngineIdentity(repoRoot, version, executable string) error {
 	if err != nil {
 		return err
 	}
-	if vendor.Version == "" || pin.Version == "" || vendor.Version != pin.Version {
-		return fmt.Errorf("engine provenance mismatch: vendor version %q, pin version %q", vendor.Version, pin.Version)
+	if vendor.Version == "" || pin.Version == "" {
+		return fmt.Errorf("engine provenance incomplete: vendor version %q, pin version %q", vendor.Version, pin.Version)
 	}
 	if _, err := decodeHex(pin.BinarySHA256, 32); err != nil {
 		return fmt.Errorf("engine provenance: invalid binary_sha256: %w", err)
@@ -47,22 +45,16 @@ func verifyEngineIdentity(repoRoot, version, executable string) error {
 		if _, err := decodeHex(vendor.KitRevision, 20); err != nil {
 			return fmt.Errorf("engine provenance: invalid trunk kitRevision: %w", err)
 		}
-		if version != pin.Version {
-			return fmt.Errorf("engine provenance mismatch: running %q, pinned %q", version, pin.Version)
-		}
-		sum, err := xshell.SHA256File(executable)
-		if err != nil {
-			return fmt.Errorf("engine provenance: hash running engine: %w", err)
-		}
-		if sum != pin.BinarySHA256 {
-			return fmt.Errorf("engine provenance mismatch: running engine sha256 %s, pinned %s", sum, pin.BinarySHA256)
+		if version != vendor.Version {
+			return fmt.Errorf("engine provenance mismatch: running %q, trunk kit requires %q", version, vendor.Version)
 		}
 		return nil
 	case "release", "nightly", "module":
-		expected := vendor.Version + "+" + vendor.Source
+		release := vendor.Version + "+release"
+		nightly := vendor.Version + "+nightly"
 		module := vendor.Version + "+module"
-		if version != expected && version != module {
-			return fmt.Errorf("engine provenance mismatch: running %q, vendored kit requires %q or %q", version, expected, module)
+		if version != release && version != nightly && version != module {
+			return fmt.Errorf("engine provenance mismatch: running %q, published kit requires %q, %q, or %q", version, release, nightly, module)
 		}
 		return nil
 	default:

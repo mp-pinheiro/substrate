@@ -18,39 +18,10 @@ func WriteBaseline(baselinePath, metricsOut, configPath string, flags PreflightF
 		}
 	}
 
-	currentMetrics := make(map[string]Number)
-	currentDir := make(map[string]string)
-
-	data, err := os.ReadFile(metricsOut)
+	currentMetrics, currentDir, err := readMetricFile(metricsOut, false)
 	if err != nil {
 		warn("baseline: cannot read metrics: %v", err)
 		return 1
-	}
-
-	lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
-	for _, line := range lines {
-		if line == "" {
-			continue
-		}
-		var m struct {
-			Name  string          `json:"name"`
-			Value json.RawMessage `json:"value"`
-			Dir   string          `json:"dir"`
-		}
-		if err := json.Unmarshal([]byte(line), &m); err != nil {
-			continue
-		}
-		if m.Name == "max_file_lines" {
-			continue
-		}
-		if m.Dir != "" {
-			currentDir[m.Name] = m.Dir
-		}
-		n, err := ParseNumber(m.Value)
-		if err != nil {
-			continue
-		}
-		currentMetrics[m.Name] = n
 	}
 
 	var newBaseline map[string]interface{}

@@ -20,37 +20,12 @@ type RatchetResult struct {
 func RunRatchet(metricsOut, baselinePath, configPath string, flags PreflightFlags) (*RatchetResult, int) {
 	result := &RatchetResult{}
 
-	currentMetrics := make(map[string]Number)
-	currentDir := make(map[string]string)
-
-	data, err := os.ReadFile(metricsOut)
+	currentMetrics, currentDir, err := readMetricFile(metricsOut, true)
 	if err != nil {
 		detail := fmt.Sprintf("ratchet: cannot read metrics: %v", err)
 		warn("%s", detail)
 		result.FailureDetails = []string{detail}
 		return result, 1
-	}
-	lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
-	for _, line := range lines {
-		if line == "" {
-			continue
-		}
-		var m struct {
-			Name  string          `json:"name"`
-			Value json.RawMessage `json:"value"`
-			Dir   string          `json:"dir"`
-		}
-		if err := json.Unmarshal([]byte(line), &m); err != nil {
-			continue
-		}
-		if m.Dir != "" {
-			currentDir[m.Name] = m.Dir
-		}
-		n, err := ParseNumber(m.Value)
-		if err != nil {
-			continue
-		}
-		currentMetrics[m.Name] = n
 	}
 
 	neverAccept := getNeverAccept(configPath)
@@ -67,6 +42,23 @@ func RunRatchet(metricsOut, baselinePath, configPath string, flags PreflightFlag
 		detail := "ratchet: cannot read baseline metrics"
 		warn("%s", detail)
 		result.FailureDetails = []string{detail}
+		return result, 1
+	}
+	var missing []string
+	for name := range baseMetrics {
+		if name == "max_file_lines" || strings.Contains(name, ":") || baseDir[name] == "hi" {
+			continue
+		}
+		if _, ok := currentMetrics[name]; !ok {
+			missing = append(missing, fmt.Sprintf("%s: metric missing from current run — cannot pass blind", name))
+		}
+	}
+	if len(missing) > 0 {
+		sort.Strings(missing)
+		for _, detail := range missing {
+			warn("ratchet: %s", detail)
+		}
+		result.FailureDetails = append([]string(nil), missing...)
 		return result, 1
 	}
 
@@ -133,7 +125,7 @@ func RunRatchet(metricsOut, baselinePath, configPath string, flags PreflightFlag
 		}
 		cur, ok := currentMetrics[name]
 		if !ok {
-			cur = Number{Sign: 0, Digits: "0", Exp: 0}
+			continue
 		}
 		base := baseMetrics[name]
 		curF := cur.Float64()

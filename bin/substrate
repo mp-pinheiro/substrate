@@ -89,7 +89,7 @@ vendor_core() {
        "$KIT_ROOT"/core/report.sh "$KIT_ROOT"/core/gated-push.sh \
        "$KIT_ROOT"/core/push-gate.sh \
        "$KIT_ROOT"/core/maintenance.sh \
-       "$KIT_ROOT"/core/receipt-lib.sh \
+       "$KIT_ROOT"/core/receipt-lib.sh "$KIT_ROOT"/core/import-linter-check.sh \
        "$KIT_ROOT"/core/gitleaks-lib.sh "$KIT_ROOT"/core/gitleaks-deep.sh \
        "$KIT_ROOT"/core/install-gitleaks.sh "$KIT_ROOT"/core/install-jj.sh \
        "$KIT_ROOT"/core/install-prereqs.sh "$KIT_ROOT"/core/install-git.sh "$KIT_ROOT"/core/forge.sh \

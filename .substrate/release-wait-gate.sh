@@ -18,6 +18,11 @@ for ((attempt=1; attempt<=attempts; attempt++)); do
             exit 0
             ;;
         failure)
+            if [ "$event" = schedule ]; then
+                printf 'status=failure\n' >> "$out_file"
+                printf '::notice::gate failed for %s — nothing to publish tonight\n' "$sha"
+                exit 0
+            fi
             printf '::error::gate failed for %s — refusing release\n' "$sha" >&2
             exit 1
             ;;

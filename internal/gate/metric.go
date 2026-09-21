@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"os"
 	"strconv"
 	"strings"
 	"unicode"
@@ -231,4 +232,38 @@ func NumberMax(a, b Number) Number {
 		return b
 	}
 	return a
+}
+
+func readMetricFile(path string, includeMaxFileLines bool) (map[string]Number, map[string]string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, nil, fmt.Errorf("read metrics: %w", err)
+	}
+	metrics := make(map[string]Number)
+	directions := make(map[string]string)
+	for _, line := range strings.Split(strings.TrimSuffix(string(data), "\n"), "\n") {
+		if line == "" {
+			continue
+		}
+		var record struct {
+			Name  string          `json:"name"`
+			Value json.RawMessage `json:"value"`
+			Dir   string          `json:"dir"`
+		}
+		if err := json.Unmarshal([]byte(line), &record); err != nil {
+			continue
+		}
+		if record.Name == "max_file_lines" && !includeMaxFileLines {
+			continue
+		}
+		if record.Dir != "" {
+			directions[record.Name] = record.Dir
+		}
+		number, err := ParseNumber(record.Value)
+		if err != nil {
+			continue
+		}
+		metrics[record.Name] = number
+	}
+	return metrics, directions, nil
 }

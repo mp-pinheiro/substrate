@@ -40,18 +40,22 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 cp "$root/VERSION" "$work/VERSION.old"
 cp "$root/engine.json" "$work/engine.json.old"
+cp -a "$root/.substrate" "$work/substrate.old"
 printf '%s\n' "$next" > "$work/VERSION"
 (
     cd "$root"
-    go build -trimpath -buildvcs=false -ldflags "-X main.version=$next" -o "$work/substrate-engine" ./cmd/substrate-engine
+    GOTOOLCHAIN=go1.27.1 CGO_ENABLED=1 go build -trimpath -buildvcs=false \
+        -ldflags "-X main.version=$next" -o "$work/substrate-engine" ./cmd/substrate-engine
 )
 "$work/substrate-engine" pin emit > "$work/engine.json"
 mv "$work/VERSION" "$root/VERSION"
 mv "$work/engine.json" "$root/engine.json"
-if ! PATH="$work:$PATH" SUBSTRATE_ENGINE_BIN="$work/substrate-engine" \
+if ! PATH="$work:$PATH" SUBSTRATE_ENGINE_BIN="$work/substrate-engine" SUBSTRATE_NO_USER_HARNESS=1 \
     "$root/bin/substrate" update --apply --from-worktree; then
     mv "$work/VERSION.old" "$root/VERSION"
     mv "$work/engine.json.old" "$root/engine.json"
+    rm -rf "$root/.substrate"
+    mv "$work/substrate.old" "$root/.substrate"
     exit 1
 fi
 mkdir -p "$root/build"
