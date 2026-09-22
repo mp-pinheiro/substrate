@@ -28,8 +28,16 @@ func RunRatchet(metricsOut, baselinePath, configPath string, flags PreflightFlag
 		return result, 1
 	}
 
-	neverAccept := getNeverAccept(configPath)
-	budgets := getBudgets(configPath)
+	config := loadRatchetConfig(configPath)
+	budgets := config.Budgets
+	neverAccept := make(map[string]bool, len(config.Ratchet.NeverAccept))
+	for _, key := range config.Ratchet.NeverAccept {
+		neverAccept[key] = true
+	}
+	activeProfiles := make(map[string]bool, len(config.Profiles))
+	for _, profile := range config.Profiles {
+		activeProfiles[profile] = true
+	}
 
 	if _, err := os.Stat(baselinePath); os.IsNotExist(err) {
 		total := len(currentMetrics)
@@ -47,6 +55,9 @@ func RunRatchet(metricsOut, baselinePath, configPath string, flags PreflightFlag
 	var missing []string
 	for name := range baseMetrics {
 		if name == "max_file_lines" || strings.Contains(name, ":") || baseDir[name] == "hi" {
+			continue
+		}
+		if owner := metricProfileOwner(name); owner != "" && !activeProfiles[owner] {
 			continue
 		}
 		if _, ok := currentMetrics[name]; !ok {
@@ -255,38 +266,35 @@ func metricKey(line string) string {
 	return line[:index]
 }
 
-func getNeverAccept(configPath string) map[string]bool {
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return nil
-	}
-	var cfg struct {
-		Ratchet struct {
-			NeverAccept []string `json:"never_accept"`
-		} `json:"ratchet"`
-	}
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return nil
-	}
-	m := make(map[string]bool)
-	for _, k := range cfg.Ratchet.NeverAccept {
-		m[k] = true
-	}
-	return m
+type ratchetConfig struct {
+	Profiles []string           `json:"profiles"`
+	Budgets  map[string]float64 `json:"budgets"`
+	Ratchet  struct {
+		NeverAccept []string `json:"never_accept"`
+	} `json:"ratchet"`
 }
 
-func getBudgets(configPath string) map[string]float64 {
-	data, err := os.ReadFile(configPath)
+func loadRatchetConfig(path string) ratchetConfig {
+	var config ratchetConfig
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil
+		return config
 	}
-	var cfg struct {
-		Budgets map[string]float64 `json:"budgets"`
+	if err := json.Unmarshal(data, &config); err != nil {
+		return ratchetConfig{}
 	}
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return nil
+	return config
+}
+
+func metricProfileOwner(name string) string {
+	switch name {
+	case "dead_code":
+		return "python"
+	case "dbt_undocumented":
+		return "dbt"
+	default:
+		return ""
 	}
-	return cfg.Budgets
 }
 
 func loadBaseline(path string) (map[string]Number, map[string]string, error) {

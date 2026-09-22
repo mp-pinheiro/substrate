@@ -121,7 +121,15 @@ if [ "$bash_pg_rc" -eq "$go_pg_rc" ] && [ "$bash_pg_rc" -eq 0 ]; then
     printf '  [ok] push-gate: both legs rc=0\n'
     pass=$((pass + 1))
 else
-    fail_fn "push-gate: exit code mismatch: bash=$bash_pg_rc go=$go_pg_rc"
+    printf '%s\n' '--- bash maintenance stderr' >&2
+    cat "$WORK/bash-push-maint.err" >&2
+    printf '%s\n' '--- bash push stderr' >&2
+    cat "$WORK/bash-push.err" >&2
+    printf '%s\n' '--- go maintenance stderr' >&2
+    cat "$WORK/go-push-maint.err" >&2
+    printf '%s\n' '--- go push stderr' >&2
+    cat "$WORK/go-push.err" >&2
+    fail_fn "push-gate: expected rc=0: bash=$bash_pg_rc go=$go_pg_rc"
 fi
 
 # ── Scenario 5: dirty-baseline overlap refusal ───────────────
