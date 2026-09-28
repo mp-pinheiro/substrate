@@ -13,6 +13,7 @@ declare const Bun: {
 			stderr: "pipe";
 			signal?: AbortSignal;
 			detached?: boolean;
+			env?: Record<string, string | undefined>;
 		},
 	): {
 		pid: number;
@@ -34,6 +35,7 @@ declare module "node:fs" {
 	export function readFileSync(path: string, encoding: string): string;
 	export function readFileSync(path: string): Uint8Array;
 	export function lstatSync(path: string): { isSymbolicLink(): boolean };
+	export function statSync(path: string): { isDirectory(): boolean };
 	export function realpathSync(path: string): string;
 	export function existsSync(path: string): boolean;
 	export function mkdirSync(path: string, options?: { recursive?: boolean; mode?: number }): string | undefined;

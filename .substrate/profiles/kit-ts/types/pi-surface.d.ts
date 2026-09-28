@@ -42,6 +42,7 @@ declare module "@oh-my-pi/pi-coding-agent" {
 		typebox: {
 			Type: {
 				String(options?: Record<string, unknown>): unknown;
+				Boolean(options?: Record<string, unknown>): unknown;
 				Object(
 					shape: Record<string, unknown>,
 					options?: Record<string, unknown>,
