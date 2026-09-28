@@ -18,11 +18,84 @@ if [ ${#plans[@]} -eq 0 ]; then
 fi
 [ ${#plans[@]} -gt 0 ] || { printf 'audit: no plans found\n'; exit 0; }
 
-overall_rc=0
-for plan in "${plans[@]}"; do
-    [ -f "$plan" ] || { printf 'audit: %s: no such plan\n' "$plan" >&2; overall_rc=1; continue; }
+delegate_matrix=0
+[ -n "${GITHUB_RUN_ID:-}" ] && delegate_matrix=1
+max_jobs=${SUBSTRATE_AUDIT_JOBS:-$(nproc 2>/dev/null || echo 4)}
+[ "$max_jobs" -lt 1 ] && max_jobs=1
+unset SUBSTRATE_VENDOR_FROM_WORKTREE
+results=$(mktemp -d) || exit 2
+trap 'rm -rf "$results"' EXIT
+
+declare -A slot_of
+slots=0
+running=0
+launch() {
+    local cmd="$1" slot="$slots"
+    slot_of["$cmd"]=$slot
+    slots=$((slots + 1))
+    : >"$results/$slot.out"
+    (
+        wd=$(mktemp -d) || { echo 2 >"$results/$slot.rc"; exit 0; }
+        cp -r "$REPO_ROOT/." "$wd/" 2>/dev/null
+        cd "$wd" && bash -c "$cmd" >"$results/$slot.out" 2>&1
+        rc=$?
+        cd / && rm -rf "$wd"
+        echo "$rc" >"$results/$slot.rc"
+    ) &
+    running=$((running + 1))
+    if [ "$running" -ge "$max_jobs" ]; then
+        wait -n 2>/dev/null || true
+        running=$((running - 1))
+    fi
+}
+
+plan_state=()
+item_plan=()
+item_line=()
+item_delegated=()
+for ((p = 0; p < ${#plans[@]}; p++)); do
+    plan="${plans[$p]}"
+    [ -f "$plan" ] || { plan_state[p]=missing; continue; }
     state=$(grep -m1 '^state: ' "$plan" | cut -d' ' -f2)
+    plan_state[p]=$state
     case "$state" in
+        active | committed | draft) ;;
+        *) continue ;;
+    esac
+    in_acceptance=0
+    while IFS= read -r line; do
+        case "$line" in
+            '## Acceptance'*) in_acceptance=1; continue ;;
+            '## '*) in_acceptance=0; continue ;;
+        esac
+        [ "$in_acceptance" -eq 1 ] || continue
+        case "$line" in
+            '- ['*']'*' :: '*) ;;
+            *) continue ;;
+        esac
+        item_plan+=("$p")
+        item_line+=("$line")
+        rest="${line:6}"
+        cmd="${rest#* :: }"
+        if [ "$delegate_matrix" -eq 1 ] && [[ "$cmd" == *"test/matrix.sh"* ]]; then
+            item_delegated+=(1)
+        else
+            item_delegated+=(0)
+            [ -n "${slot_of[$cmd]+set}" ] || launch "$cmd"
+        fi
+    done < "$plan"
+done
+
+overall_rc=0
+for ((p = 0; p < ${#plans[@]}; p++)); do
+    plan="${plans[$p]}"
+    state="${plan_state[$p]}"
+    case "$state" in
+        missing)
+            printf 'audit: %s: no such plan\n' "$plan" >&2
+            overall_rc=1
+            continue
+            ;;
         superseded | abandoned)
             printf '=== %s (%s) — skipped\n' "$plan" "$state"
             continue
@@ -36,77 +109,29 @@ for plan in "${plans[@]}"; do
     esac
 
     printf '=== %s (%s)\n' "$plan" "$state"
-    pass=0 pending=0 regressed=0 unverifiable=0 delegated=0 in_acceptance=0
-    # On CI, matrix oracles delegate to the profile-matrix job (needs:
-    # [gate, profile-matrix] guarantees all passed before this runs).
-    delegate_matrix=0
-    [ -n "${GITHUB_RUN_ID:-}" ] && delegate_matrix=1
-    items=()
-    while IFS= read -r line; do
-        case "$line" in
-            '## Acceptance'*) in_acceptance=1; continue ;;
-            '## '*) in_acceptance=0; continue ;;
-        esac
-        [ "$in_acceptance" -eq 1 ] || continue
-        case "$line" in
-            '- ['*']'*' :: '*) ;;
-            *) continue ;;
-        esac
-        items+=("$line")
-    done < "$plan"
-
-    # Partition: delegate matrix oracles on CI, keep the rest active
+    pass=0 pending=0 regressed=0 unverifiable=0 delegated=0
     active=()
-    for ((i = 0; i < ${#items[@]}; i++)); do
-        rest="${items[$i]:6}"
-        cmd="${rest#* :: }"
-        if [ "$delegate_matrix" -eq 1 ] && [[ "$cmd" == *"test/matrix.sh"* ]]; then
+    for ((i = 0; i < ${#item_line[@]}; i++)); do
+        [ "${item_plan[$i]}" -eq "$p" ] || continue
+        if [ "${item_delegated[$i]}" -eq 1 ]; then
+            rest="${item_line[$i]:6}"
             printf '  [~~] %s — DELEGATED (profile-matrix CI)\n' "${rest%% :: *}"
             delegated=$((delegated + 1))
         else
-            active+=("${items[$i]}")
+            active+=("${item_line[$i]}")
         fi
     done
 
-    n=${#active[@]}
-    if [ "$n" -eq 0 ]; then
-        printf '  audit: %d passing, %d pending, %d regressed, %d unverifiable, %d delegated\n' "$pass" "$pending" "$regressed" "$unverifiable" "$delegated"
-        [ "$regressed" -eq 0 ] || overall_rc=1
-        continue
-    fi
-
-    max_jobs=${SUBSTRATE_AUDIT_JOBS:-$(nproc 2>/dev/null || echo 4)}
-    [ "$max_jobs" -lt 1 ] && max_jobs=1
-    out_files=()
-    rc_files=()
-    wds=()
-    running=0
-    unset SUBSTRATE_VENDOR_FROM_WORKTREE
-    for ((i = 0; i < n; i++)); do
-        rest="${active[$i]:6}"
-        cmd="${rest#* :: }"
-        out_files[$i]=$(mktemp)
-        rc_files[$i]=$(mktemp)
-        wds[$i]=$(mktemp -d)
-        cp -r "$REPO_ROOT/." "${wds[$i]}/" 2>/dev/null
-        ( cd "${wds[$i]}" && bash -c "$cmd" >"${out_files[$i]}" 2>&1; echo "$?" >"${rc_files[$i]}" ) &
-        running=$((running + 1))
-        if [ "$running" -ge "$max_jobs" ]; then
-            wait -n 2>/dev/null || true
-            running=$((running - 1))
-        fi
-    done
-
-    for ((i = 0; i < n; i++)); do
-        while [ ! -s "${rc_files[$i]}" ]; do sleep 0.1; done
-        cmd_rc=$(cat "${rc_files[$i]}")
+    for ((i = 0; i < ${#active[@]}; i++)); do
         line="${active[$i]}"
         box="${line:3:1}"
         rest="${line:6}"
         claim="${rest%% :: *}"
         cmd="${rest#* :: }"
-        out=$(cat "${out_files[$i]}")
-        rm -rf "${out_files[$i]}" "${rc_files[$i]}" "${wds[$i]}"
+        slot="${slot_of[$cmd]}"
+        while [ ! -s "$results/$slot.rc" ]; do sleep 0.1; done
+        cmd_rc=$(cat "$results/$slot.rc")
+        out=$(cat "$results/$slot.out")
         if [ "$cmd_rc" -eq 0 ]; then
             printf '  [ok] %s\n' "$claim"
             pass=$((pass + 1))
@@ -126,8 +151,8 @@ for plan in "${plans[@]}"; do
             fi
         fi
     done
-    wait 2>/dev/null
     printf '  audit: %d passing, %d pending, %d regressed, %d unverifiable, %d delegated\n' "$pass" "$pending" "$regressed" "$unverifiable" "$delegated"
     [ "$regressed" -eq 0 ] || overall_rc=1
 done
+wait 2>/dev/null
 exit "$overall_rc"
