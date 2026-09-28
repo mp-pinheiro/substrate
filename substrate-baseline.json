@@ -314,7 +314,7 @@
   "comments:test/vendor-drift-test.sh": 0,
   "comments:test/vendor-source-test.sh": 0,
   "dead_code": 0,
-  "dup_pct": 1.807423030729121,
+  "dup_pct": 1.8084825746695197,
   "oversized_files": 0
 },
   "direction": {
@@ -634,5 +634,13 @@
   "dead_code": "lo",
   "dup_pct": "lo",
   "oversized_files": "lo"
+},
+  "accepted": {
+  "dup_pct": {
+  "at": "2026-09-28",
+  "from": 1.807423030729121,
+  "reason": "Folding the engine, hook-parity and transaction-parity jobs into gate shrank the workflow, so total tokens fell while duplicated tokens stayed at 30532 in a jscpd scan of tracked files. Rejected removing an unrelated clone elsewhere because it would widen this CI change into unrelated code.",
+  "to": 1.8084825746695197
+}
 }
 }

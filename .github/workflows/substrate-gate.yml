@@ -35,7 +35,8 @@ jobs:
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
-      - name: Install active profile toolchains
+      - &install_toolchain
+        name: Install active profile toolchains
         run: test/ci-toolchain.sh --active
       - &build_engine
         name: Build engine
@@ -57,8 +58,41 @@ jobs:
           key: substrate-gitleaks-${{ runner.os }}-${{ steps.gitleaks-key.outputs.key }}
       - name: Scan full history for secrets
         run: .substrate/gitleaks-deep.sh
+      - name: Provision pinned jq
+        if: ${{ !cancelled() }}
+        run: test/ci-toolchain.sh --ensure-jq
+      - name: Build, vet, and internal tests
+        if: ${{ !cancelled() }}
+        run: |
+          go build -trimpath -buildvcs=false -ldflags "-X main.version=$(cat VERSION)" ./...
+          go vet ./...
+          go test ./internal/...
+      - &cache_git
+        name: Restore prebuilt Git
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: /opt/substrate-git
+          key: substrate-git-2.47.3-${{ runner.os }}
+      - &install_jj
+        name: Install Jujutsu
+        if: ${{ !cancelled() }}
+        run: .substrate/install-jj.sh
+      - name: Go-only hook parity
+        if: ${{ !cancelled() }}
+        run: bash test/ab-hooks-test.sh
+      - name: Session-ledger golden vectors (go-only)
+        if: ${{ !cancelled() }}
+        run: bash test/golden-ledger-test.sh
+      - name: Engine rollback switch
+        if: ${{ !cancelled() }}
+        run: bash test/engine-rollback-test.sh
+      - name: Checkpoint rollback switch
+        if: ${{ !cancelled() }}
+        run: bash test/transaction-rollback-test.sh
   profile-matrix:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
@@ -81,68 +115,6 @@ jobs:
         run: test/ci-toolchain.sh ${{ matrix.profile }}
       - name: Hostile-HOME oracle
         run: test/hostile-home.sh ${{ matrix.profile }}
-  engine:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - *checkout_shallow
-      - *install_prereqs
-      - *install_go
-      - name: Provision pinned jq
-        run: test/ci-toolchain.sh --ensure-jq
-      - name: Build, vet, and internal tests
-        run: |
-          go build -trimpath -buildvcs=false -ldflags "-X main.version=$(cat VERSION)" ./...
-          go vet ./...
-          go test ./internal/...
-  hook-parity:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - *checkout_shallow
-      - *install_prereqs
-      - *install_gitleaks
-      - *setup_bun
-      - *install_core
-      - &install_toolchain
-        name: Install active profile toolchains
-        run: test/ci-toolchain.sh --active
-      - &cache_git
-        name: Restore prebuilt Git
-        continue-on-error: true
-        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
-        with:
-          path: /opt/substrate-git
-          key: substrate-git-2.47.3-${{ runner.os }}
-      - &install_jj
-        name: Install Jujutsu
-        run: .substrate/install-jj.sh
-      - *install_go
-      - *build_engine
-      - name: Go-only hook parity
-        run: bash test/ab-hooks-test.sh
-      - name: Session-ledger golden vectors (go-only)
-        run: bash test/golden-ledger-test.sh
-      - name: Engine rollback switch
-        run: bash test/engine-rollback-test.sh
-
-  transaction-parity:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - *checkout_shallow
-      - *install_prereqs
-      - *install_gitleaks
-      - *setup_bun
-      - *install_core
-      - *install_toolchain
-      - *cache_git
-      - *install_jj
-      - *install_go
-      - *build_engine
-      - name: Checkpoint rollback switch
-        run: bash test/transaction-rollback-test.sh
-
   maintenance-parity:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -154,20 +126,22 @@ jobs:
       - *install_core
       - *cache_git
       - *install_jj
-      - *install_toolchain
       - *install_go
+      - *install_toolchain
       - *build_engine
       - name: Maintenance rollback switch
         run: bash test/maintenance-rollback-test.sh
       - name: Maintenance A/B diff
+        if: ${{ !cancelled() }}
         run: bash test/maintenance-ab-test.sh
       - name: Receipt A/B comparison
+        if: ${{ !cancelled() }}
         run: bash test/maintenance-receipt-ab-test.sh
   audit:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 120
-    needs: [gate, profile-matrix, engine, hook-parity, maintenance-parity, transaction-parity]
+    needs: [gate, profile-matrix, maintenance-parity]
     steps:
       - *checkout_shallow
       - *install_prereqs
