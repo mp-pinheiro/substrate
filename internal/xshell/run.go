@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 )
 
 type Result struct {
@@ -60,6 +61,26 @@ func run(ctx context.Context, name string, args []string, opts runOpts) (Result,
 		return result, nil
 	}
 	return result, fmt.Errorf("xshell: run %s: %w", name, err)
+}
+
+func ExitErr(res Result, err error) error {
+	if err != nil {
+		return err
+	}
+	if res.Code != 0 {
+		return fmt.Errorf("exited %d", res.Code)
+	}
+	return nil
+}
+
+func Check(res Result, err error) error {
+	if err = ExitErr(res, err); err == nil {
+		return nil
+	}
+	if msg := strings.TrimSpace(string(res.Stderr)); msg != "" {
+		return fmt.Errorf("%w: %s", err, msg)
+	}
+	return err
 }
 
 func Run(ctx context.Context, name string, args ...string) (Result, error) {

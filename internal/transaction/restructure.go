@@ -327,7 +327,7 @@ func isAllowedRestructure(change string, allowed []string) bool {
 
 func childrenChanges(ctx context.Context, repo *vcs.Repo, change string) ([]string, error) {
 	res, err := xshell.RunInC(ctx, repo.Root, "jj", "log", "-r", "children("+change+")", "--no-graph", "-T", "change_id ++ \"\\n\"")
-	if err != nil || res.Code != 0 {
+	if err = xshell.Check(res, err); err != nil {
 		return nil, fmt.Errorf("restructure: children: %w", err)
 	}
 	return splitNonEmpty(string(res.Stdout)), nil
@@ -367,7 +367,7 @@ func jjOpID(ctx context.Context, repo *vcs.Repo) string {
 
 func jjHasConflicts(ctx context.Context, repo *vcs.Repo) (bool, error) {
 	res, err := xshell.RunIn(ctx, repo.Root, "jj", "log", "-r", "conflicts()", "--no-graph", "-T", "change_id ++ \"\\n\"")
-	if err != nil || res.Code != 0 {
+	if err = xshell.Check(res, err); err != nil {
 		return true, fmt.Errorf("restructure: conflicts: %w", err)
 	}
 	return strings.TrimSpace(string(res.Stdout)) != "", nil
@@ -375,7 +375,7 @@ func jjHasConflicts(ctx context.Context, repo *vcs.Repo) (bool, error) {
 
 func jjDiffRange(ctx context.Context, repo *vcs.Repo, from, to string) (string, error) {
 	res, err := xshell.RunIn(ctx, repo.Root, "jj", "diff", "--from", from, "--to", to, "--name-only")
-	if err != nil || res.Code != 0 {
+	if err = xshell.Check(res, err); err != nil {
 		return "", fmt.Errorf("restructure: diff range: %w", err)
 	}
 	return strings.TrimSpace(string(res.Stdout)), nil

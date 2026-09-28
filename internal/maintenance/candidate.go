@@ -76,9 +76,8 @@ func OverlayWorktree(ctx context.Context, candidateDir string, dirtyPaths []stri
 			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
 				return fmt.Errorf("overlay worktree: mkdir %s: %w", filepath.Dir(path), err)
 			}
-			res, runErr := xshell.Run(ctx, "cp", "-a", srcPath, target)
-			if runErr != nil || res.Code != 0 {
-				return fmt.Errorf("overlay worktree: cp %s: %w (stderr: %s)", path, runErr, res.Stderr)
+			if err := xshell.Check(xshell.Run(ctx, "cp", "-a", srcPath, target)); err != nil {
+				return fmt.Errorf("overlay worktree: cp %s: %w", path, err)
 			}
 		}
 	}
@@ -94,13 +93,11 @@ func PrepareCandidate(ctx context.Context, candidateDir, base, archive string, d
 	if base != "" {
 		res, err := xshell.Run(ctx, "git", "cat-file", "-e", base+"^{commit}")
 		if err == nil && res.Code == 0 {
-			archiveRes, archErr := xshell.Run(ctx, "git", "archive", "--format=tar", "--output="+archive, base)
-			if archErr != nil || archiveRes.Code != 0 {
-				return fmt.Errorf("prepare candidate: git archive %s: %w (stderr: %s)", base, archErr, archiveRes.Stderr)
+			if err := xshell.Check(xshell.Run(ctx, "git", "archive", "--format=tar", "--output="+archive, base)); err != nil {
+				return fmt.Errorf("prepare candidate: git archive %s: %w", base, err)
 			}
-			tarRes, tarErr := xshell.Run(ctx, "tar", "-xf", archive, "-C", candidateDir)
-			if tarErr != nil || tarRes.Code != 0 {
-				return fmt.Errorf("prepare candidate: tar extract: %w (stderr: %s)", tarErr, tarRes.Stderr)
+			if err := xshell.Check(xshell.Run(ctx, "tar", "-xf", archive, "-C", candidateDir)); err != nil {
+				return fmt.Errorf("prepare candidate: tar extract: %w", err)
 			}
 			if err := PreserveModes(candidateDir); err != nil {
 				return fmt.Errorf("prepare candidate: %w", err)
@@ -122,9 +119,8 @@ func PrepareCandidate(ctx context.Context, candidateDir, base, archive string, d
 		{[]string{"-C", candidateDir, "commit", "-q", "--allow-empty", "-m", "chore: seed maintenance candidate"}},
 	}
 	for _, s := range gitSteps {
-		res, err := xshell.Run(ctx, "git", s.args...)
-		if err != nil || res.Code != 0 {
-			return fmt.Errorf("prepare candidate: git %s: %w (stderr: %s)", s.args[1], err, res.Stderr)
+		if err := xshell.Check(xshell.Run(ctx, "git", s.args...)); err != nil {
+			return fmt.Errorf("prepare candidate: git %s: %w", s.args[2], err)
 		}
 	}
 
@@ -188,17 +184,16 @@ func RenderCandidate(ctx context.Context, candidateDir, renderHome, output strin
 	if writeErr := os.WriteFile(output, combined, 0644); writeErr != nil {
 		return fmt.Errorf("render candidate: write output: %w", writeErr)
 	}
-	if runErr != nil || res.Code != 0 {
-		return fmt.Errorf("render candidate: render failed (code %d): %w (stderr: %s)", res.Code, runErr, res.Stderr)
+	if err := xshell.ExitErr(res, runErr); err != nil {
+		return fmt.Errorf("render candidate: renderer: %w", err)
 	}
 
 	return nil
 }
 
 func GateCandidate(ctx context.Context, candidateDir, output, callerHome string, c *Context) (resultErr error) {
-	addRes, addErr := xshell.Run(ctx, "git", "-C", candidateDir, "add", "-f", "-A")
-	if addErr != nil || addRes.Code != 0 {
-		return fmt.Errorf("gate candidate: git add: %w (stderr: %s)", addErr, addRes.Stderr)
+	if err := xshell.Check(xshell.Run(ctx, "git", "-C", candidateDir, "add", "-f", "-A")); err != nil {
+		return fmt.Errorf("gate candidate: git add: %w", err)
 	}
 	sourceRoot, err := os.Getwd()
 	if err != nil {
@@ -231,8 +226,8 @@ func GateCandidate(ctx context.Context, candidateDir, output, callerHome string,
 	runGate := func(args ...string) ([]byte, error) {
 		res, err := xshell.RunInEnv(ctx, candidateDir, gateEnv, bin, append([]string{"gate"}, args...)...)
 		combined := append(res.Stdout, res.Stderr...)
-		if err != nil || res.Code != 0 {
-			return combined, fmt.Errorf("gate failed (code %d): %w (stderr: %s)", res.Code, err, res.Stderr)
+		if err = xshell.ExitErr(res, err); err != nil {
+			return combined, fmt.Errorf("gate: %w", err)
 		}
 		return combined, nil
 	}
@@ -290,14 +285,13 @@ func GateCandidate(ctx context.Context, candidateDir, output, callerHome string,
 }
 
 func CandidateChanges(ctx context.Context, candidateDir string, manifest []string) ([]string, []string, error) {
-	addRes, addErr := xshell.Run(ctx, "git", "-C", candidateDir, "add", "-f", "-A")
-	if addErr != nil || addRes.Code != 0 {
-		return nil, nil, fmt.Errorf("candidate changes: git add: %w (stderr: %s)", addErr, addRes.Stderr)
+	if err := xshell.Check(xshell.Run(ctx, "git", "-C", candidateDir, "add", "-f", "-A")); err != nil {
+		return nil, nil, fmt.Errorf("candidate changes: git add: %w", err)
 	}
 
 	diffRes, diffErr := xshell.RunC(ctx, "git", "-C", candidateDir, "diff", "--cached", "--name-only", "-z", "--no-renames", "HEAD")
-	if diffErr != nil || diffRes.Code != 0 {
-		return nil, nil, fmt.Errorf("candidate changes: git diff: %w (stderr: %s)", diffErr, diffRes.Stderr)
+	if err := xshell.Check(diffRes, diffErr); err != nil {
+		return nil, nil, fmt.Errorf("candidate changes: git diff: %w", err)
 	}
 
 	parts := bytes.Split(bytes.TrimRight(diffRes.Stdout, "\x00"), []byte("\x00"))

@@ -43,11 +43,11 @@ func NewCandidate(ctx context.Context, repo *vcs.Repo, base string, ownedPaths [
 
 func (c *Candidate) buildFromRevision(ctx context.Context, repo *vcs.Repo, base string, ownedPaths []string) error {
 	// git archive the base revision into a tar, then extract into candidate dir.
-	if res, err := xshell.RunIn(ctx, repo.Root, "git", "archive", "--format=tar", "--output="+c.Archive, base); err != nil || res.Code != 0 {
-		return fmt.Errorf("candidate: git archive %s: %w (stderr: %s)", base, err, res.Stderr)
+	if err := xshell.Check(xshell.RunIn(ctx, repo.Root, "git", "archive", "--format=tar", "--output="+c.Archive, base)); err != nil {
+		return fmt.Errorf("candidate: git archive %s: %w", base, err)
 	}
-	if res, err := xshell.Run(ctx, "tar", "-xf", c.Archive, "-C", c.Dir); err != nil || res.Code != 0 {
-		return fmt.Errorf("candidate: tar extract: %w (stderr: %s)", err, res.Stderr)
+	if err := xshell.Check(xshell.Run(ctx, "tar", "-xf", c.Archive, "-C", c.Dir)); err != nil {
+		return fmt.Errorf("candidate: tar extract: %w", err)
 	}
 
 	// Overlay owned files from worktree into candidate.
@@ -120,9 +120,8 @@ func (c *Candidate) seedGitRepo(ctx context.Context) error {
 		{"git", []string{"-C", c.Dir, "commit", "-q", "--allow-empty", "-m", "chore: seed checkpoint candidate"}},
 	}
 	for _, s := range steps {
-		res, err := xshell.Run(ctx, s.name, s.args...)
-		if err != nil || res.Code != 0 {
-			return fmt.Errorf("candidate: %s: %w (stderr: %s)", s.name, err, res.Stderr)
+		if err := xshell.Check(xshell.Run(ctx, s.name, s.args...)); err != nil {
+			return fmt.Errorf("candidate: %s %s: %w", s.name, s.args[2], err)
 		}
 	}
 	return nil

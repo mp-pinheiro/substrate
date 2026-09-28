@@ -167,26 +167,16 @@ func RunMaintenance(ctx context.Context, args []string) int {
 	gateOutput := filepath.Join(c.TxDir, "gate.log")
 
 	if err := PrepareCandidate(ctx, c.CandidateDir, base, filepath.Join(c.TxDir, "base.tar"), dirtyPaths, manifest, c.Checkpoint, c.Profiles); err != nil {
-		logx.Err().Line("maintenance: prepare candidate: %v", err)
+		logx.Err().Line("maintenance: %v", err)
 		return ExitPreflight
 	}
 
 	if err := RenderCandidate(ctx, c.CandidateDir, filepath.Join(c.TxDir, "home"), renderOutput, c); err != nil {
-		logData, _ := os.ReadFile(renderOutput)
-		if len(logData) > 0 {
-			fmt.Fprintf(os.Stderr, "%s\n", string(logData))
-		}
-		logx.Err().Line("maintenance: render candidate: %v", err)
-		return ExitPreflight
+		return candidateFailure(renderOutput, err)
 	}
 
 	if err := GateCandidate(ctx, c.CandidateDir, gateOutput, os.Getenv("HOME"), c); err != nil {
-		logData, _ := os.ReadFile(gateOutput)
-		if len(logData) > 0 {
-			fmt.Fprintf(os.Stderr, "%s\n", string(logData))
-		}
-		logx.Err().Line("maintenance: gate candidate: %v", err)
-		return ExitPreflight
+		return candidateFailure(gateOutput, err)
 	}
 	if os.Getenv("SUBSTRATE_MAINTENANCE_TESTING") == "1" {
 		if hook := os.Getenv("SUBSTRATE_MAINTENANCE_TEST_HOOK"); hook != "" {
@@ -419,4 +409,12 @@ func computeCurrentDirtyFingerprint(ctx context.Context, manifest []string, vcs 
 		return ""
 	}
 	return fp
+}
+
+func candidateFailure(logPath string, err error) int {
+	if logData, _ := os.ReadFile(logPath); len(logData) > 0 {
+		fmt.Fprintf(os.Stderr, "%s\n", string(logData))
+	}
+	logx.Err().Line("maintenance: %v", err)
+	return ExitPreflight
 }

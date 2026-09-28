@@ -135,6 +135,7 @@
   "comments:internal/maintenance/apply.go": 0,
   "comments:internal/maintenance/args.go": 0,
   "comments:internal/maintenance/candidate.go": 0,
+  "comments:internal/maintenance/candidate_test.go": 0,
   "comments:internal/maintenance/commit.go": 0,
   "comments:internal/maintenance/dependencies.go": 0,
   "comments:internal/maintenance/dependencies_test.go": 0,
@@ -314,7 +315,7 @@
   "comments:test/vendor-drift-test.sh": 0,
   "comments:test/vendor-source-test.sh": 0,
   "dead_code": 0,
-  "dup_pct": 1.7906895751102856,
+  "dup_pct": 1.788146645413708,
   "oversized_files": 0
 },
   "direction": {
@@ -453,6 +454,7 @@
   "comments:internal/maintenance/apply.go": "lo",
   "comments:internal/maintenance/args.go": "lo",
   "comments:internal/maintenance/candidate.go": "lo",
+  "comments:internal/maintenance/candidate_test.go": "lo",
   "comments:internal/maintenance/commit.go": "lo",
   "comments:internal/maintenance/dependencies.go": "lo",
   "comments:internal/maintenance/dependencies_test.go": "lo",

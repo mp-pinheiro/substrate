@@ -596,12 +596,12 @@ func commitJJ(ctx context.Context, repo *vcs.Repo, message string, paths []strin
 	args := append([]string{"commit", "--message", message, "--"}, paths...)
 	res, runErr := xshell.RunIn(ctx, repo.Root, "jj", args...)
 	output := string(res.Stdout)
-	if runErr != nil || res.Code != 0 {
-		return "", output + string(res.Stderr), fmt.Errorf("jj commit rejected the transaction: %w", runErr)
+	if err := xshell.ExitErr(res, runErr); err != nil {
+		return "", output + string(res.Stderr), fmt.Errorf("jj commit rejected the transaction: %w", err)
 	}
 	revRes, revErr := xshell.RunIn(ctx, repo.Root, "jj", "log", "-r", "@-", "--no-graph", "-T", "commit_id")
-	if revErr != nil || revRes.Code != 0 {
-		return "", output, fmt.Errorf("cannot resolve commit id: %w", revErr)
+	if err := xshell.Check(revRes, revErr); err != nil {
+		return "", output, fmt.Errorf("cannot resolve commit id: %w", err)
 	}
 	return strings.TrimSpace(string(revRes.Stdout)), output, nil
 }
@@ -615,13 +615,13 @@ func commitGit(ctx context.Context, repoRoot, message string, paths []string) (s
 	commitArgs := append([]string{"commit", "--only", "-m", message, "--"}, paths...)
 	commitRes, commitErr := xshell.RunIn(ctx, repoRoot, "git", commitArgs...)
 	output := string(commitRes.Stdout)
-	if commitErr != nil || commitRes.Code != 0 {
+	if err := xshell.ExitErr(commitRes, commitErr); err != nil {
 		_, _ = xshell.RunIn(ctx, repoRoot, "git", append([]string{"reset", "--quiet", "--"}, paths...)...)
-		return "", output + string(commitRes.Stderr), fmt.Errorf("git commit rejected the transaction: %w", commitErr)
+		return "", output + string(commitRes.Stderr), fmt.Errorf("git commit rejected the transaction: %w", err)
 	}
 	revRes, revErr := xshell.RunIn(ctx, repoRoot, "git", "rev-parse", "HEAD")
-	if revErr != nil || revRes.Code != 0 {
-		return "", output, fmt.Errorf("cannot resolve commit hash: %w", revErr)
+	if err := xshell.Check(revRes, revErr); err != nil {
+		return "", output, fmt.Errorf("cannot resolve commit hash: %w", err)
 	}
 	return strings.TrimSpace(string(revRes.Stdout)), output, nil
 }
