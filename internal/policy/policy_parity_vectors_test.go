@@ -112,7 +112,9 @@ func TestEnginePolicyParityProtectCommand(t *testing.T) {
 		{name: "restructure invalid session blocked", guard: "protect-command", payload: cmdPayload("substrate restructure --session x", "")},
 		{name: "restructure session match ok", guard: "protect-command", payload: cmdPayload("substrate restructure --session s1", "s1")},
 		{name: "direct restructure.sh blocked", guard: "protect-command", payload: cmdPayload("bash .substrate/restructure.sh", "")},
-		{name: "baseline flag blocked", guard: "protect-command", payload: cmdPayload("substrate gate --update-baseline", "")},
+		{name: "baseline flag asks", guard: "protect-command", payload: cmdPayload("substrate gate --update-baseline", ""), want: LevelAsk},
+		{name: "baseline flag with env prefix asks", guard: "protect-command", payload: cmdPayload("SUBSTRATE_ENGINE_BIN=build/substrate-engine ./bin/substrate update --apply --checkpoint --accept-regression=dup_pct --reason 'denominator shrank'", ""), want: LevelAsk},
+		{name: "governed mutation outranks baseline flag ask", guard: "protect-command", payload: cmdPayload("substrate gate --update-baseline && rm -rf .substrate", ""), want: LevelBlock},
 		{
 			name: "corrupt config plus mutator blocked", guard: "protect-command", payload: cmdPayload("rm foo.txt", ""),
 			setup: func(t *testing.T, root string) { writeSubstrateJSON(t, root, "{bad") },
@@ -151,12 +153,16 @@ func TestEnginePolicyParityProtectCommand(t *testing.T) {
 			setup: func(t *testing.T, root string) { writeSubstrateJSON(t, root, `{"protected_paths":["secrets/*"]}`) },
 		},
 		{name: "top level command fallback blocked", guard: "protect-command", payload: topLevelCmdPayload("jj commit -m x")},
-		{name: "checkpoint accept-regression exempt", guard: "protect-command", payload: cmdPayload("substrate checkpoint --session s1 --accept-regression=probe:alpha", "s1")},
-		{name: "checkpoint accept-regression chained blocked", guard: "protect-command", payload: cmdPayload("substrate checkpoint --session s1 --accept-regression=a && .substrate/gate.sh --accept-regression=b", "s1")},
-		{name: "checkpoint accept-regression process substitution blocked", guard: "protect-command", payload: cmdPayload("substrate checkpoint --session s1 --accept-regression=a < <(substrate baseline --accept-regression)", "s1")},
-		{name: "checkpoint tighten flag blocked", guard: "protect-command", payload: cmdPayload("substrate checkpoint --session s1 --tighten", "s1")},
-		{name: "checkpoint accept-regression trailing newline exempt", guard: "protect-command", payload: cmdPayload("substrate checkpoint --session s1 --accept-regression=a\n", "s1")},
-		{name: "checkpoint accept-regression u3000 locale split", guard: "protect-command", payload: cmdPayload("substrate checkpoint --session s1 --accept-regression=a\u3000--tighten", "s1")},
+		{name: "checkpoint accept-regression asks", guard: "protect-command", payload: cmdPayload("substrate checkpoint --session s1 --accept-regression=probe:alpha", "s1"), want: LevelAsk},
+		{name: "checkpoint accept-regression chained blocked", guard: "protect-command", payload: cmdPayload("substrate checkpoint --session s1 --accept-regression=a && .substrate/gate.sh --accept-regression=b", "s1"), want: LevelBlock},
+		{name: "checkpoint accept-regression process substitution blocked", guard: "protect-command", payload: cmdPayload("substrate checkpoint --session s1 --accept-regression=a < <(substrate baseline --accept-regression)", "s1"), want: LevelBlock},
+		{name: "checkpoint accept-regression command substitution blocked", guard: "protect-command", payload: cmdPayload("substrate checkpoint --session s1 --accept-regression=a --reason \"$(cat /tmp/r)\"", "s1"), want: LevelBlock},
+		{name: "checkpoint accept-regression piped blocked", guard: "protect-command", payload: cmdPayload("substrate checkpoint --session s1 --accept-regression=a | tail -1", "s1"), want: LevelBlock},
+		{name: "unsanctioned program with baseline flag blocked", guard: "protect-command", payload: cmdPayload("echo x --update-baseline", ""), want: LevelBlock},
+		{name: "substrate-engine gate accept-regression asks", guard: "protect-command", payload: cmdPayload("substrate-engine gate --accept-regression=dup_pct --reason=denominator", ""), want: LevelAsk},
+		{name: "checkpoint tighten flag asks", guard: "protect-command", payload: cmdPayload("substrate checkpoint --session s1 --tighten", "s1"), want: LevelAsk},
+		{name: "checkpoint accept-regression trailing newline asks", guard: "protect-command", payload: cmdPayload("substrate checkpoint --session s1 --accept-regression=a\n", "s1"), want: LevelAsk},
+		{name: "checkpoint accept-regression u3000 locale split asks", guard: "protect-command", payload: cmdPayload("substrate checkpoint --session s1 --accept-regression=a\u3000--tighten", "s1"), want: LevelAsk},
 	}
 	runParityVectors(t, vectors)
 }

@@ -1,1 +1,1 @@
-BLOCKED: baseline mutations are checkpoint-owned; initial debt or regressions require the user to run the explicit baseline command
+blocked: Bash command moves the ratchet baseline (--accept-regression, --update-baseline or --tighten): it raises a ceiling or grandfathers debt, and the result lands in substrate-baseline.json. Approve only after reviewing the metric and the reason. This harness cannot ask the user, so the change is blocked; hand it to the user.

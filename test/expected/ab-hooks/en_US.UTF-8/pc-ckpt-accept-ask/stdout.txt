@@ -1,0 +1,1 @@
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":"Bash command moves the ratchet baseline (--accept-regression, --update-baseline or --tighten): it raises a ceiling or grandfathers debt, and the result lands in substrate-baseline.json. Approve only after reviewing the metric and the reason."}}

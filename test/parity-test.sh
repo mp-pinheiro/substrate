@@ -38,6 +38,9 @@ git clone -q "$T/repo" "$T/jj-sub"
 git -C "$T/jj-sub" config user.name substrate
 git -C "$T/jj-sub" config user.email substrate@localhost
 (cd "$T/jj-sub" && jj git init --colocate) >/dev/null 2>&1 || fail "substrate jj fixture failed"
+git clone -q "$T/repo" "$T/accept-repo"
+git -C "$T/accept-repo" config user.name substrate
+git -C "$T/accept-repo" config user.email substrate@localhost
 
 cat > "$T/omp-lifecycle.ts" <<'TS'
 import { appendFileSync, writeFileSync } from "node:fs";
@@ -211,6 +214,74 @@ jq -e '(.jjPushBlocks | map(select((.reason // "") | contains("jj-managed"))) | 
 jq -e '.status == "passed" and .source == "checkpoint"' \
     "$T/repo/.git/substrate/gate-receipt.json" >/dev/null || fail "OMP checkpoint receipt missing"
 
+cat > "$T/omp-acceptance.ts" <<'TS'
+import { writeFileSync } from "node:fs";
+
+const { bootProbe } = await import(process.argv[3]);
+const probe = await bootProbe(process.argv[2]);
+const { callAll, resultAll, writeEvent, tools, prompts } = probe;
+const repo = process.argv[4];
+const params = {
+	message: "fix(shell): accept a reviewed regression",
+	acceptRegression: ["dup_pct"],
+	acceptRegressionReason: "denominator shrank after deleting duplicated lines",
+};
+
+const silent = probe.context(repo);
+await callAll("session_start", {}, silent);
+const ownedEvent = writeEvent("owned-write", `${repo}/owned.sh`);
+await callAll("tool_call", ownedEvent, silent);
+writeFileSync(`${repo}/owned.sh`, '#!/usr/bin/env bash\nprintf "owned\\n"\nprintf "accepted\\n"\n');
+await resultAll(ownedEvent, silent);
+
+const noUI = await tools.substrate_checkpoint.execute("no-ui", params, undefined, undefined, silent);
+const promptsAfterNoUI = prompts.length;
+const declining = probe.context(repo, { hasUI: true, approve: false });
+const declined = await tools.substrate_checkpoint.execute("declined", params, undefined, undefined, declining);
+const promptsAfterDecline = prompts.length;
+const approving = probe.context(repo, { hasUI: true, approve: true });
+const approved = await tools.substrate_checkpoint.execute("approved", params, undefined, undefined, approving);
+const updateNoUI = await tools.substrate_update.execute(
+	"update-no-ui",
+	{ acceptRegression: ["dup_pct"], acceptRegressionReason: params.acceptRegressionReason },
+	undefined,
+	undefined,
+	silent,
+);
+const update = await tools.substrate_update.execute("update", {}, undefined, undefined, silent);
+
+console.log(
+	JSON.stringify({
+		noUI,
+		promptsAfterNoUI,
+		declined,
+		promptsAfterDecline,
+		prompts,
+		approved,
+		updateNoUI,
+		update,
+	}),
+);
+TS
+
+acceptance=$(PATH="$KIT_ROOT/bin:$PATH" bun "$T/omp-acceptance.ts" "$KIT_ROOT/core/omp/substrate-quality.ts" \
+    "$KIT_ROOT/test/lib/pi-probe.ts" "$T/accept-repo") \
+    || fail "OMP acceptance probe failed"
+jq -e '.noUI.isError == true and (.noUI.content[0].text | contains("needs the user'"'"'s approval")) and .promptsAfterNoUI == 0' \
+    <<< "$acceptance" >/dev/null || fail "OMP checkpoint accepted a regression without a UI to ask: $acceptance"
+jq -e '.declined.isError == true and (.declined.content[0].text | contains("declined")) and .promptsAfterDecline == 1' \
+    <<< "$acceptance" >/dev/null || fail "OMP checkpoint did not stop on a declined regression: $acceptance"
+jq -e '.prompts[0].title == "Substrate: accept ratchet regression?" and (.prompts[0].message | contains("dup_pct")) and (.prompts[0].message | contains("denominator shrank"))' \
+    <<< "$acceptance" >/dev/null || fail "OMP regression prompt did not name the metric and reason: $acceptance"
+jq -e '.approved.details.status == "passed" and (.approved.isError // false) == false and (.prompts | length) == 2' \
+    <<< "$acceptance" >/dev/null || fail "OMP checkpoint did not commit after the user approved the regression: $acceptance"
+[ "$(git -C "$T/accept-repo" log -1 --pretty=%s)" = 'fix(shell): accept a reviewed regression' ] \
+    || fail "OMP approved checkpoint wrote the wrong commit"
+jq -e '.updateNoUI.isError == true and (.updateNoUI.content[0].text | contains("needs the user'"'"'s approval")) and (.prompts | length) == 2' \
+    <<< "$acceptance" >/dev/null || fail "OMP update accepted a regression without a UI to ask: $acceptance"
+jq -e '(.update.isError // false) == false and .update.details.operation == "update" and (.update.details.status == "committed" or .update.details.status == "noop")' \
+    <<< "$acceptance" >/dev/null || fail "OMP update did not run the maintenance transaction: $acceptance"
+
 cat > "$T/omp-hydrate.ts" <<'TS'
 import { appendFileSync } from "node:fs";
 
@@ -286,7 +357,7 @@ jq -e '.tools == []' <<< "$outside_tools" >/dev/null \
 inside_tools=$(cd "$T/repo" && bun "$T/omp-registration.ts" \
     "$KIT_ROOT/core/omp/substrate-quality.ts" "$KIT_ROOT/test/lib/pi-probe.ts") \
     || fail "OMP registration probe failed inside a substrate repo"
-jq -e '.tools == ["substrate_checkpoint", "substrate_restructure"]' <<< "$inside_tools" >/dev/null \
+jq -e '.tools == ["substrate_checkpoint", "substrate_restructure", "substrate_update"]' <<< "$inside_tools" >/dev/null \
     || fail "OMP did not advertise gate tools inside a substrate repo: $inside_tools"
 
 stub_engine() {

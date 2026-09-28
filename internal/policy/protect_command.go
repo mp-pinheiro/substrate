@@ -14,17 +14,14 @@ import (
 const bq = "`"
 
 var (
-	reVerifyMention     = regexp.MustCompile(`(^|[[:space:]/])substrate[[:space:]]+verify([[:space:];&|>]|$)`)
-	reVerifyExact       = regexp.MustCompile(`^[[:space:]]*([^[:space:]]*/)?substrate[[:space:]]+verify[[:space:]]*$`)
-	reCheckpointSh      = regexp.MustCompile(`(^|[;&|(` + bq + `][[:space:]]*)[^[:space:]]*\.substrate/checkpoint\.sh([[:space:]"\\]|$)`)
-	reCheckpointCmd     = regexp.MustCompile(`(^|[;&|][[:space:]]*|[[:space:]])substrate[[:space:]]+checkpoint([[:space:]]|$)`)
-	reRestructureCmd    = regexp.MustCompile(`(^|[;&|][[:space:]]*|[[:space:]])substrate[[:space:]]+restructure([[:space:]]|$)`)
-	reRestructureSh     = regexp.MustCompile(`(^|[;&|(` + bq + `][[:space:]]*)[^[:space:]]*\.substrate/restructure\.sh([[:space:]"\\]|$)`)
-	reBaselineFlags     = regexp.MustCompile(`(^|[[:space:]])(--update-baseline|--tighten|--accept-regression)([[:space:]=]|$)`)
-	reTeeOrRedir        = regexp.MustCompile(`>>?[^;&|]*\$|tee[[:space:]][^;&|]*\$`)
-	reCheckpointExact   = compileLocaleRegexp(`^[[:space:]]*([^[:space:]]*/)?substrate[[:space:]]+checkpoint([[:space:]]|$)`)
-	reBaselineFlagsBare = compileLocaleRegexp(`(^|[[:space:]])(--update-baseline|--tighten|--accept-regression)([[:space:]]|$)`)
-	reShellOperator     = regexp.MustCompile(`[;&|<>$` + bq + `]`)
+	reVerifyMention  = regexp.MustCompile(`(^|[[:space:]/])substrate[[:space:]]+verify([[:space:];&|>]|$)`)
+	reVerifyExact    = regexp.MustCompile(`^[[:space:]]*([^[:space:]]*/)?substrate[[:space:]]+verify[[:space:]]*$`)
+	reCheckpointSh   = regexp.MustCompile(`(^|[;&|(` + bq + `][[:space:]]*)[^[:space:]]*\.substrate/checkpoint\.sh([[:space:]"\\]|$)`)
+	reCheckpointCmd  = regexp.MustCompile(`(^|[;&|][[:space:]]*|[[:space:]])substrate[[:space:]]+checkpoint([[:space:]]|$)`)
+	reRestructureCmd = regexp.MustCompile(`(^|[;&|][[:space:]]*|[[:space:]])substrate[[:space:]]+restructure([[:space:]]|$)`)
+	reRestructureSh  = regexp.MustCompile(`(^|[;&|(` + bq + `][[:space:]]*)[^[:space:]]*\.substrate/restructure\.sh([[:space:]"\\]|$)`)
+	reBaselineFlags  = regexp.MustCompile(`(^|[[:space:]])(--update-baseline|--tighten|--accept-regression)([[:space:]=]|$)`)
+	reTeeOrRedir     = regexp.MustCompile(`>>?[^;&|]*\$|tee[[:space:]][^;&|]*\$`)
 )
 
 func ProtectCommand(in Input, cfg *config.Config, configPresent, configCorrupt bool) Decision {
@@ -54,9 +51,6 @@ func ProtectCommand(in Input, cfg *config.Config, configPresent, configCorrupt b
 	}
 	if matchAnyLine(reRestructureSh, cmd) {
 		return block("BLOCKED: invoke restructures through the harness lifecycle, not the vendored script directly\n")
-	}
-	if matchAnyLine(reBaselineFlags, cmd) && !checkpointAcceptExempt(cmd) {
-		return block("BLOCKED: baseline mutations are checkpoint-owned; initial debt or regressions require the user to run the explicit baseline command\n")
 	}
 
 	if configPresent && configCorrupt {
@@ -92,6 +86,12 @@ func ProtectCommand(in Input, cfg *config.Config, configPresent, configCorrupt b
 			}
 		}
 	}
+	if matchAnyLine(reBaselineFlags, cmd) {
+		if !sanctionedBaselineCommand(cmd) {
+			return block("BLOCKED: only a standalone substrate or substrate-engine command may move the ratchet baseline (--accept-regression, --update-baseline or --tighten); other programs, chains, pipes, redirections and substitutions are blocked so the reviewed command is the whole command\n")
+		}
+		return ask("Bash command moves the ratchet baseline (--accept-regression, --update-baseline or --tighten): it raises a ceiling or grandfathers debt, and the result lands in substrate-baseline.json. Approve only after reviewing the metric and the reason.")
+	}
 	for _, needle := range agentInstructionFiles {
 		if namedMutation(cmd, mutator, needle) != mutationNone {
 			return ask("Bash command can change %s, which holds agent instructions. Approve only after reviewing the command; the checkpoint leaves the result for you to commit.", needle)
@@ -111,18 +111,24 @@ func ProtectCommand(in Input, cfg *config.Config, configPresent, configCorrupt b
 	return allow()
 }
 
-func checkpointAcceptExempt(cmd string) bool {
+var (
+	reShellControl = regexp.MustCompile(`[;&|<>` + bq + `\n]|\$\(`)
+	reEnvAssign    = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*=`)
+)
+
+func sanctionedBaselineCommand(cmd string) bool {
 	c := strings.TrimRight(cmd, "\n")
-	if strings.Contains(c, "\n") {
+	if reShellControl.MatchString(c) {
 		return false
 	}
-	if !reCheckpointExact.match(c) {
-		return false
+	for _, token := range strings.Fields(c) {
+		if reEnvAssign.MatchString(token) {
+			continue
+		}
+		base := filepath.Base(token)
+		return base == "substrate" || base == "substrate-engine"
 	}
-	if reShellOperator.MatchString(c) {
-		return false
-	}
-	return !reBaselineFlagsBare.match(c)
+	return false
 }
 
 func checkSessionBinding(session, cmd, kind string) (Decision, bool) {

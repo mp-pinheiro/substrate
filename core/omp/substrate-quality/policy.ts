@@ -6,11 +6,11 @@ const SUBSTRATE_POLICY = [
 	"Treat every `[substrate — fix before proceeding]` report as blocking: resolve it before unrelated work.",
 	"For workflow-health requests, run `substrate verify` directly and unmodified; do not assemble ad hoc test batteries or run `substrate audit` unless the user explicitly requests committed-plan regression.",
 	"Run only direct verification relevant to the requested change.",
-	"After direct verification, call `substrate_checkpoint`; it gates, tightens improved metrics, and commits only agent-owned paths.",
+	"After direct verification, call `substrate_checkpoint`; it gates, tightens improved metrics, and commits only agent-owned paths. Kit changes reach `.substrate/` only through `substrate_update`; never edit `.substrate/` directly.",
 	"Never run `jj commit` or `git commit` directly. Never push automatically; publication remains user-owned.",
 	"Do not bypass checks, edit generated or protected assets, or relax the baseline unless the user explicitly requests that policy change.",
 	"Treat substrate.json as human-approved policy: edit it only when the user directs the policy change; the hooks ask the user first, and the checkpoint leaves the edit for the user to commit.",
-	"Before accepting a ratchet regression, cost the alternative refactor and present both options; accepting requires a written reason that is committed to substrate-baseline.json.",
+	"Before accepting a ratchet regression, cost the alternative refactor and present both options; accepting requires a written reason that is committed to substrate-baseline.json, and `substrate_checkpoint` or `substrate_update` asks the user to approve it before the ceiling moves.",
 ].join("\n");
 
 // walk up for the vendored gate so subdirectory sessions resolve the repo
@@ -220,7 +220,7 @@ async function readStream(
 async function runCommand(
 	root: string,
 	command: string[],
-	options: { stdin?: string; onLine?: (line: string) => void; signal?: AbortSignal } = {},
+	options: { stdin?: string; onLine?: (line: string) => void; signal?: AbortSignal; env?: Record<string, string> } = {},
 ): Promise<CommandResult> {
 	const proc = Bun.spawn(command, {
 		cwd: root,
@@ -228,6 +228,7 @@ async function runCommand(
 		stdout: "pipe",
 		stderr: "pipe",
 		signal: options.signal,
+		env: options.env ? { ...process.env, ...options.env } : undefined,
 		// the engine's grandchild workers inherit its stdout/stderr pipes; killing
 		// only `proc` leaves them open. detached makes proc the process-group leader.
 		detached: true,
@@ -338,4 +339,4 @@ export {
 	SUBSTRATE_POLICY,
 	toolPath,
 };
-export type { CommandResult };
+export type { ApprovalContext, CommandResult };

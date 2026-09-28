@@ -42,7 +42,7 @@ export function createProbe() {
 		registerTool(tool: ProbeTool) {
 			tools[tool.name] = tool;
 		},
-		typebox: { Type: { Object: schema, String: schema, Optional: schema, Array: schema } },
+		typebox: { Type: { Object: schema, String: schema, Boolean: schema, Optional: schema, Array: schema } },
 	};
 	function context(cwd: string, approval: ProbeApproval = { hasUI: false, approve: false }): ProbeContext {
 		return {

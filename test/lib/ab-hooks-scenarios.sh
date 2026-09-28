@@ -38,6 +38,7 @@ matrix() {
     hook_scenario pc-baseline      hooks/protect-command.sh "$(pc '"echo x --update-baseline"')"      jj prepare_none
     hook_scenario pc-baseline-keyed hooks/protect-command.sh "$(pc '"substrate update --accept-regression=dup_pct"')" jj prepare_none
     hook_scenario pc-ckpt-accept     hooks/protect-command.sh "$(pc '"substrate checkpoint --session __SESSION__ --accept-regression=probe:alpha"')" jj prepare_none
+    hook_scenario pc-ckpt-accept-ask hooks/protect-command.sh '{"hook_event_name":"PreToolUse","tool_input":{"command":"substrate checkpoint --session __SESSION__ --accept-regression=dup_pct --reason \"denominator shrank\""},"session_id":"__SESSION__"}' jj prepare_none
     hook_scenario pc-ckpt-accept-chain hooks/protect-command.sh "$(pc '"substrate checkpoint --session __SESSION__ --accept-regression=a && substrate-engine gate --accept-regression=b"')" jj prepare_none
     hook_scenario pc-ckpt-procsub    hooks/protect-command.sh "$(pc '"substrate checkpoint --session __SESSION__ --accept-regression=a < <(substrate baseline --accept-regression)"')" jj prepare_none
     hook_scenario pc-ckpt-tighten    hooks/protect-command.sh "$(pc '"substrate checkpoint --session __SESSION__ --tighten"')" jj prepare_none

@@ -31,11 +31,14 @@ import {
 } from "./substrate-quality/runtime";
 import {
 	blockedToolResult,
+	confirmRegressionAcceptance,
+	parseRegressionAcceptance,
 	registerGateTool,
 	runCheckpointTransaction,
+	runUpdateTransaction,
 } from "./substrate-quality/transactions";
 
-const GATE_TOOLS: Record<string, true> = { substrate_checkpoint: true, substrate_restructure: true };
+const GATE_TOOLS: Record<string, true> = { substrate_checkpoint: true, substrate_restructure: true, substrate_update: true };
 function blockedBash(reason: string): { block: true; reason: string } {
 	return { block: true, reason };
 }
@@ -91,47 +94,10 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 				return blockedToolResult("checkpoint blocked: message must be a string");
 			}
 			const message = params.message;
-			let acceptRegression: string[] = [];
-			if ("acceptRegression" in params && params.acceptRegression !== undefined) {
-				const raw = params.acceptRegression;
-				if (!Array.isArray(raw) || raw.some((k) => typeof k !== "string" || !/^[A-Za-z0-9._:/-]+$/.test(k))) {
-					return blockedToolResult(
-						"checkpoint blocked: acceptRegression must be an array of metric keys matching [A-Za-z0-9._:/-]+",
-					);
-				}
-				acceptRegression = raw as string[];
-			}
-			let reason: string | undefined;
-			if (acceptRegression.includes("max_file_lines")) {
-				return blockedToolResult(
-					"max_file_lines is an informational measurement; accept oversized_files instead when a reviewed regression is unavoidable",
-				);
-			}
-			if ("acceptRegressionReason" in params && params.acceptRegressionReason !== undefined) {
-				const rawReason = params.acceptRegressionReason;
-				if (typeof rawReason !== "string") {
-					return blockedToolResult("checkpoint blocked: acceptRegressionReason must be a string");
-				}
-				reason = rawReason;
-			}
-			if (acceptRegression.length > 0 && !reason) {
-				return blockedToolResult(
-					"checkpoint blocked: --accept-regression requires --reason \"<text>\" — the justification is committed to substrate-baseline.json",
-				);
-			}
-			if (reason && acceptRegression.length === 0) {
-				return blockedToolResult("checkpoint blocked: --reason applies only to --accept-regression");
-			}
-			if (reason) {
-				if (reason.length < 20) {
-					return blockedToolResult("checkpoint blocked: --reason must be at least 20 characters");
-				}
-				if (/[;&|<>$`\n]/.test(reason)) {
-					return blockedToolResult(
-						"checkpoint blocked: --reason must not contain ; & | < > $ ` or a newline",
-					);
-				}
-			}
+			const acceptance = parseRegressionAcceptance(params as Record<string, unknown>, "checkpoint");
+			if ("content" in acceptance) return acceptance;
+			const declined = await confirmRegressionAcceptance(io, acceptance, "This checkpoint");
+			if (declined) return declined;
 			const status = await withRootLock(root, () => engineStatus(root));
 			const pendingOwned = status?.pendingOwned ?? [];
 			const dirtyPaths = status?.dirtyPaths ?? [];
@@ -144,7 +110,7 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 				);
 			}
 			const sid = sessionId(root);
-			const result = await runCheckpointTransaction(root, sid, message, acceptRegression, reason, io);
+			const result = await runCheckpointTransaction(root, sid, message, acceptance.keys, acceptance.reason, io);
 			const summary = result.summary;
 			if (!result.receipt) {
 				writeRuntimeState(root, {
@@ -163,6 +129,72 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 						text: `Checkpoint ${receipt.commit.slice(0, 12)} passed and committed locally. No push performed.${leftover.length > 0 ? `\nUnowned pending paths left in place: ${leftover.join(", ")}` : ""}\n${summary}`,
 					},
 				],
+				details: receipt,
+			};
+		},
+	);
+
+	const updateParameters = pi.typebox.Type.Object(
+		{
+			message: pi.typebox.Type.Optional(
+				pi.typebox.Type.String({
+					description: "Conventional Commit message for the vendor commit; defaults to the maintenance transaction's own message.",
+				}),
+			),
+			fromWorktree: pi.typebox.Type.Optional(
+				pi.typebox.Type.Boolean({
+					description: "Vendor the kit from this worktree's core/ instead of the pinned kit source. Only meaningful inside the substrate kit repository.",
+				}),
+			),
+			acceptRegression: pi.typebox.Type.Optional(
+				pi.typebox.Type.Array(pi.typebox.Type.String(), {
+					description: "Ratcheted metric keys whose regression the candidate gate reported; the user is asked to approve before the ceiling moves.",
+				}),
+			),
+			acceptRegressionReason: pi.typebox.Type.Optional(
+				pi.typebox.Type.String({
+					description: "Why the ceiling must move, >=20 chars, no ; & | < > $ ` or newline. Required whenever acceptRegression is set; committed to substrate-baseline.json.",
+				}),
+			),
+		},
+		{ additionalProperties: false },
+	);
+	registerGateTool(
+		pi,
+		{
+			name: "substrate_update",
+			label: "Substrate update",
+			description:
+				"Vendor the Substrate kit into .substrate/ through the maintenance transaction and commit the result locally (the sanctioned way to land kit changes; never edit .substrate/ directly). Runs the gate on a candidate first. The user's home harness is left alone. Pass acceptRegression only for a metric the candidate gate reported as regressed; the user is asked to approve it. Never pushes.",
+			parameters: updateParameters,
+			blockedPrefix: "update",
+		},
+		async (root, params, io) => {
+			const input = (params && typeof params === "object" ? params : {}) as Record<string, unknown>;
+			if (input.message !== undefined && typeof input.message !== "string") {
+				return blockedToolResult("update blocked: message must be a string");
+			}
+			if (input.fromWorktree !== undefined && typeof input.fromWorktree !== "boolean") {
+				return blockedToolResult("update blocked: fromWorktree must be a boolean");
+			}
+			const acceptance = parseRegressionAcceptance(input, "update");
+			if ("content" in acceptance) return acceptance;
+			const declined = await confirmRegressionAcceptance(io, acceptance, "This update");
+			if (declined) return declined;
+			const result = await withRootLock(root, () =>
+				runUpdateTransaction(root, { message: input.message as string | undefined, fromWorktree: input.fromWorktree === true, acceptance }, io),
+			);
+			if (!result.ok) return blockedToolResult(result.summary);
+			const receipt = result.receipt;
+			if (!receipt) {
+				return blockedToolResult(`${result.summary}\nupdate finished but left no readable maintenance receipt for this run`);
+			}
+			const outcome =
+				receipt.status === "committed" && receipt.commit
+					? `Update ${receipt.commit.slice(0, 12)} committed locally (${receipt.changedPaths.length} vendored path(s) changed). No push performed.`
+					: `Update finished with repository status "${receipt.status}"; nothing was committed.`;
+			return {
+				content: [{ type: "text" as const, text: `${outcome}\n${result.summary}` }],
 				details: receipt,
 			};
 		},

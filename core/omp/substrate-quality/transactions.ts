@@ -1,7 +1,8 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { findGateRoot, runCommand } from "./policy";
+import type { ApprovalContext } from "./policy";
 
 type CheckpointReceipt = {
 	commit: string;
@@ -28,7 +29,16 @@ type ToolOutcome = {
 };
 
 type ProgressSink = (text: string) => void;
-type TransactionIO = { progress?: ProgressSink; signal?: AbortSignal };
+type TransactionIO = { progress?: ProgressSink; signal?: AbortSignal; approval?: ApprovalContext };
+type RegressionAcceptance = { keys: string[]; reason?: string };
+type UpdateReceipt = {
+	id: string;
+	operation: string;
+	at: string;
+	status: string;
+	commit: string | null;
+	changedPaths: string[];
+};
 
 function renderRecovery(report: RecoveryReport): string {
 	const label =
@@ -149,7 +159,7 @@ function registerGateTool(
 				);
 			}
 			const progress = onUpdate && ((text: string) => onUpdate({ content: [{ type: "text" as const, text }] }));
-			return run(root, params, { progress, signal });
+			return run(root, params, { progress, signal, approval: ctx });
 		},
 	});
 }
@@ -178,9 +188,140 @@ function resolveRestructureCmd(root: string): string[] {
 	return bin ? [bin, "restructure"] : ["substrate-engine", "restructure"];
 }
 
-function resolveMaintenanceCmd(root: string): string[] {
-	const bin = resolveEngineBin(root);
-	return bin ? [bin, "maintenance"] : ["substrate-engine", "maintenance"];
+function parseRegressionAcceptance(
+	params: Record<string, unknown>,
+	prefix: string,
+): RegressionAcceptance | ToolOutcome {
+	let keys: string[] = [];
+	if (params.acceptRegression !== undefined) {
+		const raw = params.acceptRegression;
+		if (!Array.isArray(raw) || raw.some((k) => typeof k !== "string" || !/^[A-Za-z0-9._:/-]+$/.test(k))) {
+			return blockedToolResult(
+				`${prefix} blocked: acceptRegression must be an array of metric keys matching [A-Za-z0-9._:/-]+`,
+			);
+		}
+		keys = raw as string[];
+	}
+	if (keys.includes("max_file_lines")) {
+		return blockedToolResult(
+			"max_file_lines is an informational measurement; accept oversized_files instead when a reviewed regression is unavoidable",
+		);
+	}
+	let reason: string | undefined;
+	if (params.acceptRegressionReason !== undefined) {
+		if (typeof params.acceptRegressionReason !== "string") {
+			return blockedToolResult(`${prefix} blocked: acceptRegressionReason must be a string`);
+		}
+		reason = params.acceptRegressionReason;
+	}
+	if (keys.length > 0 && !reason) {
+		return blockedToolResult(
+			`${prefix} blocked: --accept-regression requires --reason "<text>" — the justification is committed to substrate-baseline.json`,
+		);
+	}
+	if (reason && keys.length === 0) {
+		return blockedToolResult(`${prefix} blocked: --reason applies only to --accept-regression`);
+	}
+	if (reason) {
+		if (reason.length < 20) {
+			return blockedToolResult(`${prefix} blocked: --reason must be at least 20 characters`);
+		}
+		if (/[;&|<>$`\n]/.test(reason)) {
+			return blockedToolResult(`${prefix} blocked: --reason must not contain ; & | < > $ \` or a newline`);
+		}
+	}
+	return { keys, reason };
+}
+
+async function confirmRegressionAcceptance(
+	io: TransactionIO,
+	acceptance: RegressionAcceptance,
+	action: string,
+): Promise<ToolOutcome | null> {
+	if (acceptance.keys.length === 0) return null;
+	const detail = `${action} raises the ceiling for ${acceptance.keys.join(", ")} and records this reason in substrate-baseline.json:\n${acceptance.reason}`;
+	if (!io.approval?.hasUI) {
+		return blockedToolResult(
+			`[substrate — hand to user] ratchet.acceptance: accepting a regression needs the user's approval and this session has no UI to ask. ${detail}`,
+		);
+	}
+	if (await io.approval.ui.confirm("Substrate: accept ratchet regression?", detail)) return null;
+	return blockedToolResult(`The user declined the regression acceptance. ${detail}`);
+}
+
+function metadataDir(root: string): string | null {
+	for (const candidate of [join(root, ".git"), join(root, ".jj", "repo", "store", "git"), join(root, ".jj")]) {
+		if (!existsSync(candidate)) continue;
+		const stat = statSync(candidate);
+		if (stat.isDirectory()) return candidate;
+		if (candidate.endsWith(".git")) {
+			const pointer = readFileSync(candidate, "utf8").trim();
+			if (pointer.startsWith("gitdir: ")) return resolve(root, pointer.slice("gitdir: ".length));
+		}
+	}
+	return null;
+}
+
+function updateReceipt(root: string, startedAt: number): UpdateReceipt | null {
+	const dir = metadataDir(root);
+	if (!dir) return null;
+	const path = join(dir, "substrate", "maintenance-receipt.json");
+	if (!existsSync(path)) return null;
+	let value: unknown;
+	try {
+		value = JSON.parse(readFileSync(path, "utf8"));
+	} catch {
+		return null;
+	}
+	if (!value || typeof value !== "object") return null;
+	const receipt = value as Record<string, unknown>;
+	const repository = receipt.repository;
+	if (
+		typeof receipt.id !== "string" ||
+		typeof receipt.operation !== "string" ||
+		typeof receipt.at !== "string" ||
+		!repository ||
+		typeof repository !== "object"
+	) {
+		return null;
+	}
+	if (Date.parse(receipt.at) < startedAt - 5000) return null;
+	const repo = repository as Record<string, unknown>;
+	if (typeof repo.status !== "string") return null;
+	return {
+		id: receipt.id,
+		operation: receipt.operation,
+		at: receipt.at,
+		status: repo.status,
+		commit: typeof repo.commit === "string" ? repo.commit : null,
+		changedPaths: Array.isArray(repo.changedPaths) ? repo.changedPaths.filter((p) => typeof p === "string") : [],
+	};
+}
+
+async function runUpdateTransaction(
+	root: string,
+	options: { message?: string; fromWorktree: boolean; acceptance: RegressionAcceptance },
+	io: TransactionIO = {},
+): Promise<{ receipt: UpdateReceipt | null; ok: boolean; summary: string }> {
+	const localCli = join(root, "bin", "substrate");
+	const command = [
+		existsSync(localCli) ? localCli : "substrate",
+		"update",
+		"--apply",
+		"--checkpoint",
+		"--repo-only",
+		...(options.message ? ["--message", options.message] : []),
+		...(options.fromWorktree ? ["--from-worktree"] : []),
+		...(options.acceptance.keys.length > 0
+			? [`--accept-regression=${options.acceptance.keys.join(",")}`, "--reason", options.acceptance.reason ?? ""]
+			: []),
+	];
+	const startedAt = Date.now();
+	const result = await spawnTransactionScript(root, command, 40, io, { SUBSTRATE_NO_USER_HARNESS: "1" });
+	if (result.exitCode !== 0) {
+		return { receipt: null, ok: false, summary: result.summary || `update failed with exit ${result.exitCode}` };
+	}
+	return { receipt: updateReceipt(root, startedAt), ok: true, summary: result.summary };
 }
 
 async function spawnTransactionScript(
@@ -188,6 +329,7 @@ async function spawnTransactionScript(
 	command: string[],
 	tail: number,
 	io: TransactionIO,
+	env?: Record<string, string>,
 ): Promise<{ exitCode: number; stdout: string; summary: string }> {
 	const progress = io.progress;
 	const recent: string[] = [];
@@ -201,7 +343,7 @@ async function spawnTransactionScript(
 				progress(recent.join("\n"));
 			}
 		: undefined;
-	const result = await runCommand(root, command, { onLine, signal: io.signal });
+	const result = await runCommand(root, command, { onLine, signal: io.signal, env });
 	const stdout = result.stdout.trim();
 	const stderr = result.stderr.trim();
 	const summary = [stdout, stderr].filter(Boolean).join("\n").split("\n").slice(-tail).join("\n");
@@ -270,8 +412,11 @@ async function runRestructureTransaction(
 
 export {
 	blockedToolResult,
+	confirmRegressionAcceptance,
+	parseRegressionAcceptance,
 	registerGateTool,
 	runCheckpointTransaction,
 	runRestructureTransaction,
+	runUpdateTransaction,
 };
-export type { CheckpointReceipt };
+export type { CheckpointReceipt, RegressionAcceptance, UpdateReceipt };
