@@ -6,6 +6,7 @@ scratch_repo_init() {
     git config user.name substrate
     git config user.email substrate@localhost
     export SUBSTRATE_VENDOR_FROM_WORKTREE=1
+    export SUBSTRATE_NO_USER_HARNESS=1
     "$KIT_ROOT/bin/substrate" init --profile "$profile" --vcs git >/dev/null 2>&1 \
         || { printf 'scratch_repo_init: substrate init failed\n' >&2; return 1; }
 }

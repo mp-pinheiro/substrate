@@ -7,6 +7,7 @@ KIT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$KIT_ROOT" || exit 2
 # suites vendor from the checkout under test, by definition
 export SUBSTRATE_VENDOR_FROM_WORKTREE=1
+export SUBSTRATE_NO_USER_HARNESS=1
 if [ ! -x "$KIT_ROOT/build/substrate-engine" ]; then
     (cd "$KIT_ROOT" && go build -trimpath -buildvcs=false -ldflags "-X main.version=$(cat VERSION)" -o build/substrate-engine ./cmd/substrate-engine) || exit 2
 fi
