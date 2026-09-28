@@ -86,6 +86,11 @@ github_ref_status() {
         || die "gh api check-runs lookup failed" 1
 }
 
+github_green_run() {
+    gh api "repos/$slug/actions/workflows/$1/runs?status=success&per_page=1" --jq '.workflow_runs[0].id // empty' \
+        || die "gh api workflow runs lookup failed" 1
+}
+
 forgejo_curl() {
     curl -sSf -H "Authorization: token $token" -H "Content-Type: application/json" "$@"
 }
@@ -144,6 +149,11 @@ forgejo_ref_status() {
               elif any(. == "success") then "success"
               else "skipped" end' \
         || die "forgejo status lookup failed" 1
+}
+
+forgejo_green_run() {
+    forgejo_curl "$api/repos/$slug/actions/runs?workflow_id=$1&status=success&page=1&limit=1" | jq -r '.workflow_runs[0].id // empty' \
+        || die "forgejo workflow runs lookup failed" 1
 }
 
 dry_run() {
@@ -265,7 +275,7 @@ prune_prereleases() {
 }
 
 cmd=${1:-}
-[ -n "$cmd" ] || die "usage: forge.sh <upsert-issue|open-issue|issue-json|ref-status|create-release|upload-asset|prune-prereleases> ..." 2
+[ -n "$cmd" ] || die "usage: forge.sh <upsert-issue|open-issue|issue-json|ref-status|green-run|create-release|upload-asset|prune-prereleases> ..." 2
 shift
 
 resolve_host
@@ -291,6 +301,10 @@ case "$cmd" in
     ref-status)
         [ $# -eq 1 ] || die "usage: forge.sh ref-status <ref>" 2
         if [ "$is_github" -eq 1 ]; then github_ref_status "$1"; else forgejo_ref_status "$1"; fi
+        ;;
+    green-run)
+        [ $# -eq 1 ] || die "usage: forge.sh green-run <workflow-file>" 2
+        if [ "$is_github" -eq 1 ]; then github_green_run "$1"; else forgejo_green_run "$1"; fi
         ;;
     create-release)
         [ $# -eq 5 ] || die "usage: forge.sh create-release <tag> <name> <prerelease> <notes-file> <target-commitish>" 2
