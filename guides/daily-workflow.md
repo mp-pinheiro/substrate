@@ -20,15 +20,16 @@ Both skills (`context-pack`, `review`) are installed into `.claude/skills/` by `
 
 ## 2. Edit — and what the hooks will do
 
-Write-time hooks run on every Write/Edit in both harnesses (Claude Code hooks + omp extension). You will see blocks like:
+Write-time hooks run on every Write/Edit and every mutating Bash command in both harnesses (Claude Code hooks and the omp extension). Some paths are blocked outright:
 
 ```
-blocked: substrate-baseline.json changes only via .substrate/gate.sh --update-baseline
-blocked: substrate.json is human-approved policy — change it through guarded substrate maintenance
-blocked: .substrate/ is vendored — change the kit and run substrate update --apply
-blocked: <file> is a symlink to <target> — edit the target explicitly if that is intended
+blocked: baseline changes are checkpoint/baseline-transaction owned; use the sanctioned checkpoint workflow
+blocked: .substrate/<file> is vendored substrate core ...
+blocked: <file> is a symlink to <target> ...
+blocked: <file> is protected by substrate.json protected_paths
+```
 
-These are not suggestions — the write was rejected. If a block is wrong, the thing to change is `.substrate/hooks/protect-paths.sh` at its source (`core/hooks/` in the kit) and its omp mirror, not the workflow around it.
+A block means the write was rejected. Other paths ask you first: `CLAUDE.md` and `AGENTS.md` at any depth, the root `substrate.json`, and the repo's `ask_paths` globs. Claude Code shows its permission prompt and omp asks in its UI; a session without a UI blocks the change. The checkpoint never commits these paths, so you commit an approved edit yourself. If a rule is wrong, change it at its source in the kit (`internal/policy/`) rather than working around it.
 
 After a successful write, the comment ratchet checks the touched file:
 

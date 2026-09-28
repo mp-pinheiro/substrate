@@ -15,6 +15,8 @@ func TestCheckpointDecision(t *testing.T) {
 	}{
 		{"substrate-baseline.json", cfg, LevelBlock},
 		{".substrate/gate.sh", cfg, LevelBlock},
+		{"substrate.json", cfg, LevelAsk},
+		{"sub/dir/substrate.json", cfg, LevelAllow},
 		{"CLAUDE.md", cfg, LevelAsk},
 		{"claude/CLAUDE.md", cfg, LevelAsk},
 		{"AGENTS.md", nil, LevelAsk},

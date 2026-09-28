@@ -113,8 +113,6 @@ func hardRule(name string) (Decision, bool) {
 		return block("blocked: baseline changes are checkpoint/baseline-transaction owned; use the sanctioned checkpoint workflow\n"), true
 	case bashglob.Match("*/substrate-baseline.json", name):
 		return block("blocked: %s is a governed baseline path; use the sanctioned checkpoint workflow\n", name), true
-	case bashglob.Match("substrate.json", name):
-		return block("blocked: substrate.json contains human-approved policy — present the policy change to the user\n"), true
 	case bashglob.Match(".substrate/*", name), bashglob.Match("*/.substrate/*", name):
 		return block("blocked: %s is vendored substrate core — change the kit source, then the user runs substrate update --apply --checkpoint; never commit the mirror directly\n", name), true
 	}
@@ -128,6 +126,9 @@ func askRule(name string, cfg *config.Config) (Decision, bool) {
 		if bashglob.Match(base, name) || bashglob.Match("*/"+base, name) {
 			return ask("%s holds agent instructions. Approve only after reviewing the change; the checkpoint leaves it for you to commit.", name), true
 		}
+	}
+	if bashglob.Match("substrate.json", name) {
+		return ask("substrate.json holds this repo's Substrate policy, and the hooks read the edited file as soon as it is saved. Approve only after reviewing the change; the checkpoint leaves it for you to commit."), true
 	}
 	if cfg == nil || !cfg.Present {
 		return allow(), false

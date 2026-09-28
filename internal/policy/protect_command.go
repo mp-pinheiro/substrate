@@ -68,9 +68,6 @@ func ProtectCommand(in Input, cfg *config.Config, configPresent, configCorrupt b
 	if d, blocked := blockIfNamed(cmd, mutator, "substrate-baseline.json", "baseline — governed basename anywhere in the tree"); blocked {
 		return d
 	}
-	if d, blocked := blockIfNamed(cmd, mutator, "substrate.json", "human-approved policy config"); blocked {
-		return d
-	}
 	if d, blocked := blockIfNamed(cmd, mutator, ".substrate", "vendored engine"); blocked {
 		return d
 	}
@@ -99,6 +96,9 @@ func ProtectCommand(in Input, cfg *config.Config, configPresent, configCorrupt b
 		if namedMutation(cmd, mutator, needle) != mutationNone {
 			return ask("Bash command can change %s, which holds agent instructions. Approve only after reviewing the command; the checkpoint leaves the result for you to commit.", needle)
 		}
+	}
+	if namedMutation(cmd, mutator, "substrate.json") != mutationNone {
+		return ask("Bash command can change substrate.json, which holds this repo's Substrate policy; the hooks read the edited file as soon as it is saved. Approve only after reviewing the command; the checkpoint leaves the result for you to commit.")
 	}
 	if configPresent && cfg != nil {
 		for _, g := range cfg.AskPaths {

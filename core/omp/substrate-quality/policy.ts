@@ -9,7 +9,7 @@ const SUBSTRATE_POLICY = [
 	"After direct verification, call `substrate_checkpoint`; it gates, tightens improved metrics, and commits only agent-owned paths.",
 	"Never run `jj commit` or `git commit` directly. Never push automatically; publication remains user-owned.",
 	"Do not bypass checks, edit generated or protected assets, or relax the baseline unless the user explicitly requests that policy change.",
-	"Treat substrate.json as human-approved policy: do not mutate it as an agent; only change it through guarded maintenance when the user explicitly directs the policy decision.",
+	"Treat substrate.json as human-approved policy: edit it only when the user directs the policy change; the hooks ask the user first, and the checkpoint leaves the edit for the user to commit.",
 	"Before accepting a ratchet regression, cost the alternative refactor and present both options; accepting requires a written reason that is committed to substrate-baseline.json.",
 ].join("\n");
 

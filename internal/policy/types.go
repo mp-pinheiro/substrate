@@ -61,12 +61,8 @@ func block(format string, a ...any) Decision {
 		report.Code = "policy.protected"
 	case strings.Contains(stderr, "vendored") || strings.Contains(stderr, ".substrate"):
 		report.Code = "policy.vendored"
-	case strings.Contains(stderr, "governance") || strings.Contains(stderr, "CLAUDE.md"):
-		report.Code = "policy.governance"
 	}
-	if strings.Contains(stderr, "human-approved") || strings.Contains(stderr, "governance") ||
-		strings.Contains(stderr, "protected_paths") || strings.Contains(stderr, "user") ||
-		strings.Contains(stderr, "substrate.json contains") {
+	if strings.Contains(stderr, "protected_paths") || strings.Contains(stderr, "user") {
 		report.Owner, report.Retry, report.Next = "user", "terminal", "present this policy decision to the user; do not retry unchanged state"
 	}
 	if strings.Contains(stderr, "vendored") {
