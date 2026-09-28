@@ -49,53 +49,11 @@ launch() {
     fi
 }
 
-plan_state=()
-item_plan=()
-item_line=()
-item_delegated=()
-for ((p = 0; p < ${#plans[@]}; p++)); do
-    plan="${plans[$p]}"
-    [ -f "$plan" ] || { plan_state[p]=missing; continue; }
-    state=$(grep -m1 '^state: ' "$plan" | cut -d' ' -f2)
-    plan_state[p]=$state
-    case "$state" in
-        active | committed | draft) ;;
-        *) continue ;;
-    esac
-    in_acceptance=0
-    while IFS= read -r line; do
-        case "$line" in
-            '## Acceptance'*) in_acceptance=1; continue ;;
-            '## '*) in_acceptance=0; continue ;;
-        esac
-        [ "$in_acceptance" -eq 1 ] || continue
-        case "$line" in
-            '- ['*']'*' :: '*) ;;
-            *) continue ;;
-        esac
-        item_plan+=("$p")
-        item_line+=("$line")
-        rest="${line:6}"
-        cmd="${rest#* :: }"
-        if [ "$delegate_matrix" -eq 1 ] && [[ "$cmd" == *"test/matrix.sh"* ]]; then
-            item_delegated+=(1)
-        else
-            item_delegated+=(0)
-            [ -n "${slot_of[$cmd]+set}" ] || launch "$cmd"
-        fi
-    done < "$plan"
-done
-
 overall_rc=0
-for ((p = 0; p < ${#plans[@]}; p++)); do
-    plan="${plans[$p]}"
-    state="${plan_state[$p]}"
+for plan in "${plans[@]}"; do
+    [ -f "$plan" ] || { printf 'audit: %s: no such plan\n' "$plan" >&2; overall_rc=1; continue; }
+    state=$(grep -m1 '^state: ' "$plan" | cut -d' ' -f2)
     case "$state" in
-        missing)
-            printf 'audit: %s: no such plan\n' "$plan" >&2
-            overall_rc=1
-            continue
-            ;;
         superseded | abandoned)
             printf '=== %s (%s) — skipped\n' "$plan" "$state"
             continue
@@ -109,18 +67,28 @@ for ((p = 0; p < ${#plans[@]}; p++)); do
     esac
 
     printf '=== %s (%s)\n' "$plan" "$state"
-    pass=0 pending=0 regressed=0 unverifiable=0 delegated=0
+    pass=0 pending=0 regressed=0 unverifiable=0 delegated=0 in_acceptance=0
     active=()
-    for ((i = 0; i < ${#item_line[@]}; i++)); do
-        [ "${item_plan[$i]}" -eq "$p" ] || continue
-        if [ "${item_delegated[$i]}" -eq 1 ]; then
-            rest="${item_line[$i]:6}"
+    while IFS= read -r line; do
+        case "$line" in
+            '## Acceptance'*) in_acceptance=1; continue ;;
+            '## '*) in_acceptance=0; continue ;;
+        esac
+        [ "$in_acceptance" -eq 1 ] || continue
+        case "$line" in
+            '- ['*']'*' :: '*) ;;
+            *) continue ;;
+        esac
+        rest="${line:6}"
+        cmd="${rest#* :: }"
+        if [ "$delegate_matrix" -eq 1 ] && [[ "$cmd" == *"test/matrix.sh"* ]]; then
             printf '  [~~] %s — DELEGATED (profile-matrix CI)\n' "${rest%% :: *}"
             delegated=$((delegated + 1))
         else
-            active+=("${item_line[$i]}")
+            active+=("$line")
+            [ -n "${slot_of[$cmd]+set}" ] || launch "$cmd"
         fi
-    done
+    done < "$plan"
 
     for ((i = 0; i < ${#active[@]}; i++)); do
         line="${active[$i]}"
@@ -151,8 +119,9 @@ for ((p = 0; p < ${#plans[@]}; p++)); do
             fi
         fi
     done
+    wait 2>/dev/null
+    running=0
     printf '  audit: %d passing, %d pending, %d regressed, %d unverifiable, %d delegated\n' "$pass" "$pending" "$regressed" "$unverifiable" "$delegated"
     [ "$regressed" -eq 0 ] || overall_rc=1
 done
-wait 2>/dev/null
 exit "$overall_rc"
