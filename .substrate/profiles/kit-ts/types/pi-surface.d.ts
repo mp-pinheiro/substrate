@@ -15,7 +15,11 @@ declare module "@oh-my-pi/pi-coding-agent" {
 	};
 	export type ToolCtx = {
 		cwd: string;
-		ui: { notify(message: string, level: "info" | "warning" | "error"): void };
+		hasUI: boolean;
+		ui: {
+			notify(message: string, level: "info" | "warning" | "error"): void;
+			confirm(title: string, message: string): Promise<boolean>;
+		};
 	};
 	export type BeforeAgentStartEvent = { systemPrompt: string[] };
 	export type BeforeAgentStartResult = { systemPrompt: string[] } | undefined;
@@ -31,6 +35,7 @@ declare module "@oh-my-pi/pi-coding-agent" {
 	export type HookResult =
 		| { block: boolean; reason: string }
 		| { content: ToolContent[] }
+		| { additionalContext: string }
 		| undefined;
 	export type ExtensionAPI = {
 		setLabel(label: string): void;
