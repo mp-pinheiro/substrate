@@ -18,8 +18,12 @@ index=0
 if [ "$index" -ge "${#statuses[@]}" ]; then
     index=$((${#statuses[@]} - 1))
 fi
-printf '%s\n' "${statuses[$index]:-}"
 printf '%s\n' "$((index + 1))" > "$FAKE_STATE"
+if [ "${statuses[$index]:-}" = error ]; then
+    printf 'forge: forgejo status lookup failed\n' >&2
+    exit 1
+fi
+printf '%s\n' "${statuses[$index]:-}"
 SH
 chmod +x "$WORK/forge"
 
@@ -55,4 +59,14 @@ run_wait workflow_dispatch "pending" 1 "$WORK/timeout.out" "$WORK/timeout.state"
     && fail "manual release accepted a gate timeout"
 grep -q 'refusing release' "$WORK/timeout.log" || fail "manual timeout did not fail closed"
 
-printf 'release-wait-gate-test: pending, success, failure, schedule, and timeout scenarios green\n'
+run_wait push "error error success" 5 "$WORK/transient.out" "$WORK/transient.state" > "$WORK/transient.log" 2>&1 \
+    || fail "transient status lookup failure aborted the release"
+grep -qx 'status=success' "$WORK/transient.out" || fail "transient lookup failure did not resolve to success"
+grep -q 'lookup for abc123 failed' "$WORK/transient.log" || fail "transient lookup failure was not reported"
+
+run_wait workflow_dispatch "error" 2 "$WORK/lookup-down.out" "$WORK/lookup-down.state" > "$WORK/lookup-down.log" 2>&1 \
+    && fail "manual release accepted a gate that could never be read"
+grep -qx 'status=unknown' "$WORK/lookup-down.out" || fail "persistent lookup failure did not expose unknown status"
+grep -q 'refusing release' "$WORK/lookup-down.log" || fail "persistent lookup failure did not fail closed"
+
+printf 'release-wait-gate-test: pending, success, failure, schedule, timeout, and lookup-failure scenarios green\n'

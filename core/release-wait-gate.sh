@@ -11,7 +11,10 @@ out_file="${RELEASE_OUTPUT:-${GITHUB_OUTPUT:-/dev/stdout}}"
 status=""
 
 for ((attempt=1; attempt<=attempts; attempt++)); do
-    status=$($forge ref-status "$sha")
+    if ! status=$($forge ref-status "$sha"); then
+        printf '::warning::gate status lookup for %s failed (attempt %d/%d); retrying\n' "$sha" "$attempt" "$attempts" >&2
+        status=unknown
+    fi
     case "$status" in
         success)
             printf 'status=success\n' >> "$out_file"
