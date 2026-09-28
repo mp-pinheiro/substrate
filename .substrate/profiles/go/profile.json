@@ -10,8 +10,7 @@
     { "bin": "golangci-lint", "hint": "https://golangci-lint.run/welcome/install/" }
   ],
   "ci": [
-    "sudo apt-get update -qq",
-    "sudo apt-get install -y -qq golang-go",
+    "command -v go >/dev/null 2>&1 || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends golang-go; }",
     "curl -sSfL -o /tmp/install-golangci-lint.sh https://raw.githubusercontent.com/golangci/golangci-lint/c0d3ddc9cf3faa61a4e378e879ece580256d76e5/install.sh",
     "sudo sh /tmp/install-golangci-lint.sh -b /usr/local/bin v2.12.2"
   ],
