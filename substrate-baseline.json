@@ -315,7 +315,7 @@
   "comments:test/vendor-drift-test.sh": 0,
   "comments:test/vendor-source-test.sh": 0,
   "dead_code": 0,
-  "dup_pct": 1.7797198749855307,
+  "dup_pct": 1.7813178855901521,
   "oversized_files": 0
 },
   "direction": {
@@ -636,5 +636,13 @@
   "dead_code": "lo",
   "dup_pct": "lo",
   "oversized_files": "lo"
+},
+  "accepted": {
+  "dup_pct": {
+  "at": "2026-09-28",
+  "from": 1.7797198749855307,
+  "reason": "per-plan audit runner is 31 lines shorter with no clones, clone set unchanged, denominator shrank",
+  "to": 1.7813178855901521
+}
 }
 }
