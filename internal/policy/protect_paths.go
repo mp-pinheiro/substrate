@@ -14,7 +14,7 @@ import (
 func ProtectPaths(in Input, cfg *config.Config, repoRoot string) Decision {
 	path := in.FilePath
 	if path == "" {
-		return Decision{}
+		return allow()
 	}
 	if cfg == nil {
 		return block("blocked: substrate.json is corrupt — fix it before writing anything else\n")
@@ -58,49 +58,56 @@ func ProtectPaths(in Input, cfg *config.Config, repoRoot string) Decision {
 		return block("blocked: %s resolves outside the repo (%s) — a parent directory is a symlink\n", path, real)
 	}
 
-	if d, blocked := checkHard(rel); blocked {
+	if d, hit := hardRule(rel); hit {
 		return d
 	}
-	if d, blocked := checkHard(real); blocked {
+	if d, hit := hardRule(real); hit {
 		return d
 	}
-
-	if !cfg.Present {
-		return Decision{}
-	}
-	for _, g := range cfg.ProtectedPaths {
-		if g == "" {
-			continue
-		}
-		if bashglob.Match(g, rel) {
-			return block("blocked: %s is protected by substrate.json protected_paths\n", rel)
-		}
-		if bashglob.Match(g, real) {
-			return block("blocked: %s is protected by substrate.json protected_paths\n", real)
-		}
-	}
-	for _, c := range cfg.Contracts {
-		for _, g := range c.Paths {
+	if cfg.Present {
+		for _, g := range cfg.ProtectedPaths {
 			if g == "" {
 				continue
 			}
-			for _, candidate := range [2]string{rel, real} {
-				if candidate == g || strings.HasPrefix(candidate, g+"/") {
-					return block("blocked: %s is generated from a contract — edit the contract source; the gate regenerates (substrate.json contracts)\n", candidate)
+			if bashglob.Match(g, rel) {
+				return block("blocked: %s is protected by substrate.json protected_paths\n", rel)
+			}
+			if bashglob.Match(g, real) {
+				return block("blocked: %s is protected by substrate.json protected_paths\n", real)
+			}
+		}
+		for _, c := range cfg.Contracts {
+			for _, g := range c.Paths {
+				if g == "" {
+					continue
+				}
+				for _, candidate := range [2]string{rel, real} {
+					if candidate == g || strings.HasPrefix(candidate, g+"/") {
+						return block("blocked: %s is generated from a contract — edit the contract source; the gate regenerates (substrate.json contracts)\n", candidate)
+					}
 				}
 			}
 		}
 	}
-	return Decision{}
+	for _, candidate := range [2]string{rel, real} {
+		if d, hit := askRule(candidate, cfg); hit {
+			return d
+		}
+	}
+	return allow()
 }
 
-// CheckHard is checkHard exported for callers outside the hook path (e.g. the
-// checkpoint transaction) that need to refuse a governed path by name alone.
-func CheckHard(name string) (Decision, bool) {
-	return checkHard(name)
+func CheckpointDecision(name string, cfg *config.Config) Decision {
+	if d, hit := hardRule(name); hit {
+		return d
+	}
+	if d, hit := askRule(name, cfg); hit {
+		return d
+	}
+	return allow()
 }
 
-func checkHard(name string) (Decision, bool) {
+func hardRule(name string) (Decision, bool) {
 	switch {
 	case bashglob.Match("substrate-baseline.json", name):
 		return block("blocked: baseline changes are checkpoint/baseline-transaction owned; use the sanctioned checkpoint workflow\n"), true
@@ -110,8 +117,25 @@ func checkHard(name string) (Decision, bool) {
 		return block("blocked: substrate.json contains human-approved policy — present the policy change to the user\n"), true
 	case bashglob.Match(".substrate/*", name), bashglob.Match("*/.substrate/*", name):
 		return block("blocked: %s is vendored substrate core — change the kit source, then the user runs substrate update --apply --checkpoint; never commit the mirror directly\n", name), true
-	case bashglob.Match("CLAUDE.md", name), bashglob.Match("*/CLAUDE.md", name):
-		return block("blocked: CLAUDE.md is governance policy — present the change to the user\n"), true
 	}
-	return Decision{}, false
+	return allow(), false
+}
+
+var agentInstructionFiles = [...]string{"CLAUDE.md", "AGENTS.md"}
+
+func askRule(name string, cfg *config.Config) (Decision, bool) {
+	for _, base := range agentInstructionFiles {
+		if bashglob.Match(base, name) || bashglob.Match("*/"+base, name) {
+			return ask("%s holds agent instructions. Approve only after reviewing the change; the checkpoint leaves it for you to commit.", name), true
+		}
+	}
+	if cfg == nil || !cfg.Present {
+		return allow(), false
+	}
+	for _, g := range cfg.AskPaths {
+		if g != "" && bashglob.Match(g, name) {
+			return ask("%s is listed in substrate.json ask_paths. Approve only after reviewing the change; the checkpoint leaves it for you to commit.", name), true
+		}
+	}
+	return allow(), false
 }

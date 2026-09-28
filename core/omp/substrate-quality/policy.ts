@@ -266,7 +266,62 @@ async function refreshReport(root: string): Promise<string | null> {
 	return stderr || null;
 }
 
+type PolicyDecision = { level: "allow" | "warn" | "ask" | "block"; reason: string };
+type ApprovalContext = {
+	hasUI: boolean;
+	ui: {
+		confirm(title: string, message: string): Promise<boolean>;
+		notify(message: string, level: "info" | "warning" | "error"): void;
+	};
+};
+type PolicyOutcome = { block: true; reason: string } | { additionalContext: string } | undefined;
+
+function hookDecision(result: CommandResult, failure: string): PolicyDecision {
+	if (result.exitCode !== 0) {
+		return { level: "block", reason: result.stderr.trim() || `${failure} with exit ${result.exitCode}` };
+	}
+	const stdout = result.stdout.trim();
+	if (!stdout) return { level: "allow", reason: "" };
+	let output: unknown = null;
+	try {
+		output = JSON.parse(stdout);
+	} catch {}
+	const hook = output && typeof output === "object" && "hookSpecificOutput" in output ? output.hookSpecificOutput : null;
+	if (hook && typeof hook === "object") {
+		if (
+			"permissionDecision" in hook &&
+			hook.permissionDecision === "ask" &&
+			"permissionDecisionReason" in hook &&
+			typeof hook.permissionDecisionReason === "string"
+		) {
+			return { level: "ask", reason: hook.permissionDecisionReason };
+		}
+		if (!("permissionDecision" in hook) && "additionalContext" in hook && typeof hook.additionalContext === "string") {
+			return { level: "warn", reason: hook.additionalContext };
+		}
+	}
+	return { level: "block", reason: `${failure}: unreadable policy decision ${stdout}` };
+}
+
+async function applyPolicyDecision(decision: PolicyDecision, ctx: ApprovalContext): Promise<PolicyOutcome> {
+	if (decision.level === "allow") return undefined;
+	if (decision.level === "warn") {
+		if (ctx.hasUI) ctx.ui.notify(decision.reason, "warning");
+		return { additionalContext: `Substrate warning: ${decision.reason}` };
+	}
+	if (decision.level === "block") return { block: true, reason: decision.reason };
+	if (!ctx.hasUI) {
+		return {
+			block: true,
+			reason: `${decision.reason}\nThis session has no UI to ask the user, so the change is blocked. Hand it to the user.`,
+		};
+	}
+	if (await ctx.ui.confirm("Substrate: approve this change?", decision.reason)) return undefined;
+	return { block: true, reason: `The user declined this change. ${decision.reason}` };
+}
+
 export {
+	applyPolicyDecision,
 	commandArgv,
 	commandTargetCwd,
 	commandVerbIndex,
@@ -277,6 +332,7 @@ export {
 	hasRawGitPush,
 	hasPush,
 	findJjRoot,
+	hookDecision,
 	refreshReport,
 	runCommand,
 	SUBSTRATE_POLICY,

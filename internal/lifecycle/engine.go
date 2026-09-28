@@ -93,7 +93,7 @@ func (e *Engine) Run(ctx context.Context, args []string, stdin io.Reader) Result
 		if len(args) > 2 {
 			commit = args[2]
 		}
-		return e.Complete(ctx, session, commit)
+		return e.Complete(ctx, session, commit, nil)
 	case "stop":
 		return e.Stop(ctx, payload)
 	case "end":

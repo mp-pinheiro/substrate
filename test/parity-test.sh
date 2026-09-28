@@ -289,4 +289,71 @@ inside_tools=$(cd "$T/repo" && bun "$T/omp-registration.ts" \
 jq -e '.tools == ["substrate_checkpoint", "substrate_restructure"]' <<< "$inside_tools" >/dev/null \
     || fail "OMP did not advertise gate tools inside a substrate repo: $inside_tools"
 
-printf 'parity-test: structural mirrors, lifecycle, checkpoint, command, push parity green\n'
+stub_engine() {
+    cat > "$T/$1-engine" <<SH
+#!/usr/bin/env bash
+if [ "\${1:-} \${2:-}" = "hook protect-paths" ]; then
+    cat >/dev/null
+    printf '%s\n' '$2'
+    exit 0
+fi
+exec '$(command -v substrate-engine)' "\$@"
+SH
+    chmod +x "$T/$1-engine"
+}
+stub_engine warn '{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"stub warning"},"systemMessage":"stub warning"}'
+stub_engine garbage 'not a decision'
+git clone -q "$T/repo" "$T/ask-repo"
+git -C "$T/ask-repo" config user.name substrate
+git -C "$T/ask-repo" config user.email substrate@localhost
+cat > "$T/omp-ask.ts" <<'TS'
+import { appendFileSync } from "node:fs";
+
+const [extensionPath, probePath, repo, warnEngine, garbageEngine] = process.argv.slice(2);
+const { bootProbe } = await import(probePath);
+const probe = await bootProbe(extensionPath);
+const approve = probe.context(repo, { hasUI: true, approve: true });
+const decline = probe.context(repo, { hasUI: true, approve: false });
+await probe.callAll("session_start", {}, approve);
+const guide = probe.writeEvent("guide-write", `${repo}/CLAUDE.md`);
+const approved = await probe.callAll("tool_call", guide, approve);
+appendFileSync(`${repo}/CLAUDE.md`, "Approved by the user\n");
+await probe.resultAll(guide, approve);
+const declined = await probe.callAll("tool_call", probe.writeEvent("agents-write", `${repo}/AGENTS.md`), decline);
+const noUi = await probe.callAll("tool_call", probe.writeEvent("headless-write", `${repo}/CLAUDE.md`), probe.context(repo));
+const bashCall = { toolName: "bash", toolCallId: "bash-ask", input: { command: "perl -pi -e 's/a/b/' AGENTS.md" } };
+const bashDeclined = await probe.callAll("tool_call", bashCall, decline);
+const owned = probe.writeEvent("owned-ask-write", `${repo}/owned.sh`);
+await probe.callAll("tool_call", owned, approve);
+appendFileSync(`${repo}/owned.sh`, 'printf "omp\\n"\n');
+await probe.resultAll(owned, approve);
+const stop = (await probe.handlers.session_stop[0]({ stop_hook_active: false }, approve)) ?? null;
+process.env.SUBSTRATE_ENGINE_BIN = warnEngine;
+const warned = await probe.callAll("tool_call", probe.writeEvent("warn-write", `${repo}/notes.txt`), approve);
+process.env.SUBSTRATE_ENGINE_BIN = garbageEngine;
+const unreadable = await probe.callAll("tool_call", probe.writeEvent("garbage-write", `${repo}/notes.txt`), approve);
+const { prompts, notifications } = probe;
+console.log(JSON.stringify({ approved, declined, noUi, bashDeclined, stop, warned, unreadable, prompts, notifications }));
+TS
+ask=$(bun "$T/omp-ask.ts" "$KIT_ROOT/core/omp/substrate-quality.ts" "$KIT_ROOT/test/lib/pi-probe.ts" \
+    "$T/ask-repo" "$T/warn-engine" "$T/garbage-engine") || fail "OMP ask probe failed"
+jq -e '(.approved | length) == 0 and (.prompts | length) == 3' <<< "$ask" >/dev/null \
+    || fail "OMP did not ask exactly once per interactive ask-level call: $ask"
+jq -e 'any(.prompts[]; .message | contains("CLAUDE.md holds agent instructions"))' <<< "$ask" >/dev/null \
+    || fail "OMP prompt did not explain the ask: $ask"
+jq -e 'any(.declined[]; .block == true and (.reason | contains("declined")) and (.reason | contains("AGENTS.md")))' <<< "$ask" >/dev/null \
+    || fail "OMP did not block a declined edit: $ask"
+jq -e 'any(.noUi[]; .block == true and (.reason | contains("no UI")))' <<< "$ask" >/dev/null \
+    || fail "OMP did not fail closed without a UI: $ask"
+jq -e 'any(.bashDeclined[]; .block == true and (.reason | contains("declined")))' <<< "$ask" >/dev/null \
+    || fail "OMP did not block a declined bash command: $ask"
+jq -e '.stop == null and any(.notifications[]; .message | contains("Left for the user to review and commit: CLAUDE.md"))' <<< "$ask" >/dev/null \
+    || fail "OMP stop did not hand off the approved guide edit: $ask"
+jq -e 'any(.warned[]; .additionalContext == "Substrate warning: stub warning") and any(.notifications[]; .type == "warning" and .message == "stub warning")' <<< "$ask" >/dev/null \
+    || fail "OMP did not surface a warn decision: $ask"
+jq -e 'any(.unreadable[]; .block == true and (.reason | contains("unreadable policy decision")))' <<< "$ask" >/dev/null \
+    || fail "OMP accepted an unreadable decision: $ask"
+git -C "$T/ask-repo" show --name-only --pretty=format: HEAD | grep -qx CLAUDE.md && fail "CLAUDE.md leaked into the OMP auto-checkpoint"
+[ -n "$(git -C "$T/ask-repo" status --porcelain=v1 -- CLAUDE.md)" ] || fail "OMP auto-checkpoint consumed the CLAUDE.md edit"
+
+printf 'parity-test: structural mirrors, lifecycle, checkpoint, command, push, and ask parity green\n'

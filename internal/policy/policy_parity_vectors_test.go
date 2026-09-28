@@ -45,7 +45,29 @@ func TestEnginePolicyParityProtectPaths(t *testing.T) {
 		{name: "redundant-normalized substrate config blocked", guard: "protect-paths", payload: filePayload("sub/./../substrate.json")},
 		{name: "nested substrate config is not canonical", guard: "protect-paths", payload: filePayload("sub/dir/substrate.json")},
 		{name: "dotSubstrate write blocked", guard: "protect-paths", payload: filePayload(".substrate/foo.txt")},
-		{name: "CLAUDE.md write blocked", guard: "protect-paths", payload: filePayload("CLAUDE.md")},
+		{name: "CLAUDE.md write asks", guard: "protect-paths", payload: filePayload("CLAUDE.md"), want: LevelAsk},
+		{name: "nested CLAUDE.md write asks", guard: "protect-paths", payload: filePayload("claude/CLAUDE.md"), want: LevelAsk},
+		{name: "AGENTS.md write asks", guard: "protect-paths", payload: filePayload("data/Lua/AGENTS.md"), want: LevelAsk},
+		{name: "CLAUDE.md lookalike allowed", guard: "protect-paths", payload: filePayload("docs/CLAUDE.md.bak"), want: LevelAllow},
+		{
+			name: "AGENTS.md symlink write blocked", guard: "protect-paths", payload: filePayload("AGENTS.md"), want: LevelBlock,
+			setup: func(t *testing.T, root string) {
+				writeRepoFile(t, root, "CLAUDE.md", "guide")
+				if err := os.Symlink("CLAUDE.md", filepath.Join(root, "AGENTS.md")); err != nil {
+					t.Fatalf("symlink: %v", err)
+				}
+			},
+		},
+		{
+			name: "ask_paths glob asks", guard: "protect-paths", payload: filePayload("wsl-mounts/map_shares.bat"), want: LevelAsk,
+			setup: func(t *testing.T, root string) { writeSubstrateJSON(t, root, `{"ask_paths":["wsl-mounts/*"]}`) },
+		},
+		{
+			name: "protected_paths outranks ask_paths", guard: "protect-paths", payload: filePayload("secrets/CLAUDE.md"), want: LevelBlock,
+			setup: func(t *testing.T, root string) {
+				writeSubstrateJSON(t, root, `{"protected_paths":["secrets/*"],"ask_paths":["secrets/*"]}`)
+			},
+		},
 		{
 			name: "protected_paths glob hit", guard: "protect-paths", payload: filePayload("secrets/key.pem"),
 			setup: func(t *testing.T, root string) { writeSubstrateJSON(t, root, `{"protected_paths":["secrets/*"]}`) },
@@ -105,7 +127,16 @@ func TestEnginePolicyParityProtectCommand(t *testing.T) {
 		{name: "multiline second line trips commit guard", guard: "protect-command", payload: cmdPayload("echo hi\njj commit -m 'x'", "")},
 		{name: "multiline false positive no block", guard: "protect-command", payload: cmdPayload("substrate\nverify", "")},
 		{name: "embedded quotes and backslashes blocked", guard: "protect-command", payload: cmdPayload(`echo "a\b" && jj commit -m "x"`, "")},
-		{name: "perl in-place mutator on CLAUDE.md blocked", guard: "protect-command", payload: cmdPayload("perl -pi -e 's/a/b/' CLAUDE.md", "")},
+		{name: "perl in-place mutator on CLAUDE.md asks", guard: "protect-command", payload: cmdPayload("perl -pi -e 's/a/b/' CLAUDE.md", ""), want: LevelAsk},
+		{name: "redirect into AGENTS.md asks", guard: "protect-command", payload: cmdPayload("echo rule >> sub/AGENTS.md", ""), want: LevelAsk},
+		{
+			name: "ask_paths literal mutation asks", guard: "protect-command", payload: cmdPayload("rm wsl-mounts/map_shares.bat", ""), want: LevelAsk,
+			setup: func(t *testing.T, root string) { writeSubstrateJSON(t, root, `{"ask_paths":["wsl-mounts/*"]}`) },
+		},
+		{
+			name: "protected path outranks CLAUDE.md in one command", guard: "protect-command", payload: cmdPayload("rm CLAUDE.md secrets/key.pem", ""), want: LevelBlock,
+			setup: func(t *testing.T, root string) { writeSubstrateJSON(t, root, `{"protected_paths":["secrets/*"]}`) },
+		},
 		{name: "top level command fallback blocked", guard: "protect-command", payload: topLevelCmdPayload("jj commit -m x")},
 		{name: "checkpoint accept-regression exempt", guard: "protect-command", payload: cmdPayload("substrate checkpoint --session s1 --accept-regression=probe:alpha", "s1")},
 		{name: "checkpoint accept-regression chained blocked", guard: "protect-command", payload: cmdPayload("substrate checkpoint --session s1 --accept-regression=a && .substrate/gate.sh --accept-regression=b", "s1")},

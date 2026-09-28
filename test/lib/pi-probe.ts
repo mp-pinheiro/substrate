@@ -1,4 +1,12 @@
-type ProbeContext = { cwd: string; ui: { notify(message: string, type: string): void } };
+type ProbeContext = {
+	cwd: string;
+	hasUI: boolean;
+	ui: {
+		notify(message: string, type: string): void;
+		confirm(title: string, message: string): Promise<boolean>;
+	};
+};
+type ProbeApproval = { hasUI: boolean; approve: boolean };
 type ProbeEvent = Record<string, unknown>;
 type ProbeHandler = (event: ProbeEvent, ctx: ProbeContext) => Promise<unknown> | unknown;
 type ProbeUpdate = (partial: { content: Array<{ type: string; text?: string }> }) => void;
@@ -18,6 +26,7 @@ export function createProbe() {
 	const commands: Record<string, unknown> = {};
 	const tools: Record<string, ProbeTool> = {};
 	const notifications: Array<{ message: string; type: string }> = [];
+	const prompts: Array<{ title: string; message: string }> = [];
 	let label = "";
 	const schema = (..._args: unknown[]): Record<string, never> => ({});
 	const pi = {
@@ -35,12 +44,17 @@ export function createProbe() {
 		},
 		typebox: { Type: { Object: schema, String: schema, Optional: schema, Array: schema } },
 	};
-	function context(cwd: string): ProbeContext {
+	function context(cwd: string, approval: ProbeApproval = { hasUI: false, approve: false }): ProbeContext {
 		return {
 			cwd,
+			hasUI: approval.hasUI,
 			ui: {
 				notify(message: string, type: string) {
 					notifications.push({ message, type });
+				},
+				async confirm(title: string, message: string) {
+					prompts.push({ title, message });
+					return approval.approve;
 				},
 			},
 		};
@@ -80,6 +94,7 @@ export function createProbe() {
 		commands,
 		tools,
 		notifications,
+		prompts,
 		context,
 		callAll,
 		resultAll,

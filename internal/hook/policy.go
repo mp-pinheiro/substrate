@@ -3,10 +3,14 @@ package hook
 import (
 	"io"
 	"os"
+	"strings"
 
+	"github.com/mp-pinheiro/substrate/internal/canonjson"
 	"github.com/mp-pinheiro/substrate/internal/config"
 	"github.com/mp-pinheiro/substrate/internal/policy"
 )
+
+const msgNoDecision = "blocked: policy returned no decision level\n"
 
 func buildInput(payload []byte, cmdPaths ...string) (policy.Input, bool) {
 	in := policy.Input{Raw: payload}
@@ -31,47 +35,92 @@ func buildInput(payload []byte, cmdPaths ...string) (policy.Input, bool) {
 		return in, true
 	}
 	in.SessionID = session
+	event, failed := jqAlt(v, "hook_event_name")
+	if failed {
+		return in, true
+	}
+	in.HookEvent = event
 	return in, false
 }
 
-func render(d policy.Decision) int {
-	if d.Block {
-		writeResult(nil, []byte(d.Stderr))
-		return d.Code
+func render(in policy.Input, d policy.Decision) int {
+	stdout, stderr, code := hookOutput(d, in.HookEvent == "PreToolUse")
+	writeResult(stdout, stderr)
+	return code
+}
+
+func hookOutput(d policy.Decision, canAsk bool) (stdout, stderr []byte, code int) {
+	switch d.Level {
+	case policy.LevelAllow:
+		return nil, nil, 0
+	case policy.LevelBlock:
+		return nil, []byte(d.Message), 2
+	case policy.LevelAsk:
+		if !canAsk {
+			return nil, []byte("blocked: " + d.Message + " This harness cannot ask the user, so the change is blocked; hand it to the user.\n"), 2
+		}
+		return preToolUseOutput(canonjson.NewObject().Set("hookSpecificOutput", canonjson.NewObject().
+			Set("hookEventName", "PreToolUse").
+			Set("permissionDecision", "ask").
+			Set("permissionDecisionReason", d.Message)))
+	case policy.LevelWarn:
+		return preToolUseOutput(canonjson.NewObject().
+			Set("hookSpecificOutput", canonjson.NewObject().
+				Set("hookEventName", "PreToolUse").
+				Set("additionalContext", d.Message)).
+			Set("systemMessage", d.Message))
 	}
-	return 0
+	return nil, []byte(msgNoDecision), 2
+}
+
+func preToolUseOutput(doc *canonjson.Object) (stdout, stderr []byte, code int) {
+	body, err := canonjson.Marshal(doc)
+	if err != nil {
+		return nil, []byte(msgNoDecision), 2
+	}
+	return append(body, '\n'), nil, 0
+}
+
+func pathInput(e env, stdin io.Reader) (policy.Input, *config.Config) {
+	payload, _ := io.ReadAll(stdin)
+	in, _ := buildInput(payload)
+	if in.FilePath == "" {
+		return in, nil
+	}
+	cfg, _ := config.LoadConfig(e.paths().ConfigPath)
+	return in, cfg
 }
 
 func dispatchProtectPaths(e env, stdin io.Reader) int {
-	payload, _ := io.ReadAll(stdin)
-	in, _ := buildInput(payload)
+	in, cfg := pathInput(e, stdin)
 	if in.FilePath == "" {
 		return 0
 	}
-	cfg, err := config.LoadConfig(e.paths().ConfigPath)
-	if err != nil {
-		cfg = nil
-	}
-	return render(policy.ProtectPaths(in, cfg, e.repoRoot))
+	return render(in, policy.ProtectPaths(in, cfg, e.repoRoot))
 }
-func dispatchCheckHard(stdin io.Reader) int {
-	payload, _ := io.ReadAll(stdin)
-	in, _ := buildInput(payload)
+
+func dispatchCheckHard(e env, stdin io.Reader) int {
+	in, cfg := pathInput(e, stdin)
 	if in.FilePath == "" {
 		return 0
 	}
-	decision, blocked := policy.CheckHard(in.FilePath)
-	if !blocked {
+	d := policy.CheckpointDecision(in.FilePath, cfg)
+	switch d.Level {
+	case policy.LevelAllow, policy.LevelWarn:
 		return 0
+	case policy.LevelAsk, policy.LevelBlock:
+		writeResult(nil, []byte(strings.TrimSuffix(d.Message, "\n")+"\n"))
+		return 2
 	}
-	return render(decision)
+	writeResult(nil, []byte(msgNoDecision))
+	return 2
 }
 
 func dispatchProtectCommand(e env, stdin io.Reader) int {
 	payload, _ := io.ReadAll(stdin)
 	in, decodeFailed := buildInput(payload, "tool_input.command", "command")
 	if decodeFailed {
-		return render(policy.Decision{Block: true, Code: 2, Stderr: "blocked: malformed Bash tool payload\n"})
+		return render(in, policy.Decision{Level: policy.LevelBlock, Message: "blocked: malformed Bash tool payload\n"})
 	}
 	if in.Command == "" {
 		return 0
@@ -90,7 +139,7 @@ func dispatchProtectCommand(e env, stdin io.Reader) int {
 			cfg = loaded
 		}
 	}
-	return render(policy.ProtectCommand(in, cfg, present, corrupt))
+	return render(in, policy.ProtectCommand(in, cfg, present, corrupt))
 }
 
 func dispatchEnforceJJ(e env, stdin io.Reader) int {
@@ -99,7 +148,7 @@ func dispatchEnforceJJ(e env, stdin io.Reader) int {
 	if decodeFailed {
 		in.Command = ""
 	}
-	return render(policy.EnforceJJ(in, e.repoRoot))
+	return render(in, policy.EnforceJJ(in, e.repoRoot))
 }
 
 func dispatchEnforceConventionalCommits(e env, stdin io.Reader) int {
@@ -108,5 +157,5 @@ func dispatchEnforceConventionalCommits(e env, stdin io.Reader) int {
 	if decodeFailed {
 		in.Command = ""
 	}
-	return render(policy.EnforceConventionalCommits(in, e.repoRoot))
+	return render(in, policy.EnforceConventionalCommits(in, e.repoRoot))
 }

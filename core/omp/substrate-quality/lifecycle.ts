@@ -19,7 +19,7 @@ async function pendingPathsForHook(
 	return blocked;
 }
 
-async function hardProtectedPending(root: string, paths: string[]): Promise<string[]> {
+async function uncommittablePending(root: string, paths: string[]): Promise<string[]> {
 	return pendingPathsForHook(root, paths, "check-hard");
 }
 
@@ -45,8 +45,8 @@ function registerSessionLifecycle(pi: ExtensionAPI): void {
 		}
 		const pendingOwned = status?.pendingOwned ?? [];
 		const dirtyPaths = status?.dirtyPaths ?? [];
-		const hardProtected = await hardProtectedPending(root, pendingOwned);
-		if (pendingOwned.length > 0 && hardProtected.length === pendingOwned.length) {
+		const uncommittable = await uncommittablePending(root, pendingOwned);
+		if (pendingOwned.length > 0 && uncommittable.length === pendingOwned.length) {
 			ctx.ui.notify(
 				`[substrate — hand to user] pending paths are policy-protected and can never be agent-committed: ${pendingOwned.join(", ")}. Ask the user to commit them; no checkpoint retry will succeed.`,
 				"warning",
@@ -54,7 +54,7 @@ function registerSessionLifecycle(pi: ExtensionAPI): void {
 			return;
 		}
 		const protectedPending = await policyProtectedPending(root, pendingOwned);
-		const fixableProtected = protectedPending.filter((path) => !hardProtected.includes(path));
+		const fixableProtected = protectedPending.filter((path) => !uncommittable.includes(path));
 		const trackingError = status?.trackingError ?? null;
 		const driftNotice = status?.driftNotice ?? null;
 		let autoFailure = "";
@@ -67,8 +67,10 @@ function registerSessionLifecycle(pi: ExtensionAPI): void {
 			const receipt = result.receipt;
 			if (receipt) {
 				writeRuntimeState(root, { lastCheckpoint: receipt });
+				const handoff =
+					uncommittable.length > 0 ? ` Left for the user to review and commit: ${uncommittable.join(", ")}.` : "";
 				ctx.ui.notify(
-					`Substrate auto-checkpoint ${receipt.commit.slice(0, 12)} committed agent-owned work. No push performed.`,
+					`Substrate auto-checkpoint ${receipt.commit.slice(0, 12)} committed agent-owned work. No push performed.${handoff}`,
 					"info",
 				);
 				return;

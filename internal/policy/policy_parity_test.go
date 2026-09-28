@@ -103,6 +103,7 @@ type parityVector struct {
 	guard   string
 	payload func(repoRoot string) map[string]any
 	setup   func(t *testing.T, repoRoot string)
+	want    Level
 }
 
 func runParityVectors(t *testing.T, vectors []parityVector) {
@@ -150,21 +151,41 @@ func runEnginePolicyParity(t *testing.T, v parityVector) {
 	default:
 		t.Fatalf("unknown guard %q", v.guard)
 	}
-	goCode := 0
-	if got.Block {
-		goCode = got.Code
+	if v.want != 0 && got.Level != v.want {
+		t.Errorf("%s: level %d, want %d (message=%q)", v.name, got.Level, v.want, got.Message)
 	}
+	engineLevel, engineMessage := decodeEngineDecision(t, engineRes)
+	if got.Level != engineLevel {
+		t.Errorf("%s: level mismatch: go=%d engine=%d (go message=%q engine stdout=%q stderr=%q)",
+			v.name, got.Level, engineLevel, got.Message, string(engineRes.stdout), string(engineRes.stderr))
+	}
+	if got.Message != engineMessage {
+		t.Errorf("%s: message mismatch:\n go=%q\nengine=%q", v.name, got.Message, engineMessage)
+	}
+}
 
-	if goCode != engineRes.code {
-		t.Errorf("%s: exit code mismatch: go=%d engine=%d (go stderr=%q engine stderr=%q)",
-			v.name, goCode, engineRes.code, got.Stderr, string(engineRes.stderr))
+func decodeEngineDecision(t *testing.T, res engineResult) (Level, string) {
+	t.Helper()
+	switch {
+	case res.code == 2 && len(res.stdout) == 0:
+		return LevelBlock, string(res.stderr)
+	case res.code != 0 || len(res.stderr) != 0:
+		t.Fatalf("unexpected engine result: code=%d stdout=%q stderr=%q", res.code, res.stdout, res.stderr)
+	case len(res.stdout) == 0:
+		return LevelAllow, ""
 	}
-	if got.Stderr != string(engineRes.stderr) {
-		t.Errorf("%s: stderr mismatch:\n go=%q\nengine=%q", v.name, got.Stderr, string(engineRes.stderr))
+	var out struct {
+		HookSpecificOutput struct {
+			HookEventName            string `json:"hookEventName"`
+			PermissionDecision       string `json:"permissionDecision"`
+			PermissionDecisionReason string `json:"permissionDecisionReason"`
+		} `json:"hookSpecificOutput"`
 	}
-	if len(engineRes.stdout) != 0 {
-		t.Errorf("%s: unexpected engine stdout: %q", v.name, string(engineRes.stdout))
+	if err := json.Unmarshal(res.stdout, &out); err != nil ||
+		out.HookSpecificOutput.HookEventName != "PreToolUse" || out.HookSpecificOutput.PermissionDecision != "ask" {
+		t.Fatalf("engine stdout is not a PreToolUse ask decision: %q", res.stdout)
 	}
+	return LevelAsk, out.HookSpecificOutput.PermissionDecisionReason
 }
 
 func writeRepoFile(t *testing.T, repoRoot, rel, content string) {
@@ -193,8 +214,9 @@ func makeJJRepo(t *testing.T, repoRoot string) {
 func cmdPayload(cmd, session string) func(string) map[string]any {
 	return func(string) map[string]any {
 		return map[string]any{
-			"tool_input": map[string]any{"command": cmd},
-			"session_id": session,
+			"hook_event_name": "PreToolUse",
+			"tool_input":      map[string]any{"command": cmd},
+			"session_id":      session,
 		}
 	}
 }
@@ -207,6 +229,6 @@ func topLevelCmdPayload(cmd string) func(string) map[string]any {
 
 func filePayload(path string) func(string) map[string]any {
 	return func(string) map[string]any {
-		return map[string]any{"tool_input": map[string]any{"file_path": path}}
+		return map[string]any{"hook_event_name": "PreToolUse", "tool_input": map[string]any{"file_path": path}}
 	}
 }

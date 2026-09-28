@@ -6,6 +6,7 @@ import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { initializeRuntime, writeRuntimeState } from "./substrate-quality/identity";
 import { registerSessionLifecycle } from "./substrate-quality/lifecycle";
 import {
+	applyPolicyDecision,
 	commandTargetCwd,
 	hasDirectCommit,
 	hasGitMutation,
@@ -13,6 +14,7 @@ import {
 	hasPush,
 	findGateRoot,
 	findJjRoot,
+	hookDecision,
 	runCommand,
 	SUBSTRATE_POLICY,
 	toolPath,
@@ -202,13 +204,9 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 		if (!root) return;
 		if (!existsSync(join(root, ".substrate", "VERSION"))) return;
 		const result = await runCommand(root, [...engineBaseCmd(root), "hook", "protect-paths"], {
-			stdin: JSON.stringify({ tool_input: { file_path: abs } }),
+			stdin: JSON.stringify({ hook_event_name: "PreToolUse", tool_input: { file_path: abs } }),
 		});
-		if (result.exitCode === 0) return;
-		return {
-			block: true,
-			reason: result.stderr.trim() || `blocked: protected-path guard failed with exit ${result.exitCode}`,
-		};
+		return applyPolicyDecision(hookDecision(result, "blocked: protected-path guard failed"), ctx);
 	});
 
 	// mirrors: protect-command.sh — shared Bash governance policy backs Claude PreToolUse.
@@ -218,13 +216,9 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 		if (!root) return;
 	if (!existsSync(join(root, ".substrate", "VERSION"))) return;
 	const result = await runCommand(root, [...engineBaseCmd(root), "hook", "protect-command"], {
-		stdin: JSON.stringify({ tool_input: event.input }),
+		stdin: JSON.stringify({ hook_event_name: "PreToolUse", tool_input: event.input }),
 	});
-		if (result.exitCode === 0) return;
-		return {
-			block: true,
-			reason: result.stderr.trim() || `BLOCKED: Bash governance guard failed with exit ${result.exitCode}`,
-		};
+		return applyPolicyDecision(hookDecision(result, "BLOCKED: Bash governance guard failed"), ctx);
 	});
 
 	// mirrors: enforce-jj.sh — substrate-managed jj repos only (plain jj repos

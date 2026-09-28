@@ -1,0 +1,1 @@
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":"CLAUDE.md holds agent instructions. Approve only after reviewing the change; the checkpoint leaves it for you to commit."}}

@@ -23,6 +23,7 @@ type Config struct {
 	Profiles       []string
 	Unscanned      []string
 	ProtectedPaths []string
+	AskPaths       []string
 	Contracts      []Contract
 	Scopes         map[string]Scope
 	CommentTags    []string
@@ -49,6 +50,7 @@ func LoadConfig(path string) (*Config, error) {
 		decodeStringSlice(top["profiles"], &cfg.Profiles)
 		decodeStringSlice(top["unscanned"], &cfg.Unscanned)
 		decodeStringSlice(top["protected_paths"], &cfg.ProtectedPaths)
+		decodeStringSlice(top["ask_paths"], &cfg.AskPaths)
 		cfg.Scopes = decodeScopes(top["scopes"])
 		cfg.Contracts, cfg.contractsValid = decodeContracts(top["contracts"])
 		cfg.CommentTags = decodeCommentTags(top["comment"])

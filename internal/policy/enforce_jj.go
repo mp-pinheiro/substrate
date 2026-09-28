@@ -22,20 +22,20 @@ func isJJRepo(repoRoot string) bool {
 // whole command, not per line, before the per-line guards below.
 func EnforceJJ(in Input, repoRoot string) Decision {
 	if !isJJRepo(repoRoot) {
-		return Decision{}
+		return allow()
 	}
 	cmd := reJJGit.ReplaceAllString(in.Command, "JJ_GIT")
 	if cmd == "" {
-		return Decision{}
+		return allow()
 	}
 	if reGitMutate.match(cmd) {
 		return block("BLOCKED: this repo is jj-managed — use substrate_checkpoint after direct verification, not direct VCS mutation (see docs/jj-workflow.md).\n")
 	}
 	if reGitPush.match(cmd) {
 		if reTagPush.match(cmd) {
-			return Decision{}
+			return allow()
 		}
 		return block("BLOCKED: use the guarded publication workflow, not git push, in this jj-managed repo (release tags are the exception: 'git push origin vX.Y.Z'). See docs/jj-workflow.md.\n")
 	}
-	return Decision{}
+	return allow()
 }

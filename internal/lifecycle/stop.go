@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/mp-pinheiro/substrate/internal/canonjson"
+	"github.com/mp-pinheiro/substrate/internal/config"
 	"github.com/mp-pinheiro/substrate/internal/policy"
 )
 
@@ -102,13 +103,20 @@ func (e *Engine) Stop(ctx context.Context, payload []byte) Result {
 	}
 	current := e.snapshot(ctx)
 	decision := evaluateStop(state, current, stopHookActive(payload))
-	protected := 0
+	cfg, _ := config.LoadConfig(e.paths.ConfigPath)
+	uncommittable := 0
+	var handoff []string
 	for _, path := range decision.Pending {
-		if _, blocked := policy.CheckHard(path); blocked {
-			protected++
+		switch policy.CheckpointDecision(path, cfg).Level {
+		case policy.LevelAllow, policy.LevelWarn:
+		case policy.LevelAsk:
+			uncommittable++
+			handoff = append(handoff, path)
+		default:
+			uncommittable++
 		}
 	}
-	if len(decision.Pending) > 0 && protected == len(decision.Pending) {
+	if len(decision.Pending) > 0 && uncommittable == len(decision.Pending) {
 		return stopSystemMessage(fmt.Sprintf("[substrate — hand to user] pending paths are policy-protected and can never be agent-committed: %s. Ask the user to commit them; no checkpoint retry will succeed.", strings.Join(decision.Pending, ", ")))
 	}
 
@@ -124,7 +132,11 @@ func (e *Engine) Stop(ctx context.Context, payload []byte) Result {
 			if commit == "" {
 				autoNote = " [substrate — hand to user] recovery.protocol-invalid: automatic checkpoint returned no valid receipt."
 			} else {
-				return stopSystemMessage(fmt.Sprintf("Substrate auto-checkpoint %s committed agent-owned work. No push performed.", commit))
+				message := fmt.Sprintf("Substrate auto-checkpoint %s committed agent-owned work. No push performed.", commit)
+				if len(handoff) > 0 {
+					message += fmt.Sprintf(" Left for the user to review and commit: %s.", strings.Join(handoff, ", "))
+				}
+				return stopSystemMessage(message)
 			}
 		} else if valid {
 			autoNote = fmt.Sprintf(" %s %s: %s. %s Next: %s", report.Label(), report.Code, report.Summary, strings.Join(report.Details, " "), report.Next)

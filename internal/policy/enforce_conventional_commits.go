@@ -8,20 +8,20 @@ var (
 
 func EnforceConventionalCommits(in Input, repoRoot string) Decision {
 	if !isJJRepo(repoRoot) {
-		return Decision{}
+		return allow()
 	}
 	cmd := in.Command
 	if cmd == "" {
-		return Decision{}
+		return allow()
 	}
 	if !reJJCommitForms.match(cmd) {
-		return Decision{}
+		return allow()
 	}
 	if !reMessageFlag.match(cmd) {
-		return Decision{}
+		return allow()
 	}
 	if !reConventional.match(cmd) {
 		return block("BLOCKED: commit message must follow Conventional Commits — 'type(scope): subject'. Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert (append ! for breaking). Example: jj commit -m 'feat(auth): add login'.\n")
 	}
-	return Decision{}
+	return allow()
 }

@@ -92,11 +92,30 @@ func RunCheckpoint(ctx context.Context, args []string) int {
 		logx.Err().Line("checkpoint blocked: %v", err)
 		return ExitPreflight
 	}
+	cfg, err := config.LoadConfig(filepath.Join(repoRoot, "substrate.json"))
+	if err != nil {
+		logx.Err().Line("checkpoint blocked: %v", err)
+		return ExitPreflight
+	}
+	var commitPaths, handoff []string
 	for _, p := range normalized {
-		if d, blocked := policy.CheckHard(p); blocked {
-			logx.Err().Line("checkpoint %s", strings.TrimSuffix(d.Stderr, "\n"))
+		d := policy.CheckpointDecision(p, cfg)
+		switch classifyCheckpoint(d) {
+		case checkpointCommit:
+			commitPaths = append(commitPaths, p)
+		case checkpointHandoff:
+			handoff = append(handoff, p)
+		default:
+			if d.Level == policy.LevelBlock {
+				logx.Err().Line("checkpoint %s", strings.TrimSuffix(d.Message, "\n"))
+			} else {
+				logx.Err().Line("checkpoint blocked: policy returned no decision level for %s", p)
+			}
 			return ExitPreflight
 		}
+	}
+	if len(handoff) > 0 && (opts.session == "" || len(commitPaths) == 0) {
+		return emitCheckpointFailure(opts, handoffReport(handoff), ExitPreflight)
 	}
 
 	current, err := ChangedPaths(ctx, repo)
@@ -114,11 +133,38 @@ func RunCheckpoint(ctx context.Context, args []string) int {
 		return ExitPreflight
 	}
 
-	leftover := SetDifference(normalized, current)
+	leftover := SetDifference(commitPaths, current)
 	if len(leftover) == 0 {
-		return runCheckpointFull(ctx, repo, repoRoot, metadataDir, normalized, opts, baselinePath)
+		return runCheckpointFull(ctx, repo, repoRoot, metadataDir, commitPaths, opts, baselinePath)
 	}
-	return runCheckpointScoped(ctx, repo, repoRoot, metadataDir, normalized, leftover, opts, baselinePath)
+	return runCheckpointScoped(ctx, repo, repoRoot, metadataDir, commitPaths, leftover, handoff, opts, baselinePath)
+}
+
+type checkpointClass int
+
+const (
+	checkpointRefuse checkpointClass = iota
+	checkpointCommit
+	checkpointHandoff
+)
+
+func classifyCheckpoint(d policy.Decision) checkpointClass {
+	switch d.Level {
+	case policy.LevelAllow, policy.LevelWarn:
+		return checkpointCommit
+	case policy.LevelAsk:
+		return checkpointHandoff
+	}
+	return checkpointRefuse
+}
+
+func handoffReport(paths []string) recovery.Report {
+	return recovery.Report{
+		Status: "blocked", Code: "checkpoint.handoff", Owner: "user", Retry: "terminal",
+		Summary: "the checkpoint never commits these paths; they need the user's review and commit",
+		Details: paths,
+		Next:    "ask the user to review and commit these paths themselves",
+	}
 }
 
 type checkpointOpts struct {
@@ -301,10 +347,10 @@ func runCheckpointFull(ctx context.Context, repo *vcs.Repo, repoRoot, metadataDi
 	}
 	logx.Out().Line("%s", verifyOut)
 
-	return finishCheckpoint(ctx, repo, repoRoot, metadataDir, commit, publicationBookmark, opts)
+	return finishCheckpoint(ctx, repo, repoRoot, metadataDir, commit, publicationBookmark, nil, opts)
 }
 
-func runCheckpointScoped(ctx context.Context, repo *vcs.Repo, repoRoot, metadataDir string, normalized, leftover []string, opts checkpointOpts, baselinePath string) int {
+func runCheckpointScoped(ctx context.Context, repo *vcs.Repo, repoRoot, metadataDir string, normalized, leftover, handoff []string, opts checkpointOpts, baselinePath string) int {
 	for _, p := range leftover {
 		if p == "substrate-baseline.json" {
 			logx.Err().Line("checkpoint blocked: substrate-baseline.json carries changes outside agent ownership — resolve it before a path-scoped checkpoint")
@@ -384,16 +430,22 @@ func runCheckpointScoped(ctx context.Context, repo *vcs.Repo, repoRoot, metadata
 		}, 1)
 	}
 
-	if result := finishCheckpoint(ctx, repo, repoRoot, metadataDir, commit, publicationBookmark, opts); result != 0 {
+	if result := finishCheckpoint(ctx, repo, repoRoot, metadataDir, commit, publicationBookmark, handoff, opts); result != 0 {
 		return result
 	}
-	if len(leftover) > 0 {
-		logx.Err().Line("checkpoint left unowned pending paths in place:")
-		for _, p := range leftover {
-			logx.Err().Line("  %s", p)
-		}
-	}
+	logPendingPaths("checkpoint left unowned pending paths in place:", SetDifference(handoff, leftover))
+	logPendingPaths("checkpoint left these paths for the user to review and commit:", handoff)
 	return 0
+}
+
+func logPendingPaths(header string, paths []string) {
+	if len(paths) == 0 {
+		return
+	}
+	logx.Err().Line("%s", header)
+	for _, p := range paths {
+		logx.Err().Line("  %s", p)
+	}
 }
 
 func resolveRepoRoot() (string, error) {
@@ -406,7 +458,7 @@ func resolveRepoRoot() (string, error) {
 	}
 	return dir, nil
 }
-func finishCheckpoint(ctx context.Context, repo *vcs.Repo, repoRoot, metadataDir, commit, publicationBookmark string, opts checkpointOpts) int {
+func finishCheckpoint(ctx context.Context, repo *vcs.Repo, repoRoot, metadataDir, commit, publicationBookmark string, handoff []string, opts checkpointOpts) int {
 	acceptCSV := strings.Join(opts.accept, ",")
 	receiptJSON, err := receipt.WriteWithPublicationBookmark(ctx, repoRoot, "checkpoint", commit, string(repo.Kind), opts.session, acceptCSV, publicationBookmark)
 	if err != nil {
@@ -423,7 +475,7 @@ func finishCheckpoint(ctx context.Context, repo *vcs.Repo, repoRoot, metadataDir
 		pathsCfg, _ := config.DiscoverFromSubstrateDir(substrateDir)
 		le := lifecycle.New(pathsCfg, repo)
 		le.SetStateDir(filepath.Join(metadataDir, "substrate", "agent-sessions"))
-		result := le.Complete(ctx, opts.session, commit)
+		result := le.Complete(ctx, opts.session, commit, handoff)
 		if result.Code != 0 {
 			_, _ = os.Stderr.Write(result.Stderr)
 			return emitCheckpointFailure(opts, recovery.Report{

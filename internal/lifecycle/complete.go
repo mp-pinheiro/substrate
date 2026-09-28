@@ -7,7 +7,7 @@ import (
 	"github.com/mp-pinheiro/substrate/internal/vcs"
 )
 
-func (e *Engine) Complete(ctx context.Context, session, commit string) Result {
+func (e *Engine) Complete(ctx context.Context, session, commit string, handoff []string) Result {
 	statePath := e.statePath(session)
 	state, present, err := e.loadLedgerOrBail(statePath)
 	if !present {
@@ -18,7 +18,8 @@ func (e *Engine) Complete(ctx context.Context, session, commit string) Result {
 	}
 
 	current := e.snapshot(ctx)
-	pending := intersectPreserveOrder(current.Entries.Keys(), objStringArray(state, "ownedPaths"))
+	owned := intersectPreserveOrder(current.Entries.Keys(), objStringArray(state, "ownedPaths"))
+	pending := subtractPreserveOrder(owned, handoff)
 	if len(pending) != 0 {
 		return Result{Stderr: []byte("substrate lifecycle: checkpoint left owned paths pending\n"), Code: 2}
 	}

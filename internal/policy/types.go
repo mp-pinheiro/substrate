@@ -14,13 +14,31 @@ type Input struct {
 	FilePath  string
 	SessionID string
 	RepoRoot  string
+	HookEvent string
 }
 
+type Level int
+
+const (
+	_ Level = iota
+	LevelAllow
+	LevelWarn
+	LevelAsk
+	LevelBlock
+)
+
 type Decision struct {
-	Block    bool
-	Stderr   string
-	Code     int
+	Level    Level
+	Message  string
 	Recovery recovery.Report
+}
+
+func allow() Decision {
+	return Decision{Level: LevelAllow}
+}
+
+func ask(format string, a ...any) Decision {
+	return Decision{Level: LevelAsk, Message: fmt.Sprintf(format, a...)}
 }
 
 func block(format string, a ...any) Decision {
@@ -58,7 +76,7 @@ func block(format string, a ...any) Decision {
 		strings.Contains(stderr, "checkpoint/baseline-transaction") {
 		report.Next = "after direct verification, call substrate_checkpoint"
 	}
-	return Decision{Block: true, Code: 2, Stderr: stderr, Recovery: report}
+	return Decision{Level: LevelBlock, Message: stderr, Recovery: report}
 }
 
 // A6: grep is line-oriented; split the subject and test each line so RE2

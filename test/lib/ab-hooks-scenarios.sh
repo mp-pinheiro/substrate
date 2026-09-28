@@ -22,6 +22,7 @@ matrix() {
     hook_scenario pp-nested        hooks/protect-paths.sh "$(pp 'deep/substrate-baseline.json')" jj prepare_none
     hook_scenario pp-vendored      hooks/protect-paths.sh "$(pp 'substrate-engine gate')"        jj prepare_none
     hook_scenario pp-governance    hooks/protect-paths.sh "$(pp 'CLAUDE.md')"                 jj prepare_none
+    hook_scenario pp-governance-ask hooks/protect-paths.sh '{"hook_event_name":"PreToolUse","tool_input":{"file_path":"CLAUDE.md"}}' jj prepare_none
     hook_scenario pp-protected     hooks/protect-paths.sh "$(pp 'secrets/token.txt')"         jj prepare_none
     hook_scenario pp-symlink       hooks/protect-paths.sh "$(pp 'link.md')"                   jj prepare_symlink
     hook_scenario pp-corrupt       hooks/protect-paths.sh "$(pp 'README.md')"                 jj prepare_corrupt_config

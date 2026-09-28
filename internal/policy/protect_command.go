@@ -30,7 +30,7 @@ var (
 func ProtectCommand(in Input, cfg *config.Config, configPresent, configCorrupt bool) Decision {
 	cmd := in.Command
 	if cmd == "" {
-		return Decision{}
+		return allow()
 	}
 
 	if matchAnyLine(reVerifyMention, cmd) && !matchAnyLine(reVerifyExact, cmd) {
@@ -74,9 +74,6 @@ func ProtectCommand(in Input, cfg *config.Config, configPresent, configCorrupt b
 	if d, blocked := blockIfNamed(cmd, mutator, ".substrate", "vendored engine"); blocked {
 		return d
 	}
-	if d, blocked := blockIfNamed(cmd, mutator, "CLAUDE.md", "governance"); blocked {
-		return d
-	}
 	if configPresent && cfg != nil {
 		for _, g := range cfg.ProtectedPaths {
 			lit := literalPrefix(g)
@@ -98,7 +95,20 @@ func ProtectCommand(in Input, cfg *config.Config, configPresent, configCorrupt b
 			}
 		}
 	}
-	return Decision{}
+	for _, needle := range agentInstructionFiles {
+		if namedMutation(cmd, mutator, needle) != mutationNone {
+			return ask("Bash command can change %s, which holds agent instructions. Approve only after reviewing the command; the checkpoint leaves the result for you to commit.", needle)
+		}
+	}
+	if configPresent && cfg != nil {
+		for _, g := range cfg.AskPaths {
+			lit := literalPrefix(g)
+			if lit != "" && namedMutation(cmd, mutator, lit) != mutationNone {
+				return ask("Bash command can change %s (substrate.json ask_paths). Approve only after reviewing the command; the checkpoint leaves the result for you to commit.", lit)
+			}
+		}
+	}
+	return allow()
 }
 
 func checkpointAcceptExempt(cmd string) bool {
@@ -122,7 +132,7 @@ func checkSessionBinding(session, cmd, kind string) (Decision, bool) {
 	if !matchAnyLine(sessionPattern(session), cmd) {
 		return block("BLOCKED: Claude %s command must carry its current lifecycle session id\n", kind), true
 	}
-	return Decision{}, false
+	return allow(), false
 }
 
 func validSession(s string) bool {
@@ -143,21 +153,42 @@ func sessionPattern(session string) *regexp.Regexp {
 	return regexp.MustCompile(`--session([=[:space:]])['"]?` + regexp.QuoteMeta(session) + `(['"[:space:]]|$)`)
 }
 
+type mutation int
+
+const (
+	mutationNone mutation = iota
+	mutationCommand
+	mutationRedirect
+	mutationIndirect
+)
+
 func blockIfNamed(cmd string, mutator bool, needle, label string) (Decision, bool) {
+	switch namedMutation(cmd, mutator, needle) {
+	case mutationCommand:
+		return block("BLOCKED: Bash command can mutate governed path %s (%s); use the protected workflow instead\n", needle, label), true
+	case mutationRedirect:
+		return block("BLOCKED: shell redirection targets governed path %s (%s)\n", needle, label), true
+	case mutationIndirect:
+		return block("BLOCKED: indirect shell write resolves to governed path %s (%s)\n", needle, label), true
+	}
+	return allow(), false
+}
+
+func namedMutation(cmd string, mutator bool, needle string) mutation {
 	if needle == "" {
-		return Decision{}, false
+		return mutationNone
 	}
 	if mutator && mutatorContains(cmd, needle) {
-		return block("BLOCKED: Bash command can mutate governed path %s (%s); use the protected workflow instead\n", needle, label), true
+		return mutationCommand
 	}
 	dotted := escapeDots(needle)
 	if redirRe, ok := compileNeedleRegex(`(^|[[:space:]])>>?[[:space:]]*['"]?[^;&|]*` + dotted); ok && matchAnyLine(redirRe, cmd) {
-		return block("BLOCKED: shell redirection targets governed path %s (%s)\n", needle, label), true
+		return mutationRedirect
 	}
 	if assignRe, ok := compileNeedleRegex(`[A-Za-z_][A-Za-z0-9_]*=['"]?[^;&|]*` + dotted); ok && matchAnyLine(assignRe, cmd) && matchAnyLine(reTeeOrRedir, cmd) {
-		return block("BLOCKED: indirect shell write resolves to governed path %s (%s)\n", needle, label), true
+		return mutationIndirect
 	}
-	return Decision{}, false
+	return mutationNone
 }
 
 func commandSegments(cmd string) []string {

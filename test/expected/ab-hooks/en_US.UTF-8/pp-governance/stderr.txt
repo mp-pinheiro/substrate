@@ -1,1 +1,1 @@
-blocked: CLAUDE.md is governance policy — present the change to the user
+blocked: CLAUDE.md holds agent instructions. Approve only after reviewing the change; the checkpoint leaves it for you to commit. This harness cannot ask the user, so the change is blocked; hand it to the user.
