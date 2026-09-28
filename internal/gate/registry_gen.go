@@ -15,7 +15,7 @@ var RegistryDigests = map[string]string{
 	"64-constructs.sh":       "a3f13728b8d4298e37602124caaacc20a0077fb7968bc2d1f34c96d37222bb9f",
 	"71-kit-tsc.sh":          "68fc1fc57bbd384796fbc9945091c164684b01bf8029ecf1018e1295ff1daffc",
 	"75-go-build.sh":         "b1270dae0bd3edd89ead3231e3083906734d6a55ac9546ea9657d8e578ebcba9",
-	"76-golangci.sh":         "53661b0df799d7c9886adb38af9c9537594824e22485ef5eb283c396b7458765",
+	"76-golangci.sh":         "416f020d003e5af2ec60142f01726b01b7c9d18cc4503211a86a459f33f50d96",
 	"81-engine-ts-parity.sh": "c9031c40d9c238748979173b3eaaca48a4734ff5e2c29ebf66d97ec17e6ee38a",
 	"82-check-registry.sh":   "afa6d494e548c4e81017f60ae34f980b448636510e6a41e9dbe67fd52c5d15bf",
 }

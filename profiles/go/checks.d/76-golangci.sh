@@ -15,7 +15,7 @@ if [ ! -f "$REPO_ROOT/.golangci.yml" ]; then
 fi
 require_bin golangci-lint "profile toolchain — see profiles/go/profile.json"
 
-out=$(cd "$go_dir" && golangci-lint run --timeout 3m --config "$REPO_ROOT/.golangci.yml" 2>&1)
+out=$(cd "$go_dir" && golangci-lint run --allow-serial-runners --timeout 3m --config "$REPO_ROOT/.golangci.yml" 2>&1)
 rc=$?
 if [ "$rc" -eq 0 ]; then
     exit 0

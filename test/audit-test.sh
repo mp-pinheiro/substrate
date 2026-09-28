@@ -66,4 +66,14 @@ state: committed
 EOF
 "$T/.substrate/audit.sh" >/dev/null 2>&1 && fail "regression masked by unverifiable sibling"
 
-printf 'audit-test: 5 cases green\n'
+rm "$T/.pi/plans/mixed.md"
+
+export AUDIT_RUNS="$T/runs"
+for name in shared-a shared-b; do
+    printf '%s\n' 'state: committed' '## Acceptance' '- [x] shared claim :: echo run >> "$AUDIT_RUNS"' > "$T/.pi/plans/$name.md"
+done
+out=$("$T/.substrate/audit.sh" 2>&1) || fail "shared oracle failed the audit: $out"
+[ "$(grep -c '\[ok\] shared claim' <<< "$out")" -eq 2 ] || fail "shared oracle not reported for both plans: $out"
+[ "$(wc -l < "$AUDIT_RUNS")" -eq 1 ] || fail "an oracle listed by two plans must run once per audit"
+
+printf 'audit-test: 6 cases green\n'

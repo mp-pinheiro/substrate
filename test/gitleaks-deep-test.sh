@@ -96,8 +96,7 @@ printf 'fake-v2\n' > "$GITLEAKS_VERSION_FILE"
 .substrate/gitleaks-deep.sh >/dev/null 2>&1 || fail "version-invalidated deep scan failed"
 [ "$(wc -l < "$GITLEAKS_COUNT")" -eq 5 ] || fail "gitleaks version change did not invalidate the cache"
 
-scan_steps=$(yq -r '[.jobs.gate.steps[] | select(.run == ".substrate/gitleaks-deep.sh")] | length' \
-    "$KIT_ROOT/core/ci/github-gate.yml")
+scan_steps=$(grep -cxE '[[:space:]]+(- )?run: \.substrate/gitleaks-deep\.sh' "$KIT_ROOT/core/ci/github-gate.yml")
 [ "$scan_steps" -eq 1 ] || fail "consumer CI does not own exactly one full-history scan"
 if grep -Fq 'gitleaks/gitleaks-action' "$KIT_ROOT/core/ci/github-gate.yml"; then
     fail "consumer CI still carries a second full-history scanner"
