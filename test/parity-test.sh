@@ -238,6 +238,7 @@ jq -e '.status == "passed" and .source == "checkpoint"' \
     "$T/repo/.git/substrate/gate-receipt.json" >/dev/null || fail "OMP checkpoint receipt missing"
 
 cat > "$T/omp-acceptance.ts" <<'TS'
+import { execFileSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 
 const { bootProbe } = await import(process.argv[3]);
@@ -264,6 +265,7 @@ const declined = await tools.substrate_checkpoint.execute("declined", params, un
 const promptsAfterDecline = prompts.length;
 const approving = probe.context(repo, { hasUI: true, approve: true });
 const approved = await tools.substrate_checkpoint.execute("approved", params, undefined, undefined, approving);
+const approvedHead = execFileSync("git", ["-C", repo, "log", "-1", "--pretty=%s"], { encoding: "utf8" }).trim();
 const updateNoUI = await tools.substrate_update.execute(
 	"update-no-ui",
 	{ acceptRegression: ["dup_pct"], acceptRegressionReason: params.acceptRegressionReason },
@@ -281,6 +283,7 @@ console.log(
 		promptsAfterDecline,
 		prompts,
 		approved,
+		approvedHead,
 		updateNoUI,
 		update,
 	}),
@@ -298,8 +301,8 @@ jq -e '.prompts[0].title == "Substrate: accept ratchet regression?" and (.prompt
     <<< "$acceptance" >/dev/null || fail "OMP regression prompt did not name the metric and reason: $acceptance"
 jq -e '.approved.details.status == "passed" and (.approved.isError // false) == false and (.prompts | length) == 2' \
     <<< "$acceptance" >/dev/null || fail "OMP checkpoint did not commit after the user approved the regression: $acceptance"
-[ "$(git -C "$T/accept-repo" log -1 --pretty=%s)" = 'fix(shell): accept a reviewed regression' ] \
-    || fail "OMP approved checkpoint wrote the wrong commit"
+jq -e '.approvedHead == "fix(shell): accept a reviewed regression"' \
+    <<< "$acceptance" >/dev/null || fail "OMP approved checkpoint wrote the wrong commit: $acceptance"
 jq -e '.updateNoUI.isError == true and (.updateNoUI.content[0].text | contains("needs the user'"'"'s approval")) and (.prompts | length) == 2' \
     <<< "$acceptance" >/dev/null || fail "OMP update accepted a regression without a UI to ask: $acceptance"
 jq -e '(.update.isError // false) == false and .update.details.operation == "update" and (.update.details.status == "committed" or .update.details.status == "noop")' \
