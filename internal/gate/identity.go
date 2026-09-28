@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/mp-pinheiro/substrate/internal/engineselect"
 )
 
 type vendorIdentity struct {
@@ -37,7 +39,7 @@ func verifyEngineIdentity(repoRoot, version, _ string) error {
 
 	switch vendor.Source {
 	case "worktree":
-		if version != vendor.Version {
+		if !engineselect.Accepts(vendor.Source, vendor.Version, version) {
 			return fmt.Errorf("engine provenance mismatch: running %q, worktree requires %q", version, vendor.Version)
 		}
 		return nil
@@ -45,16 +47,13 @@ func verifyEngineIdentity(repoRoot, version, _ string) error {
 		if _, err := decodeHex(vendor.KitRevision, 20); err != nil {
 			return fmt.Errorf("engine provenance: invalid trunk kitRevision: %w", err)
 		}
-		if version != vendor.Version {
+		if !engineselect.Accepts(vendor.Source, vendor.Version, version) {
 			return fmt.Errorf("engine provenance mismatch: running %q, trunk kit requires %q", version, vendor.Version)
 		}
 		return nil
 	case "release", "nightly", "module":
-		release := vendor.Version + "+release"
-		nightly := vendor.Version + "+nightly"
-		module := vendor.Version + "+module"
-		if version != release && version != nightly && version != module {
-			return fmt.Errorf("engine provenance mismatch: running %q, published kit requires %q, %q, or %q", version, release, nightly, module)
+		if !engineselect.Accepts(vendor.Source, vendor.Version, version) {
+			return fmt.Errorf("engine provenance mismatch: running %q, published kit requires %q, %q, or %q", version, vendor.Version+"+release", vendor.Version+"+nightly", vendor.Version+"+module")
 		}
 		return nil
 	default:

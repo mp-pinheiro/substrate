@@ -86,6 +86,8 @@
   "comments:internal/config/paths.go": 0,
   "comments:internal/enginecli/enginecli.go": 0,
   "comments:internal/enginepin/pin.go": 0,
+  "comments:internal/engineselect/engineselect.go": 0,
+  "comments:internal/engineselect/engineselect_test.go": 0,
   "comments:internal/gate/baseline.go": 0,
   "comments:internal/gate/check_05_unclaimed.go": 0,
   "comments:internal/gate/check_10_comments.go": 0,
@@ -315,7 +317,7 @@
   "comments:test/vendor-drift-test.sh": 0,
   "comments:test/vendor-source-test.sh": 0,
   "dead_code": 0,
-  "dup_pct": 1.7813178855901521,
+  "dup_pct": 1.752386379826186,
   "oversized_files": 0
 },
   "direction": {
@@ -405,6 +407,8 @@
   "comments:internal/config/paths.go": "lo",
   "comments:internal/enginecli/enginecli.go": "lo",
   "comments:internal/enginepin/pin.go": "lo",
+  "comments:internal/engineselect/engineselect.go": "lo",
+  "comments:internal/engineselect/engineselect_test.go": "lo",
   "comments:internal/gate/baseline.go": "lo",
   "comments:internal/gate/check_05_unclaimed.go": "lo",
   "comments:internal/gate/check_10_comments.go": "lo",
@@ -636,13 +640,5 @@
   "dead_code": "lo",
   "dup_pct": "lo",
   "oversized_files": "lo"
-},
-  "accepted": {
-  "dup_pct": {
-  "at": "2026-09-28",
-  "from": 1.7797198749855307,
-  "reason": "per-plan audit runner is 31 lines shorter with no clones, clone set unchanged, denominator shrank",
-  "to": 1.7813178855901521
-}
 }
 }

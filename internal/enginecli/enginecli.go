@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/mp-pinheiro/substrate/internal/enginepin"
+	"github.com/mp-pinheiro/substrate/internal/engineselect"
 	"github.com/mp-pinheiro/substrate/internal/gate"
 	"github.com/mp-pinheiro/substrate/internal/hook"
 	"github.com/mp-pinheiro/substrate/internal/maintenance"
@@ -18,6 +19,9 @@ func Run(args []string, version string) int {
 	if len(args) == 0 {
 		fmt.Fprintf(os.Stderr, "usage: substrate-engine <command> [args]\n")
 		return 2
+	}
+	if code, stop := engineselect.Maybe(args, version); stop {
+		return code
 	}
 	switch args[0] {
 	case "version":

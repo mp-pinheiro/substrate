@@ -68,6 +68,9 @@ func ensureEngineAlias() {
 	if _, err := os.Lstat(alias); err == nil {
 		return
 	}
+	if _, err := exec.LookPath("substrate-engine"); err == nil {
+		return
+	}
 	_ = os.Symlink(exe, alias)
 }
 

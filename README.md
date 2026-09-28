@@ -17,7 +17,29 @@ on first use under `${XDG_CACHE_HOME:-~/.cache}/substrate/kit/<version>-<digest>
 clone. `SUBSTRATE_KIT_CACHE` relocates that directory (use it when the default cache is mounted `noexec`).
 The same binary answers to `substrate-engine` when invoked under that name, and the first CLI run drops a
 `substrate-engine` symlink beside itself so installed Git hooks, `just gate`, and CI find the engine on
-`PATH` without a second install.
+`PATH` without a second install. It skips that symlink when another `substrate-engine` is already on
+`PATH`, so a kit checkout's engine is never shadowed.
+
+### One machine, many kit versions
+
+Every engine command except `version`, `pin`, `capabilities` and `maintenance` first reads the nearest
+`.substrate/vendor.json` and hands off to an engine that repository accepts: the exact version for `trunk`
+and `worktree` vendoring, `<version>+release`, `+nightly` or `+module` for published kits. Whichever
+`substrate-engine` a hook, Git hook, shell or harness launches, the command runs on the engine the
+repository pins.
+
+- A matching `substrate-engine` elsewhere on `PATH` wins.
+- Otherwise a published kit's engine is downloaded once from the GitHub release (the public mirror;
+  the Forgejo host needs credentials), checked against `SHA256SUMS` and its own `version`, and cached
+  under `${XDG_CACHE_HOME:-~/.cache}/substrate/engines/<version>`. `SUBSTRATE_ENGINE_CACHE` relocates the
+  cache and `SUBSTRATE_RELEASE_BASE_URL` the download origin.
+- If no matching engine can be found or verified, a published-kit repository stops with exit 12 before the
+  command runs. A `trunk` or `worktree` repository warns and continues on the running engine, so
+  `substrate update` can still re-vendor it; its gate reports the mismatch.
+
+`maintenance` always runs on the engine that invoked it, because an update must run the new kit against a
+repository that still pins the old one. A `substrate-engine` symlink left beside a `go install`ed binary by
+a release older than this behavior can still shadow a kit checkout; delete it once.
 
 Working on the kit itself still wants a checkout:
 
