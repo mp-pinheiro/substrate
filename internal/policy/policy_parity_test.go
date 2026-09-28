@@ -133,6 +133,7 @@ func runEnginePolicyParity(t *testing.T, v parityVector) {
 	engineRes := runEngineHook(t, repoRoot, v.guard, payload)
 
 	in := inputFromPayload(payload)
+	in.RepoRoot = repoRoot
 	var got Decision
 	switch v.guard {
 	case "protect-paths":

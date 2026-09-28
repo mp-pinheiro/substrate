@@ -149,6 +149,18 @@ const jjPushBlocks = await callAll(
 	{ toolName: "bash", toolCallId: "jj-push", input: { command: "jj git push" } },
 	jjSubCtx,
 );
+const vcsBlocks = (command: string) =>
+	callAll("tool_call", { toolName: "bash", toolCallId: command, input: { command } }, jjSubCtx);
+const plainTarget = process.argv[6];
+const crossRepo = {
+	plainAdd: await vcsBlocks(`git -C ${plainTarget} add .`),
+	plainCommit: await vcsBlocks(`git -C ${plainTarget} commit -m "fix: elsewhere"`),
+	homeCommit: await vcsBlocks('git -C ~/elsewhere commit -m "fix: elsewhere"'),
+	selfAdd: await vcsBlocks(`git -C ${process.argv[7]} add .`),
+	governedCommit: await vcsBlocks(`git -C ${process.argv[4]} commit -m "fix: governed"`),
+	mixedAdd: await vcsBlocks(`git -C ${plainTarget} add . && git add .`),
+	mixedPathGuard: await vcsBlocks(`git -C ${plainTarget} status && rm -rf .substrate`),
+};
 console.log(
 	JSON.stringify({
 		beforeStop,
@@ -163,6 +175,7 @@ console.log(
 		plainPushBlocks,
 		plainCommitBlocks,
 		jjPushBlocks,
+		crossRepo,
 		notifications,
 		loopTicks,
 		progressFrames: progressFrames.length,
@@ -207,6 +220,16 @@ jq -e '(.plainPushBlocks | length) == 0 and (.plainCommitBlocks | length) == 0' 
     <<< "$omp_results" >/dev/null || fail "OMP enforced jj governance in a non-substrate jj repo: $omp_results"
 jq -e '(.jjPushBlocks | map(select((.reason // "") | contains("jj-managed"))) | length) == 0' \
     <<< "$omp_results" >/dev/null || fail "OMP blocked the sanctioned jj git push in a substrate repo: $omp_results"
+jq -e '[.crossRepo.plainAdd, .crossRepo.plainCommit, .crossRepo.homeCommit] | all(length == 0)' \
+    <<< "$omp_results" >/dev/null || fail "OMP blocked git aimed at a repository outside Substrate: $omp_results"
+jq -e '.crossRepo.selfAdd | any(.block == true and (.reason | contains("jj-managed")))' \
+    <<< "$omp_results" >/dev/null || fail "OMP let git -C mutate its own jj-governed repository: $omp_results"
+jq -e '.crossRepo.governedCommit | any(.block == true)' \
+    <<< "$omp_results" >/dev/null || fail "OMP let git -C commit into another governed repository: $omp_results"
+jq -e '.crossRepo.mixedAdd | any(.block == true and (.reason | contains("jj-managed")))' \
+    <<< "$omp_results" >/dev/null || fail "OMP skipped jj governance for the unnamed half of a mixed command: $omp_results"
+jq -e '.crossRepo.mixedPathGuard | any(.block == true)' \
+    <<< "$omp_results" >/dev/null || fail "OMP skipped the path guard when one segment named another repository: $omp_results"
 [ "$(git -C "$T/repo" log -1 --pretty=%s)" = 'chore(agent): checkpoint owned work at session stop' ] \
     || fail "OMP auto-checkpoint wrote the wrong commit"
 [ "$(git -C "$T/repo" log -2 --pretty=%s | tail -n 1)" = 'fix(shell): checkpoint omp work' ] \

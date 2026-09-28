@@ -138,6 +138,36 @@ function commandVerbIndex(argv: string[]): number {
 	}
 	return -1;
 }
+function expandHome(path: string): string | null {
+	const home = process.env.HOME ?? "";
+	for (const prefix of ["~", "$HOME", "${HOME}"]) {
+		if (path === prefix || path.startsWith(`${prefix}/`)) return home ? home + path.slice(prefix.length) : null;
+	}
+	return /[$`]/.test(path) || path.startsWith("~") ? null : path;
+}
+function vcsTarget(argv: string[], cwd: string): string | null {
+	for (let i = 1; i < argv.length; i++) {
+		const arg = argv[i];
+		if (["-C", "-R", "--repository", "--git-dir"].includes(arg) || arg.startsWith("--git-dir=")) {
+			const raw = arg.startsWith("--git-dir=") ? arg.slice("--git-dir=".length) : argv[i + 1];
+			const expanded = raw ? expandHome(raw) : null;
+			return expanded === null ? null : resolve(cwd, expanded);
+		}
+		if (["--work-tree", "--namespace", "-c"].includes(arg)) {
+			i++;
+			continue;
+		}
+		if (arg.startsWith("-")) continue;
+		return cwd;
+	}
+	return cwd;
+}
+function vcsTargetGoverned(argv: string[], cwd: string, jjOnly: boolean): boolean {
+	const target = vcsTarget(argv, cwd);
+	if (target === null) return true;
+	if (findGateRoot(target) === null) return false;
+	return !jjOnly || findJjRoot(target) !== null;
+}
 const GIT_MUTATING_VERBS: Record<string, true> = {
 	commit: true,
 	add: true,
@@ -155,20 +185,20 @@ const GIT_MUTATING_VERBS: Record<string, true> = {
 	apply: true,
 };
 
-function hasGitMutation(command: string): boolean {
+function hasGitMutation(command: string, cwd: string): boolean {
 	return commandArgv(command).some((args) => {
 		const verb = commandVerbIndex(args);
-		return args[0] === "git" && verb >= 0 && GIT_MUTATING_VERBS[args[verb]] === true;
+		return args[0] === "git" && verb >= 0 && GIT_MUTATING_VERBS[args[verb]] === true && vcsTargetGoverned(args, cwd, true);
 	});
 }
 
-function hasDirectCommit(command: string): boolean {
+function hasDirectCommit(command: string, cwd: string): boolean {
 	return commandArgv(command).some((args) => {
 		const verb = commandVerbIndex(args);
-		return (
+		const commitForm =
 			(args[0] === "jj" && verb >= 0 && ["commit", "describe", "squash"].includes(args[verb])) ||
-			(args[0] === "git" && verb >= 0 && args[verb] === "commit")
-		);
+			(args[0] === "git" && verb >= 0 && args[verb] === "commit");
+		return commitForm && vcsTargetGoverned(args, cwd, false);
 	});
 }
 
@@ -184,10 +214,10 @@ function hasPush(command: string): boolean {
 
 // EnforceJJ normalizes `jj git` away before its git-push match, so the mirror
 // must block only raw `git push`; `jj git push` flows on to the push gate.
-function hasRawGitPush(command: string): boolean {
+function hasRawGitPush(command: string, cwd: string): boolean {
 	return commandArgv(command).some((args) => {
 		const verb = commandVerbIndex(args);
-		return args[0] === "git" && verb >= 0 && args[verb] === "push";
+		return args[0] === "git" && verb >= 0 && args[verb] === "push" && vcsTargetGoverned(args, cwd, true);
 	});
 }
 type CommandResult = { exitCode: number; stdout: string; stderr: string };

@@ -361,7 +361,7 @@ func commitTargetOutside(argv []string, repoRoot string) bool {
 	for i := 1; i < len(argv); i++ {
 		target := ""
 		switch {
-		case argv[i] == "-C" || argv[i] == "--repository" || argv[i] == "--git-dir":
+		case argv[i] == "-C" || argv[i] == "-R" || argv[i] == "--repository" || argv[i] == "--git-dir":
 			if i+1 < len(argv) {
 				target = argv[i+1]
 			}
@@ -371,6 +371,7 @@ func commitTargetOutside(argv []string, repoRoot string) bool {
 		if target == "" {
 			continue
 		}
+		target = expandHome(target)
 		if !strings.HasPrefix(target, "/") {
 			target = repoRoot + "/" + target
 		}
@@ -381,6 +382,19 @@ func commitTargetOutside(argv []string, repoRoot string) bool {
 		return !hasGateRoot(target)
 	}
 	return false
+}
+
+func expandHome(path string) string {
+	home := os.Getenv("HOME")
+	if home == "" {
+		return path
+	}
+	for _, prefix := range []string{"~", "$HOME", "${HOME}"} {
+		if path == prefix || strings.HasPrefix(path, prefix+"/") {
+			return home + path[len(prefix):]
+		}
+	}
+	return path
 }
 
 func hasGateRoot(path string) bool {

@@ -260,10 +260,10 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 		if (!findGateRoot(ctx.cwd)) return;
 		if (!findJjRoot(ctx.cwd)) return;
 		const cmd = String(event.input.command ?? "");
-		if (hasGitMutation(cmd)) {
-			return blockedBash("BLOCKED: this repo is jj-managed — use substrate_checkpoint after direct verification, not direct VCS mutation (see docs/jj-workflow.md).");
+		if (hasGitMutation(cmd, ctx.cwd)) {
+			return blockedBash("BLOCKED: this repo is jj-managed, so VCS changes go through substrate_checkpoint after direct verification (see docs/jj-workflow.md). Git aimed at another repository runs normally when the command names it with git -C <path>.");
 		}
-		if (hasRawGitPush(cmd) && !/(--tags|\sv\d)/.test(cmd)) {
+		if (hasRawGitPush(cmd, ctx.cwd) && !/(--tags|\sv\d)/.test(cmd)) {
 			return blockedBash("BLOCKED: use 'jj git push', not 'git push', in this jj-managed repo (release tags are the exception: 'git push origin vX.Y.Z'). See docs/jj-workflow.md.");
 		}
 	});
@@ -272,8 +272,8 @@ export default function substrateQuality(pi: ExtensionAPI): void {
 	pi.on("tool_call", async (event, ctx) => {
 		if (event.toolName !== "bash" || !findGateRoot(ctx.cwd)) return;
 		const cmd = String(event.input.command ?? "");
-		if (!hasDirectCommit(cmd)) return;
-		return blockedBash("BLOCKED: use the substrate_checkpoint tool after direct verification. It enforces ownership, runs the gate, tightens the baseline, and commits locally.");
+		if (!hasDirectCommit(cmd, ctx.cwd)) return;
+		return blockedBash("BLOCKED: use the substrate_checkpoint tool after direct verification. It enforces ownership, runs the gate, tightens the baseline, and commits locally. A commit in a repository outside Substrate runs normally when the command names it with git -C <path>.");
 	});
 
 	// mirrors: gate-before-push.sh

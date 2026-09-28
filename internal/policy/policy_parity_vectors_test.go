@@ -126,6 +126,10 @@ func TestEnginePolicyParityProtectCommand(t *testing.T) {
 		{name: "mutator basename hit blocked", guard: "protect-command", payload: cmdPayload("rm substrate-baseline.json", "")},
 		{name: "substrate config mutation asks", guard: "protect-command", payload: cmdPayload("rm substrate.json", ""), want: LevelAsk},
 		{name: "baseline mutation outranks substrate config ask", guard: "protect-command", payload: cmdPayload("rm substrate.json substrate-baseline.json", ""), want: LevelBlock},
+		{
+			name: "commit naming a home-relative repository outside every gate root allowed", guard: "protect-command", payload: cmdPayload("git -C ~/elsewhere commit -m x", ""), want: LevelAllow,
+			setup: func(t *testing.T, root string) { t.Setenv("HOME", filepath.Join(filepath.Dir(root), "home")) },
+		},
 		{name: "redirection governed path blocked", guard: "protect-command", payload: cmdPayload("echo x >> .substrate/foo", "")},
 		{name: "redirect argval false positive not blocked", guard: "protect-command", payload: cmdPayload(`gh issue comment 16 --body "--reason=<text> mentions substrate-baseline.json in prose"`, "")},
 		{name: "indirect write blocked", guard: "protect-command", payload: cmdPayload(`F=".substrate/x"; echo hi >> "$F"`, "")},
