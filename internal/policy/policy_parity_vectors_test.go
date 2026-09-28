@@ -14,6 +14,10 @@ func TestEnginePolicyParityProtectPaths(t *testing.T) {
 			setup: func(t *testing.T, root string) { writeSubstrateJSON(t, root, "{ not json") },
 		},
 		{
+			name: "corrupt config blocks substrate config write", guard: "protect-paths", payload: filePayload("substrate.json"), want: LevelBlock,
+			setup: func(t *testing.T, root string) { writeSubstrateJSON(t, root, "{ not json") },
+		},
+		{
 			name: "contracts shape invalid blocks write", guard: "protect-paths", payload: filePayload("foo.txt"),
 			setup: func(t *testing.T, root string) {
 				writeSubstrateJSON(t, root, `{"contracts":[{"name":123,"regen":"gen","paths":["x"]}]}`)
@@ -112,6 +116,10 @@ func TestEnginePolicyParityProtectCommand(t *testing.T) {
 		{
 			name: "corrupt config plus mutator blocked", guard: "protect-command", payload: cmdPayload("rm foo.txt", ""),
 			setup: func(t *testing.T, root string) { writeSubstrateJSON(t, root, "{bad") },
+		},
+		{
+			name: "corrupt config blocks substrate config command", guard: "protect-command", payload: cmdPayload("rm substrate.json", ""), want: LevelBlock,
+			setup: func(t *testing.T, root string) { writeSubstrateJSON(t, root, "{ not json") },
 		},
 		{name: "mutator basename hit blocked", guard: "protect-command", payload: cmdPayload("rm substrate-baseline.json", "")},
 		{name: "substrate config mutation asks", guard: "protect-command", payload: cmdPayload("rm substrate.json", ""), want: LevelAsk},
