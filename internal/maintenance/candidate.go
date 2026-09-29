@@ -117,6 +117,7 @@ func PrepareCandidate(ctx context.Context, candidateDir, base, archive string, d
 		{[]string{"-C", candidateDir, "config", "user.email", "substrate@localhost"}},
 		{[]string{"-C", candidateDir, "add", "-f", "-A"}},
 		{[]string{"-C", candidateDir, "commit", "-q", "--allow-empty", "-m", "chore: seed maintenance candidate"}},
+		{[]string{"-C", candidateDir, "update-ref", "refs/remotes/substrate/maintenance-base", "HEAD"}},
 	}
 	for _, s := range gitSteps {
 		if err := xshell.Check(xshell.Run(ctx, "git", s.args...)); err != nil {

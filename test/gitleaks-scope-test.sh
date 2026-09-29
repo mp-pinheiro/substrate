@@ -75,4 +75,39 @@ scan_red "Jujutsu untracked addition" untracked.txt
 jj restore untracked.txt >/dev/null 2>&1
 scan_green "clean Jujutsu tree did not recover"
 
+mkdir -p "$T/maintenance-git" "$T/maintenance-origin.git"
+git init -q --bare "$T/maintenance-origin.git"
+git -C "$T/maintenance-git" init -q --initial-branch=main
+cd "$T/maintenance-git" || exit 9
+git config user.name substrate
+git config user.email substrate@localhost
+"$KIT_ROOT/bin/substrate" init --profile base --vcs git >/dev/null 2>&1 \
+    || fail "maintenance fixture initialization failed"
+printf '%s\n' "$canary" > legacy.txt
+git add -A
+git commit -qm 'chore: seed legacy canary'
+git remote add origin "$T/maintenance-origin.git"
+git push -q --no-verify -u origin main || fail "maintenance fixture push failed"
+git fetch -q origin || fail "maintenance fixture fetch failed"
+git show-ref --verify --quiet refs/remotes/origin/main \
+    || fail "maintenance fixture origin ref missing"
+if ! out=$("$KIT_ROOT/bin/substrate" bootstrap --profile base --vcs git --checkpoint --accept-baseline --repo-only 2>&1); then
+    fail "maintenance candidate rejected the unchanged seed: $out"
+fi
+if printf '%s\n' "$out" | grep -Fq 'legacy.txt'; then
+    fail "maintenance candidate reported unchanged legacy.txt"
+fi
+dirty_canary='ghp_'
+dirty_canary+='Z9y8X7w6V5u4T3s2R1q0P9o8N7m6L5k4J3i2'
+jq --arg canary "$dirty_canary" '.maintenanceProbe = $canary' substrate.json > "$T/substrate.json" \
+    || fail "dirty substrate.json rewrite failed"
+mv "$T/substrate.json" substrate.json
+if out=$("$KIT_ROOT/bin/substrate" bootstrap --repo-only 2>&1); then
+    fail "maintenance candidate missed dirty substrate.json secret"
+fi
+printf '%s\n' "$out" | grep -Fq 'substrate.json' \
+    || fail "dirty substrate.json finding was not reported"
+printf '%s\n' "$out" | grep -Fq 'potential secrets in pending work' \
+    || fail "pending secret failure was not reported"
+
 printf 'gitleaks-scope-test: Git tracked, staged, untracked and Jujutsu pending coverage green\n'
