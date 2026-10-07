@@ -55,10 +55,7 @@ read-only mirror of `main`.
 
 Stable releases are tagged `vX.Y.Z`. Nightlies are pre-releases cut at 07:00 UTC from a green revision and pruned after 14 days; once `vX.Y.Z` has shipped they are tagged against the next minor (`vX.Y+1.0-nightly.YYYYMMDD`) so a nightly always sorts above the stable it builds on. The scheduled run skips when the revision's tree is identical to the most recent nightly tag reachable from it, so a night without changes cuts nothing; a manually dispatched nightly is always cut.
 
-Maintainers prepare a stable release with `just bump major|minor|patch`. The command updates `VERSION`,
-rebuilds and repins the engine, and re-vendors the kit in one guarded operation. Landing that version
-change on Forgejo `main` starts the stable release workflow; publication waits for the gate status on
-the same revision. The workflow publishes neither from a red gate nor from an unbumped revision.
+Maintainers cut a stable release with `just bump major|minor|patch` from a clean working copy on `main`. The command updates `VERSION`, rebuilds and repins the engine, re-vendors the kit in one guarded operation, commits the result as `chore(release): vX.Y.Z`, and pushes `main` through the gated push. Landing that version change on Forgejo `main` starts the stable release workflow; publication waits for the gate status on the same revision. The workflow publishes neither from a red gate nor from an unbumped revision.
 
 ```sh
 go install github.com/mp-pinheiro/substrate/cmd/substrate@latest                  # newest stable

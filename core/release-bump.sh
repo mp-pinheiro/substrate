@@ -35,6 +35,27 @@ if git -C "$root" rev-parse -q --verify "refs/tags/v$next" >/dev/null; then
     printf 'release-bump: tag v%s already exists\n' "$next" >&2
     exit 2
 fi
+if [ -d "$root/.jj" ]; then
+    vcs=jj
+    if [ "$(jj -R "$root" log -r @ --no-graph -T empty)" != true ]; then
+        printf 'release-bump: working copy has changes; commit or discard them first\n' >&2
+        exit 2
+    fi
+    if [ -z "$(jj -R "$root" log -r 'main & ::@-' --no-graph -T commit_id)" ]; then
+        printf 'release-bump: working copy must build on main\n' >&2
+        exit 2
+    fi
+else
+    vcs=git
+    if [ -n "$(git -C "$root" status --porcelain)" ]; then
+        printf 'release-bump: working tree has changes; commit or discard them first\n' >&2
+        exit 2
+    fi
+    if [ "$(git -C "$root" symbolic-ref --short -q HEAD)" != main ]; then
+        printf 'release-bump: HEAD must be on main\n' >&2
+        exit 2
+    fi
+fi
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
@@ -61,3 +82,18 @@ fi
 mkdir -p "$root/build"
 cp "$work/substrate-engine" "$root/build/substrate-engine"
 printf 'release-bump: %s -> %s\n' "$current" "$next"
+
+message="chore(release): v$next"
+if [ "$vcs" = jj ]; then
+    (cd "$root" && jj commit -m "$message" && jj bookmark set main -r @-)
+    push=(bash "$root/.substrate/gated-push.sh" --bookmark main)
+else
+    git -C "$root" add -A
+    PATH="$work:$PATH" git -C "$root" commit -q -m "$message"
+    push=(git -C "$root" push origin main)
+fi
+if ! (cd "$root" && PATH="$work:$PATH" "${push[@]}"); then
+    printf 'release-bump: %s committed but not pushed; push main to publish it\n' "$message" >&2
+    exit 1
+fi
+printf 'release-bump: pushed %s\n' "$message"
