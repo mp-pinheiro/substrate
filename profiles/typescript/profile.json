@@ -23,6 +23,8 @@
     { "file": "fixtures/bad-tsc.ts", "fails": "71-tsc.sh" },
     { "file": "fixtures/bad-cycle", "fails": "72-depcruise.sh" },
     { "file": "fixtures/bad-as-any.ts", "fails": "74-no-as-any.sh" },
+    { "file": "fixtures/bad-as-any-array.ts", "fails": "74-no-as-any.sh" },
+    { "file": "fixtures/bad-as-any.tsx", "fails": "74-no-as-any.sh" },
     { "file": "fixtures/bad-inline-sql.ts", "fails": "75-no-inline-sql.sh" }
   ],
   "lsp": {

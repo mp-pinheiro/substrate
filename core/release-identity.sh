@@ -53,6 +53,13 @@ if [ -n "$existing" ] && [ "$existing" != "$head_sha" ]; then
     fi
 elif [ -n "$existing" ]; then
     notice "$tag already exists at this revision — resuming publication for it"
+elif [ "$event" = schedule ]; then
+    last_tag=$(git describe --tags --abbrev=0 --match 'v[0-9]*' "$head_sha" 2>/dev/null) || last_tag=
+    if [ -n "$last_tag" ] \
+        && [ "$(git rev-parse "$last_tag^{tree}")" = "$(git rev-parse "$head_sha^{tree}")" ]; then
+        notice "$head_sha has no changes since $last_tag — nothing to cut tonight"
+        skip=true
+    fi
 fi
 
 {

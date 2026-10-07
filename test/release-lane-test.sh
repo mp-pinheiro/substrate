@@ -96,7 +96,7 @@ ann | grep -q 'resuming publication' || fail "resume must be announced: $(ann)"
 ok "re-running at the published revision resumes instead of failing"
 
 git tag -a v0.3.0-nightly.20260101 -m nightly || fail "nightly tag"
-git commit -q --allow-empty -m third || fail "third commit"
+echo third > CHANGES && git add CHANGES && git commit -qm third || fail "third commit"
 head_sha=$(git rev-parse HEAD)
 identity schedule "" || fail "cron collision must not fail the run: $(ann)"
 [ "$(field skip)" = true ] || fail "cron collision must skip: $(cat "$T/out")"
@@ -110,6 +110,29 @@ git tag -d v0.3.0-nightly.20260101 >/dev/null || fail "tag cleanup"
 identity schedule "" || fail "clean cron exited $?: $(ann)"
 [ "$(field skip)" = false ] || fail "a cron with no tag today must proceed: $(cat "$T/out")"
 ok "cron with no tag for today proceeds to a fresh nightly"
+
+git tag -a v0.3.0-nightly.20251231 -m nightly || fail "yesterday's nightly tag"
+identity schedule "" || fail "unchanged cron exited $?: $(ann)"
+[ "$(field skip)" = true ] || fail "a cron with no changes since the last cut must skip: $(cat "$T/out")"
+ann | grep -q 'no changes since v0.3.0-nightly.20251231' || fail "the no-diff skip must name the last cut: $(ann)"
+ok "cron with no changes since yesterday's nightly skips"
+
+git commit -q --allow-empty -m empty || fail "empty commit"
+head_sha=$(git rev-parse HEAD)
+identity schedule "" || fail "empty-commit cron exited $?: $(ann)"
+[ "$(field skip)" = true ] || fail "a commit with no tree change must not cut a nightly: $(cat "$T/out")"
+ok "an empty commit since the last nightly still skips"
+
+identity workflow_dispatch nightly || fail "manual nightly with no changes exited $?: $(ann)"
+[ "$(field skip)" = false ] || fail "a manual nightly is an explicit request and must not skip: $(cat "$T/out")"
+ok "a manually dispatched nightly is not gated on changes"
+
+echo fourth > CHANGES && git add CHANGES && git commit -qm fourth || fail "fourth commit"
+head_sha=$(git rev-parse HEAD)
+identity schedule "" || fail "changed cron exited $?: $(ann)"
+[ "$(field skip)" = false ] || fail "a cron with changes since the last nightly must cut: $(cat "$T/out")"
+ok "cron with changes since yesterday's nightly proceeds"
+git tag -d v0.3.0-nightly.20251231 >/dev/null || fail "tag cleanup"
 
 mirror="$T/mirror"
 mkdir -p "$mirror" || fail "mirror repo"
@@ -166,7 +189,6 @@ env RELEASE_EVENT=schedule RELEASE_HEAD_SHA="$real_head" RELEASE_DATE=20260921 \
     || fail "tomorrow's cron against the real VERSION exited $?: $(ann)"
 [ "$(field version)" = "$expect_nightly" ] \
     || fail "real-repo cron must cut $expect_nightly, got: $(cat "$T/out")"
-[ "$(field skip)" = false ] || fail "real-repo cron must not skip: $(cat "$T/out")"
 [ "$(field prerelease)" = true ] || fail "real-repo cron must be a prerelease: $(cat "$T/out")"
 rm -f "$T/api/ref-v$real_base"
 ok "tomorrow's cron against the real VERSION and a published v$real_base cuts $expect_nightly"
