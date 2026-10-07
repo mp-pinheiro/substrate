@@ -132,6 +132,13 @@ head_sha=$(git rev-parse HEAD)
 identity schedule "" || fail "changed cron exited $?: $(ann)"
 [ "$(field skip)" = false ] || fail "a cron with changes since the last nightly must cut: $(cat "$T/out")"
 ok "cron with changes since yesterday's nightly proceeds"
+
+git tag -a v0.2.9 -m stable || fail "stable tag after the nightly"
+identity schedule "" || fail "post-stable cron exited $?: $(ann)"
+[ "$(field skip)" = false ] \
+    || fail "a stable cut since the last nightly must not stand in for it: $(cat "$T/out")"
+git tag -d v0.2.9 >/dev/null || fail "stable tag cleanup"
+ok "cron after a stable cut still compares against the previous nightly"
 git tag -d v0.3.0-nightly.20251231 >/dev/null || fail "tag cleanup"
 
 mirror="$T/mirror"
