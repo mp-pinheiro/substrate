@@ -51,6 +51,7 @@ cp "$root/engine.json" "$root/.substrate/engine.json"
 [ "${FAIL_UPDATE:-0}" = 0 ] || exit 1
 SH
     chmod +x "$root/bin/substrate"
+    printf '#!/usr/bin/env bash\nexit 0\n' > "$root/.substrate/push-gate.sh"
     printf '#!/usr/bin/env bash\nexec jj git push "$@"\n' > "$root/.substrate/gated-push.sh"
     printf 'build/\n' > "$root/.gitignore"
     git init -q --bare "$root.git"

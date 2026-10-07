@@ -90,7 +90,7 @@ if [ "$vcs" = jj ]; then
 else
     git -C "$root" add -A
     PATH="$work:$PATH" git -C "$root" commit -q -m "$message"
-    push=(git -C "$root" push origin main)
+    push=(bash -c 'bash .substrate/push-gate.sh && git push origin main')
 fi
 if ! (cd "$root" && PATH="$work:$PATH" "${push[@]}"); then
     printf 'release-bump: %s committed but not pushed; push main to publish it\n' "$message" >&2
