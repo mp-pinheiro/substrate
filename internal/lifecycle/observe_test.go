@@ -1,9 +1,16 @@
 package lifecycle
 
 import (
+	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/mp-pinheiro/substrate/internal/canonjson"
+	"github.com/mp-pinheiro/substrate/internal/config"
+	"github.com/mp-pinheiro/substrate/internal/vcs"
 )
 
 func entriesObj(m map[string]string) *canonjson.Object {
@@ -159,5 +166,67 @@ func TestObserveInitialGuardMatchesReconcileRequirement(t *testing.T) {
 				t.Errorf("objObject(state, %q) nil-ness = %v, want bail = %v", "initial", got, tc.wantBail)
 			}
 		})
+	}
+}
+
+func TestObserveDriftNoticeTracksRemainingOwnership(t *testing.T) {
+	if _, err := exec.LookPath("jj"); err != nil {
+		t.Skip("jj not on PATH")
+	}
+	t.Setenv("JJ_CONFIG", filepath.Join(t.TempDir(), "config.toml"))
+	noMaintenance, err := exec.LookPath("false")
+	if err != nil {
+		t.Skip("false not on PATH")
+	}
+	t.Setenv("SUBSTRATE_ENGINE_BIN", noMaintenance)
+	root := t.TempDir()
+	jj := func(args ...string) {
+		t.Helper()
+		if out, err := exec.Command("jj", append([]string{"-R", root}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("jj %v: %v\n%s", args, err, out)
+		}
+	}
+	write := func(name string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(root, name), []byte(name+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if out, err := exec.Command("jj", "git", "init", root).CombinedOutput(); err != nil {
+		t.Fatalf("jj git init: %v\n%s", err, out)
+	}
+	write("base.txt")
+	jj("commit", "-m", "base")
+
+	engine := New(config.Paths{RepoRoot: root}, &vcs.Repo{Root: root, Kind: vcs.KindJJ})
+	run := func(action string) {
+		t.Helper()
+		if res := engine.Run(context.Background(), []string{action}, strings.NewReader(`{"session_id":"s1"}`)); res.Code != 0 {
+			t.Fatalf("%s: code %d: %s", action, res.Code, res.Stderr)
+		}
+	}
+	ledger := func() (notice string, owned []string) {
+		t.Helper()
+		state, err := readLedger(engine.statePath("s1"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return objString(state, "driftNotice"), objStringArray(state, "ownedPaths")
+	}
+
+	run("start")
+	write("owned.txt")
+	run("observe")
+
+	jj("describe", "-r", "@-", "-m", "base reworded")
+	run("observe")
+	if notice, owned := ledger(); notice == "" || !stringSliceEqual(owned, []string{"owned.txt"}) {
+		t.Fatalf("revision moved under owned work: notice=%q owned=%v, want a drift notice and owned.txt still owned", notice, owned)
+	}
+
+	jj("commit", "-m", "user commits the owned work")
+	run("observe")
+	if notice, owned := ledger(); notice != "" || len(owned) != 0 {
+		t.Fatalf("user committed all owned work: notice=%q owned=%v, want no notice and nothing owned; a checkpoint has nothing left to clear it", notice, owned)
 	}
 }

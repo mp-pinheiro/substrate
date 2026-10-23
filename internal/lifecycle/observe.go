@@ -49,7 +49,9 @@ func (e *Engine) Observe(ctx context.Context, payload []byte) Result {
 		next.Set("completedCommit", nil)
 	}
 	next.Set("trackingError", nullable(current.Error))
-	if beforeRevision != currentRevision && (len(changed) > 0 || len(ownedBeforeReconcile) > 0) {
+	if len(objStringArray(next, "ownedPaths")) == 0 {
+		next.Set("driftNotice", nil)
+	} else if beforeRevision != currentRevision && (len(changed) > 0 || len(ownedBeforeReconcile) > 0) {
 		next.Set("driftNotice", "repository revision changed outside the checkpoint transaction; ownership re-baselined")
 	}
 

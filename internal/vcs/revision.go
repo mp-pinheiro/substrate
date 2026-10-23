@@ -19,11 +19,11 @@ func (r *Repo) probeRevision(ctx context.Context, name string, args ...string) (
 	if err != nil {
 		return "", "", fmt.Errorf("vcs: run %s: %w", name, err)
 	}
-	combined := trimTrailingNewlines(string(res.Stdout) + string(res.Stderr))
 	if res.Code != 0 {
+		combined := trimTrailingNewlines(string(res.Stdout) + string(res.Stderr))
 		return combined, combined, nil
 	}
-	return combined, "", nil
+	return trimTrailingNewlines(string(res.Stdout)), "", nil
 }
 
 func (r *Repo) ChangeIDFor(ctx context.Context, commit string) (string, error) {
