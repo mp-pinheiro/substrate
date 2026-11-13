@@ -176,10 +176,19 @@ cmd_doctor() {
     fi
 
     if [ -d .jj ]; then
-        local trunk configured bookmarks remotes
+        local trunk configured bookmarks remotes auto_advance=true
         trunk="${SUBSTRATE_JJ_TRUNK:-main}"
+        if [ -f substrate.json ] && jq -e '.jj.auto_advance_trunk == false' substrate.json >/dev/null 2>&1; then
+            auto_advance=false
+        fi
         configured=$(jj config get experimental-advance-branches.enabled-branches 2>/dev/null) || configured=""
-        if [[ "$configured" == *"$trunk"* ]]; then
+        if [ "$auto_advance" = "false" ]; then
+            if [[ "$configured" == *"$trunk"* ]]; then
+                warn "jj trunk auto-advance still includes $trunk despite auto_advance_trunk=false — rerun bootstrap"
+            else
+                success "jj trunk auto-advance disabled via auto_advance_trunk=false"
+            fi
+        elif [[ "$configured" == *"$trunk"* ]]; then
             success "jj trunk auto-advance configured ($trunk)"
         else
             warn "jj trunk auto-advance does not include configured trunk $trunk — rerun init"

@@ -483,4 +483,44 @@ grep -q "unsupported ci.provider" "$T/external-invalid.out" \
     || fail "invalid ci.provider failure was not actionable"
 jq '.ci.provider = "external"' substrate.json > substrate.json.tmp && mv substrate.json.tmp substrate.json
 
-printf 'bootstrap-test: fresh, sync, ownership, force-adopt, symlink-cli, external-ci, preservation green\n'
+# jj auto-advance opt-out: auto_advance_trunk=false must pin repo-level enabled-branches
+# to [] so a user-level list cannot re-enable the trunk (isolated JJ_CONFIG catches this).
+if command -v jj >/dev/null 2>&1; then
+    printf '[user]\nname="t"\nemail="t@t"\n[experimental-advance-branches]\nenabled-branches = ["main"]\n' > "$T/jj-user.toml"
+    run_wire_jj_runtime() {  # $1: substrate.json content
+        (
+            info() { :; }
+            success() { :; }
+            warn() { :; }
+            die() { return 1; }
+            # shellcheck source=../core/install-lib.sh
+            source "$KIT_ROOT/core/install-lib.sh"
+            wire_jj_runtime
+        )
+    }
+    for case_dir in opt-out default-on; do
+        JJREP="$T/jj-$case_dir"
+        mkdir -p "$JJREP"
+        cd "$JJREP" || exit 9
+        JJ_CONFIG="$T/jj-user.toml" jj git init r >/dev/null 2>&1 || fail "jj fixture init failed ($case_dir)"
+        cd r || exit 9
+        if [ "$case_dir" = opt-out ]; then
+            printf '{"version":1,"jj":{"auto_advance_trunk":false}}\n' > substrate.json
+        else
+            printf '{"version":1}\n' > substrate.json
+        fi
+        JJ_CONFIG="$T/jj-user.toml" run_wire_jj_runtime || fail "wire_jj_runtime failed ($case_dir)"
+        if [ "$case_dir" = opt-out ]; then
+            [ "$(JJ_CONFIG="$T/jj-user.toml" jj config get experimental-advance-branches.enabled-branches 2>/dev/null)" = "[]" ] \
+                || fail "auto_advance_trunk=false did not override user-level enabled-branches"
+        else
+            [ "$(JJ_CONFIG="$T/jj-user.toml" jj config get experimental-advance-branches.enabled-branches 2>/dev/null)" = '["main"]' ] \
+                || fail "default auto_advance_trunk did not set repo-level enabled-branches to the trunk"
+        fi
+    done
+    cd "$T" || exit 9
+else
+    printf 'bootstrap-test: jj unavailable — auto-advance opt-out case skipped\n'
+fi
+
+printf 'bootstrap-test: fresh, sync, ownership, force-adopt, symlink-cli, external-ci, jj-opt-out, preservation green\n'
