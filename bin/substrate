@@ -18,6 +18,8 @@ usage: substrate <command> [args]
 
   bootstrap [--profile a,b] [--force] [--from-worktree]  kickstart or synchronize the current repo
   init --profile a,b [--vcs auto|git|jj] [--from-worktree]  install the gate into a new repo
+  jj auto-advance: "jj": {"auto_advance_trunk": false} in substrate.json keeps the trunk
+                   bookmark (main/master) from auto-advancing on checkout (default: true)
   gate [--update-baseline|--tighten|--accept-regression] | gate --deep [--no-cache|--print-key]
   baseline [--update|--accept-regression[=key1,key2] --reason <text>]
   checkpoint --message <message> --path <path>... [--accept-regression=<metric>[,<metric>] --reason <text>]  gate, tighten, commit locally
