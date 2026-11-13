@@ -27,11 +27,13 @@ The interfaces every component implements. Change these deliberately — everyth
   "budgets": { "max_file_lines": 500 },
   "checks": { "disabled": [] },
   "ratchet": { "never_accept": ["dead_code"] },
-  "contracts": [{ "name": "api", "regen": "bun run generate", "paths": ["src/generated"] }]
+  "contracts": [{ "name": "api", "regen": "bun run generate", "paths": ["src/generated"] }],
+  "jj": { "auto_advance_trunk": true }
 }
 ```
 
 - `inventory`: `auto` (jj when `.jj/` exists, else git), `git`, or `jj`. Submodule contents are always excluded.
+- `jj.auto_advance_trunk`: `false` makes `substrate init`/`bootstrap` skip setting jj's `experimental-advance-branches.enabled-branches` for the trunk bookmark (main/master), so the trunk does not auto-advance on checkout. Default `true`. Applied per clone as repo-local jj config; rerun init/bootstrap after changing it.
 - `unscanned`: globs for tracked files no profile claims — a reviewed ledger, not a default. A tracked source file matching neither a profile claim nor `unscanned` FAILS the gate (check `05-unclaimed-source`).
 - `substrate.json`: human-approved policy configuration. Agent file and shell edits ask the user first, and the checkpoint never commits the file; change it only when a human directs the policy decision. The hooks, the checkpoint's choice of which paths it may commit, and a local `just gate` read the working-copy file, so an approved edit applies to them at once; the gate that the checkpoint runs and CI read the committed file. An edit that leaves the file unparseable blocks every agent write and shell command until a human repairs it.
 - `protected_paths` and `ask_paths`: path globs with a policy level. Hooks block agent writes and mutating shell commands that touch `protected_paths`. For `ask_paths` they ask the user first: Claude Code shows its permission prompt, and omp asks through its UI and blocks when the session has no UI (print mode, task subagents). `CLAUDE.md` and `AGENTS.md` at any depth and the root `substrate.json` are built-in ask paths; the baseline and `.substrate/` are built-in blocks. A block wins over an ask, so a repo list can raise a path's level but never lower a built-in one; listing `substrate.json` in `protected_paths` restores the block. The checkpoint never commits an ask path: a session checkpoint commits the other owned paths and leaves ask paths for the user to review and commit, and an explicit `--path` list that names one is refused.

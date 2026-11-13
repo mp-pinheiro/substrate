@@ -7,6 +7,9 @@
     "python",
     "shell"
   ],
+  "jj": {
+    "auto_advance_trunk": true
+  },
   "inventory": "auto",
   "unscanned": [
     "**/*.md",

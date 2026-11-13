@@ -19,6 +19,10 @@ type Scope struct {
 	Profiles []string
 }
 
+type JJConfig struct {
+	AutoAdvanceTrunk *bool `json:"auto_advance_trunk"`
+}
+
 type Config struct {
 	Profiles       []string
 	Unscanned      []string
@@ -27,6 +31,7 @@ type Config struct {
 	Contracts      []Contract
 	Scopes         map[string]Scope
 	CommentTags    []string
+	JJ             JJConfig
 	Present        bool
 
 	contractsValid bool
@@ -54,6 +59,7 @@ func LoadConfig(path string) (*Config, error) {
 		cfg.Scopes = decodeScopes(top["scopes"])
 		cfg.Contracts, cfg.contractsValid = decodeContracts(top["contracts"])
 		cfg.CommentTags = decodeCommentTags(top["comment"])
+		decodeJJConfig(top["jj"], &cfg.JJ)
 		return cfg, nil
 	case err == nil && top == nil:
 		return nil, fmt.Errorf("config: parse %s: top-level value is null", path)
@@ -276,4 +282,13 @@ func decodeCommentTags(raw json.RawMessage) []string {
 		return append([]string(nil), defaultCommentTags...)
 	}
 	return *comment.AllowTags
+}
+
+func decodeJJConfig(raw json.RawMessage, dest *JJConfig) {
+	if len(raw) == 0 {
+		return
+	}
+	if err := json.Unmarshal(raw, dest); err != nil {
+		return
+	}
 }
