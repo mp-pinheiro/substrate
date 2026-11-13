@@ -40,6 +40,9 @@ With it, `main` follows every `jj commit` / `jj new` automatically (Git-style), 
 is just `jj commit` then `jj git push` — no manual `jj tug`. `jj tug` stays the tool for feature
 bookmarks, which are deliberately *not* auto-advanced.
 
+Set `"jj": { "auto_advance_trunk": false }` in `substrate.json` and rerun `substrate bootstrap`
+to disable trunk auto-advance for the repo (default: enabled).
+
 ## Model: trunk-based on `main`
 
 - `main` is a **bookmark** (jj's word for a branch), not a moving `HEAD`, configured to
