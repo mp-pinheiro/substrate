@@ -92,6 +92,18 @@ What lands in the repo: `.substrate/` (vendored, pinned core), `substrate.json` 
 
 Agents and skills are optional helpers, not the enforcement layer, and they are repo-scoped: `substrate init` installs them into a governed repository's `.claude/` and `.omp/`, and the user harness carries no copy of them — a helper that named the gate from every unrelated repository would be instruction noise where nothing enforces it. Omp enforcement comes from the automatically loaded user-scoped `substrate-quality.ts` extension and its private modules: it injects gate policy, tracks agent-owned paths, blocks protected operations and direct commits, scans every mutating tool result (including LSP refactors), and refuses task completion until the agent runs a green local `substrate_checkpoint`. The checkpoint tightens improved ceilings, commits only owned paths, and records an exact-state receipt; it never pushes. `substrate doctor` and `/substrate` expose the installed and loaded path, aggregate source hash, engine version, and latest lifecycle state.
 
+## Shell completions
+
+`substrate completion` prints a completion script for bash, fish, or zsh, generated from the same command registry that drives `substrate` usage — new commands and flags appear automatically:
+
+```
+substrate completion bash            # print to stdout
+substrate completion zsh --install   # append to ~/.zshrc (idempotent)
+substrate completion fish --install  # append to ~/.config/fish/config.fish
+```
+
+Without `--install`, pipe the output wherever you like (e.g. `substrate completion bash >> ~/.bashrc`).
+
 ## Editor feedback
 
 Profiles may declare optional language servers for omp. `substrate bootstrap` seeds `.omp/lsp.json` from the active profiles only when the file does not exist; later runs preserve repository edits. `substrate doctor` reports whether each server binary is available and prints an installation hint when it is missing. Substrate does not install LSP binaries, and a missing server disables inline diagnostics without failing the gate.
