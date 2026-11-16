@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # substrate — deterministic gates for agentic development, installable in any repo.
-# Commands are declared in SUBSTRATE_COMMANDS below; usage and completions render from it.
+# Commands are declared in core/completion.sh (sourced below); usage and completions render from it.
 set -uo pipefail
 
 SCRIPT=$(readlink -f "${BASH_SOURCE[0]}") || { printf 'substrate: cannot resolve executable path\n' >&2; exit 2; }
@@ -12,52 +12,15 @@ warn()    { printf '\033[0;33m[!]\033[0m %s\n' "$*"; }
 die()     { warn "$*"; exit 2; }
 engine_bin() { printf '%s\n' "${SUBSTRATE_ENGINE_BIN:-substrate-engine}"; }
 
-# Single source of truth for the command surface: "name|description|words..."
-# (words are flags/subcommands offered after the command name). usage() and
-# `substrate completion` both render from this list; test/completion-test.sh
-# enforces that the dispatch case below matches it exactly.
-SUBSTRATE_COMMANDS=(
-    "bootstrap|kickstart or synchronize the current repo|--profile --force --from-worktree"
-    "init|install the gate into a new repo|--profile --vcs --force --from-worktree"
-    "gate|run the gate|--update-baseline --tighten --accept-regression --deep --no-cache --print-key"
-    "version|print the engine/kit version and channel|"
-    "checkpoint|gate, tighten, and commit locally|--message --path --accept-regression --reason"
-    "restructure|reshape agent commits|--op --revision --message"
-    "baseline|manage the ratchet baseline|--update --accept-regression --reason"
-    "doctor|config, langmap freshness, toolchain|"
-    "verify|active OMP runtime + bounded local gate|"
-    "update|inspect or re-vendor the engine|--apply --force --from-worktree"
-    "engine|engine maintenance (pin: RELEASE ACTION)|pin --bin"
-    "selftest|sandboxed negative-test battery|"
-    "audit|execute plan acceptance oracles|"
-    "report|advisory maintenance queue (always exits 0)|--write --refresh"
-    "completion|print or install shell completions|bash fish zsh --install"
-)
-
-registry_name()  { printf '%s' "${1%%|*}"; }
-registry_desc()  { local r; r="${1#*|}"; printf '%s' "${r%%|*}"; }
-registry_words() { local r; r="${1#*|}"; printf '%s' "${r#*|}"; }
-
 usage() {
-    local e name desc words
-    printf 'usage: substrate <command> [args]\n\n'
-    for e in "${SUBSTRATE_COMMANDS[@]}"; do
-        name=$(registry_name "$e"); desc=$(registry_desc "$e"); words=$(registry_words "$e")
-        if [ -n "$words" ]; then
-            printf '  %-12s [%s]  %s\n' "$name" "$words" "$desc"
-        else
-            printf '  %-12s  %s\n' "$name" "$desc"
-        fi
-    done
-    cat <<'EOF'
-
-notes:
-  maintenance flags: --checkpoint [--message <message>] [--accept-baseline] [--repo-only] [--json]
-                     [--accept-regression=<metric>[,<metric>] --reason <text>]  move a ratcheted metric that a core change moved
-  --from-worktree on bootstrap/init/update vendors from the kit worktree even when
-                     it is dirty or unpushed
-EOF
+    print_usage_root
     exit 2
+}
+
+usage_cmd() {
+    local cmd="$1" code="${2:-2}"
+    print_usage_cmd "$cmd" || usage
+    exit "$code"
 }
 
 profile_dir() {
@@ -79,6 +42,8 @@ source "$KIT_ROOT/core/doctor.sh"
 source "$KIT_ROOT/core/verify.sh"
 # shellcheck source=../core/maintenance.sh
 source "$KIT_ROOT/core/maintenance.sh"
+# shellcheck source=../core/completion.sh
+source "$KIT_ROOT/core/completion.sh"
 
 
 build_langmap() {
@@ -359,10 +324,11 @@ cmd_gate() {
     fi
     if [ "${1:-}" = --deep ]; then
         shift
-        [ "$#" -le 1 ] || usage
+        [ "$#" -le 1 ] || usage_cmd gate
         case "${1:-}" in
+            -h|--help) usage_cmd gate 0 ;;
             ""|--no-cache|--print-key) ;;
-            *) usage ;;
+            *) usage_cmd gate ;;
         esac
         [ -x .substrate/gitleaks-deep.sh ] || die "deep scan runtime missing — run: substrate update --apply"
         "$(engine_bin)" gate || return
@@ -374,7 +340,7 @@ cmd_gate() {
 cmd_engine() {
     case "${1:-}" in
         pin) shift; cmd_engine_pin "$@" ;;
-        *) usage ;;
+        *) usage_cmd engine ;;
     esac
 }
 
@@ -407,136 +373,6 @@ cmd_engine_pin() {
     fi
 }
 
-completion_bash() {
-    local e name words first=1
-    printf '_substrate_completions() {\n'
-    printf '    local cur cmd\n'
-    printf '    cur="${COMP_WORDS[COMP_CWORD]}"\n'
-    printf '    if [ "$COMP_CWORD" -eq 1 ]; then\n'
-    printf '        COMPREPLY=($(compgen -W "'
-    for e in "${SUBSTRATE_COMMANDS[@]}"; do
-        [ "$first" -eq 1 ] || printf ' '
-        printf '%s' "$(registry_name "$e")"
-        first=0
-    done
-    printf '" -- "$cur"))\n'
-    printf '        return\n'
-    printf '    fi\n'
-    printf '    cmd="${COMP_WORDS[1]}"\n'
-    printf '    case "$cmd" in\n'
-    for e in "${SUBSTRATE_COMMANDS[@]}"; do
-        name=$(registry_name "$e"); words=$(registry_words "$e")
-        [ -n "$words" ] || continue
-        printf '        %s) COMPREPLY=($(compgen -W "%s" -- "$cur")) ;;\n' "$name" "$words"
-    done
-    printf '    esac\n'
-    printf '}\n'
-    printf 'complete -F _substrate_completions substrate\n'
-}
-
-completion_zsh() {
-    local e name desc words
-    printf '#compdef substrate\n\n'
-    printf '_substrate() {\n'
-    printf '    local -a commands\n'
-    printf '    commands=(\n'
-    for e in "${SUBSTRATE_COMMANDS[@]}"; do
-        name=$(registry_name "$e"); desc=$(registry_desc "$e")
-        printf "        '%s:%s'\n" "$(sq_escape "$name")" "$(sq_escape "$desc")"
-    done
-    printf '    )\n'
-    printf '    if (( CURRENT == 2 )); then\n'
-    printf '        _describe "command" commands\n'
-    printf '        return\n'
-    printf '    fi\n'
-    printf '    case "${words[2]}" in\n'
-    for e in "${SUBSTRATE_COMMANDS[@]}"; do
-        name=$(registry_name "$e"); words=$(registry_words "$e")
-        [ -n "$words" ] || continue
-        printf '        %s) compadd -- %s ;;\n' "$name" "$words"
-    done
-    printf '    esac\n'
-    printf '}\n\n'
-    printf '_substrate "$@"\n'
-}
-
-completion_fish() {
-    local e name desc words
-    printf 'function __fish_substrate_needs_command\n'
-    printf '    set -l cmd (commandline -opc)\n'
-    printf '    test (count $cmd) -eq 1\n'
-    printf 'end\n'
-    for e in "${SUBSTRATE_COMMANDS[@]}"; do
-        name=$(registry_name "$e"); desc=$(registry_desc "$e")
-        printf "complete -c substrate -f -n __fish_substrate_needs_command -a %s -d '%s'\n" "$(sq_escape "$name")" "$(sq_escape "$desc")"
-    done
-    for e in "${SUBSTRATE_COMMANDS[@]}"; do
-        name=$(registry_name "$e"); words=$(registry_words "$e")
-        [ -n "$words" ] || continue
-        printf "complete -c substrate -f -n '__fish_seen_subcommand_from %s' -a '%s'\n" "$name" "$words"
-    done
-}
-
-# Escape for single-quoted zsh/fish strings: ' -> '\''
-sq_escape() { printf '%s' "${1//\'/\'\\\'\'}"; }
-
-completion_install() {
-    local shell="$1" rc_file line tmp open_n close_n
-    case "$shell" in
-        bash) rc_file="$HOME/.bashrc"; line='source <(substrate completion bash)' ;;
-        zsh)  rc_file="$HOME/.zshrc";  line='source <(substrate completion zsh)' ;;
-        fish) rc_file="$HOME/.config/fish/completions/substrate.fish"; line='substrate completion fish | source' ;;
-    esac
-    mkdir -p "$(dirname "$rc_file")" || die "cannot create $(dirname "$rc_file")"
-    touch "$rc_file" || die "cannot write $rc_file"
-    open_n=$(grep -c '^# >>> substrate completion >>>$' "$rc_file" || true)
-    close_n=$(grep -c '^# <<< substrate completion <<<$' "$rc_file" || true)
-    if [ "$open_n" != "$close_n" ]; then
-        die "unbalanced substrate completion markers in $rc_file ($open_n >>> vs $close_n <<<) — fix by hand, refusing to rewrite"
-    fi
-    tmp=$(mktemp) || die "mktemp failed"
-    awk '
-        $0 == "# >>> substrate completion >>>" { skip=1; next }
-        $0 == "# <<< substrate completion <<<" { skip=0; next }
-        !skip { print }
-    ' "$rc_file" > "$tmp" || { rm -f "$tmp"; die "failed to read $rc_file"; }
-    {
-        printf '\n# >>> substrate completion >>>\n'
-        printf '%s\n' "$line"
-        printf '# <<< substrate completion <<<\n'
-    } >> "$tmp"
-    # Write back in place: keeps a symlinked rc file a symlink and preserves its mode.
-    cat "$tmp" > "$rc_file" || { rm -f "$tmp"; die "failed to install completion into $rc_file"; }
-    rm -f "$tmp"
-    success "installed $shell completion into $rc_file — restart your shell or source $rc_file"
-}
-
-cmd_completion() {
-    local shell="${1:-}"
-    [ -n "$shell" ] || usage
-    case "$shell" in
-        bash|fish|zsh) ;;
-        *) usage ;;
-    esac
-    shift
-    local install=0 arg
-    for arg in "$@"; do
-        case "$arg" in
-            --install) install=1 ;;
-            *) usage ;;
-        esac
-    done
-    if [ "$install" -eq 1 ]; then
-        completion_install "$shell"
-    else
-        case "$shell" in
-            bash) completion_bash ;;
-            fish) completion_fish ;;
-            zsh)  completion_zsh ;;
-        esac
-    fi
-}
-
 if [ "${1:-}" = __maintenance-render ]; then
     shift
     operation="${1:-}"
@@ -548,6 +384,14 @@ if [ "${1:-}" = __maintenance-render ]; then
     esac
     exit
 fi
+
+case "${1:-}" in
+    -h|--help|help) print_usage_root; exit 0 ;;
+esac
+
+case "${2:-}" in
+    -h|--help) print_usage_cmd "${1:-}" && exit 0 ;;
+esac
 
 case "${1:-}" in
 
@@ -565,8 +409,8 @@ case "${1:-}" in
             case "$1" in
                 --update) args+=(--update-baseline); shift ;;
                 --accept-regression|--accept-regression=*) args+=("$1"); shift ;;
-                --reason) [ "$#" -ge 2 ] || usage; args+=("--reason=$2"); shift 2 ;;
-                *) usage ;;
+                --reason) [ "$#" -ge 2 ] || usage_cmd baseline; args+=("--reason=$2"); shift 2 ;;
+                *) usage_cmd baseline ;;
             esac
         done
         exec "$(engine_bin)" gate "${args[@]}" ;;
