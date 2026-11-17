@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # substrate — deterministic gates for agentic development, installable in any repo.
-# Commands: bootstrap, init, gate, checkpoint, baseline, doctor, verify, update, selftest, audit, report.
+# Commands are declared in core/completion.sh (sourced below); usage and completions render from it.
 set -uo pipefail
 
 SCRIPT=$(readlink -f "${BASH_SOURCE[0]}") || { printf 'substrate: cannot resolve executable path\n' >&2; exit 2; }
@@ -13,29 +13,14 @@ die()     { warn "$*"; exit 2; }
 engine_bin() { printf '%s\n' "${SUBSTRATE_ENGINE_BIN:-substrate-engine}"; }
 
 usage() {
-    cat <<'EOF'
-usage: substrate <command> [args]
-
-  bootstrap [--profile a,b] [--force] [--from-worktree]  kickstart or synchronize the current repo
-  init --profile a,b [--vcs auto|git|jj] [--from-worktree]  install the gate into a new repo
-  gate [--update-baseline|--tighten|--accept-regression] | gate --deep [--no-cache|--print-key]
-  baseline [--update|--accept-regression[=key1,key2] --reason <text>]
-  checkpoint --message <message> --path <path>... [--accept-regression=<metric>[,<metric>] --reason <text>]  gate, tighten, commit locally
-  restructure --op split|describe|squash --revision <rev> --message <m> ...  reshape agent commits
-  doctor                                    config, langmap freshness, toolchain
-  version                                   print the engine/kit version and channel
-  verify                                    active OMP runtime + bounded local gate
-  update [--apply] [--force] [--from-worktree]  inspect or re-vendor the engine only
-  engine pin [--bin PATH]                    RELEASE ACTION: pin .substrate/engine.json to a built binary (not for dev rebuilds)
-  maintenance flags: --checkpoint [--message <message>] [--accept-baseline] [--repo-only] [--json]
-                     [--accept-regression=<metric>[,<metric>] --reason <text>]  move a ratcheted metric that a core change moved
-                     --from-worktree on bootstrap/init/update vendors from the kit worktree even when
-                     it is dirty or unpushed
-  selftest                                  sandboxed negative-test battery
-  audit [plan.md ...]                       execute plan acceptance oracles
-  report [--write|--refresh]                advisory maintenance queue (always exits 0)
-EOF
+    print_usage_root
     exit 2
+}
+
+usage_cmd() {
+    local cmd="$1" code="${2:-2}"
+    print_usage_cmd "$cmd" || usage
+    exit "$code"
 }
 
 profile_dir() {
@@ -57,6 +42,8 @@ source "$KIT_ROOT/core/doctor.sh"
 source "$KIT_ROOT/core/verify.sh"
 # shellcheck source=../core/maintenance.sh
 source "$KIT_ROOT/core/maintenance.sh"
+# shellcheck source=../core/completion.sh
+source "$KIT_ROOT/core/completion.sh"
 
 
 build_langmap() {
@@ -337,10 +324,11 @@ cmd_gate() {
     fi
     if [ "${1:-}" = --deep ]; then
         shift
-        [ "$#" -le 1 ] || usage
+        [ "$#" -le 1 ] || usage_cmd gate
         case "${1:-}" in
+            -h|--help) usage_cmd gate 0 ;;
             ""|--no-cache|--print-key) ;;
-            *) usage ;;
+            *) usage_cmd gate ;;
         esac
         [ -x .substrate/gitleaks-deep.sh ] || die "deep scan runtime missing — run: substrate update --apply"
         "$(engine_bin)" gate || return
@@ -352,7 +340,7 @@ cmd_gate() {
 cmd_engine() {
     case "${1:-}" in
         pin) shift; cmd_engine_pin "$@" ;;
-        *) usage ;;
+        *) usage_cmd engine ;;
     esac
 }
 
@@ -398,6 +386,14 @@ if [ "${1:-}" = __maintenance-render ]; then
 fi
 
 case "${1:-}" in
+    -h|--help|help) print_usage_root; exit 0 ;;
+esac
+
+case "${2:-}" in
+    -h|--help) print_usage_cmd "${1:-}" && exit 0 ;;
+esac
+
+case "${1:-}" in
 
     bootstrap) shift; cmd_bootstrap "$@" ;;
     init)     shift; cmd_init "$@" ;;
@@ -413,8 +409,8 @@ case "${1:-}" in
             case "$1" in
                 --update) args+=(--update-baseline); shift ;;
                 --accept-regression|--accept-regression=*) args+=("$1"); shift ;;
-                --reason) [ "$#" -ge 2 ] || usage; args+=("--reason=$2"); shift 2 ;;
-                *) usage ;;
+                --reason) [ "$#" -ge 2 ] || usage_cmd baseline; args+=("--reason=$2"); shift 2 ;;
+                *) usage_cmd baseline ;;
             esac
         done
         exec "$(engine_bin)" gate "${args[@]}" ;;
@@ -425,5 +421,6 @@ case "${1:-}" in
     selftest) shift; [ -x .substrate/selftest.sh ] || die "no .substrate here — run: substrate init"; exec .substrate/selftest.sh "$@" ;;
     audit)    shift; [ -x .substrate/audit.sh ] || die "no .substrate here — run: substrate init"; exec .substrate/audit.sh "$@" ;;
     report)   shift; [ -x .substrate/report.sh ] || die "no .substrate here — run: substrate init"; exec .substrate/report.sh "$@" ;;
+    completion) shift; cmd_completion "$@" ;;
     *) usage ;;
 esac
