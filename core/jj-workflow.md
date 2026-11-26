@@ -35,6 +35,8 @@ Set once per machine with `jj config edit --user` (`~/.config/jj/config.toml`):
 jj config set --repo experimental-advance-branches.enabled-branches '["main"]'
 ```
 
+Set `"jj": { "auto_advance_trunk": false }` in `substrate.json` and rerun `substrate bootstrap` to turn trunk auto-advance off for the repo. Bootstrap then sets the repo-level list to `[]`, which also overrides a user-level `enabled-branches`.
+
 Checkpoint resolves and finalizes the local publication bookmark after verification.
 No generic bookmark-advance command is recovery for a blocked checkpoint.
 
