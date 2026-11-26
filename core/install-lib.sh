@@ -362,7 +362,7 @@ wire_jj_runtime() {
         || { warn "jj tug alias configuration failed"; return 1; }
 
     # Auto-advance is opt-out: only a literal false disables it (jq's // treats false as missing)
-    local auto_advance=true
+    local auto_advance=true wired
     if [ -f substrate.json ] && jq -e '.jj.auto_advance_trunk == false' substrate.json >/dev/null 2>&1; then
         auto_advance=false
     fi
@@ -370,13 +370,13 @@ wire_jj_runtime() {
     if [ "$auto_advance" != "false" ]; then
         jj config set --repo experimental-advance-branches.enabled-branches "[\"$trunk\"]" \
             || { warn "jj auto-advance configuration failed"; return 1; }
-        success "jj tug wired ($trunk auto-advance; --repo config is machine-local, rerun init per clone)"
+        wired="$trunk auto-advance; --repo config is machine-local, rerun init per clone"
     else
         # An explicit empty repo-level list overrides any user-level enabled-branches;
         # unset --repo would only drop the repo layer and jj would fall back to the user value.
         jj config set --repo experimental-advance-branches.enabled-branches '[]' \
             || { warn "jj auto-advance opt-out failed"; return 1; }
-        success "jj tug wired ($trunk auto-advance disabled via substrate.json)"
+        wired="$trunk auto-advance disabled via substrate.json"
     fi
     if ! printf '%s\n' "$bookmarks" | grep -q "^$trunk:"; then
         jj bookmark create "$trunk" -r @- 2>/dev/null \
@@ -387,6 +387,7 @@ wire_jj_runtime() {
         jj bookmark track "$trunk" --remote=origin 2>/dev/null \
             || { warn "jj bookmark tracking failed for $trunk@origin"; return 1; }
     fi
+    success "jj tug wired ($wired)"
 }
 
 wire_jj() {
