@@ -10,9 +10,9 @@ import (
 	"testing"
 )
 
-func TestJJRevisionIgnoresSnapshotWarnings(t *testing.T) {
-	jjConfig := filepath.Join(t.TempDir(), "config.toml")
-	t.Setenv("JJ_CONFIG", jjConfig)
+func initJJRepo(t *testing.T) string {
+	t.Helper()
+	t.Setenv("JJ_CONFIG", filepath.Join(t.TempDir(), "config.toml"))
 	root := t.TempDir()
 	out, err := exec.Command("jj", "git", "init", root).CombinedOutput()
 	if errors.Is(err, exec.ErrNotFound) {
@@ -21,6 +21,11 @@ func TestJJRevisionIgnoresSnapshotWarnings(t *testing.T) {
 	if err != nil {
 		t.Fatalf("jj git init: %v\n%s", err, out)
 	}
+	return root
+}
+
+func TestJJRevisionIgnoresSnapshotWarnings(t *testing.T) {
+	root := initJJRepo(t)
 	if err := os.WriteFile(filepath.Join(root, "oversized.bin"), make([]byte, 2<<20), 0o644); err != nil {
 		t.Fatal(err)
 	}

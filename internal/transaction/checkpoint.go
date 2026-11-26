@@ -593,7 +593,7 @@ func commitPathsFn(ctx context.Context, repo *vcs.Repo, repoRoot, message string
 }
 
 func commitJJ(ctx context.Context, repo *vcs.Repo, message string, paths []string) (string, string, error) {
-	args := append([]string{"commit", "--message", message, "--"}, paths...)
+	args := append([]string{"commit", "--message", message, "--"}, vcs.JJFilePatterns(paths)...)
 	res, runErr := xshell.RunIn(ctx, repo.Root, "jj", args...)
 	output := string(res.Stdout)
 	if err := xshell.ExitErr(res, runErr); err != nil {
@@ -607,16 +607,16 @@ func commitJJ(ctx context.Context, repo *vcs.Repo, message string, paths []strin
 }
 
 func commitGit(ctx context.Context, repoRoot, message string, paths []string) (string, string, error) {
-	addArgs := append([]string{"add", "--"}, paths...)
+	addArgs := append([]string{"--literal-pathspecs", "add", "--"}, paths...)
 	addRes, addErr := xshell.RunIn(ctx, repoRoot, "git", addArgs...)
 	if addErr != nil || addRes.Code != 0 {
 		return "", string(addRes.Stderr), fmt.Errorf("git could not stage the owned paths")
 	}
-	commitArgs := append([]string{"commit", "--only", "-m", message, "--"}, paths...)
+	commitArgs := append([]string{"--literal-pathspecs", "commit", "--only", "-m", message, "--"}, paths...)
 	commitRes, commitErr := xshell.RunIn(ctx, repoRoot, "git", commitArgs...)
 	output := string(commitRes.Stdout)
 	if err := xshell.ExitErr(commitRes, commitErr); err != nil {
-		_, _ = xshell.RunIn(ctx, repoRoot, "git", append([]string{"reset", "--quiet", "--"}, paths...)...)
+		_, _ = xshell.RunIn(ctx, repoRoot, "git", append([]string{"--literal-pathspecs", "reset", "--quiet", "--"}, paths...)...)
 		return "", output + string(commitRes.Stderr), fmt.Errorf("git commit rejected the transaction: %w", err)
 	}
 	revRes, revErr := xshell.RunIn(ctx, repoRoot, "git", "rev-parse", "HEAD")

@@ -3,10 +3,16 @@ package vcs
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
+	"strings"
 
 	"github.com/mp-pinheiro/substrate/internal/xshell"
 )
+
+func HasParentSegment(path string) bool {
+	return slices.Contains(strings.Split(path, "/"), "..")
+}
 
 func (r *Repo) ChangedPaths(ctx context.Context) ([]string, string, error) {
 	if r.Kind == KindJJ {

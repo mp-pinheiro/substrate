@@ -254,12 +254,16 @@ jj commit -m 'chore: add jj local check' checks.d/85-jj.sh >/dev/null 2>&1 \
     || fail "Jujutsu source fixture commit failed"
 printf 'dirty-jj-work\n' >> app.sh
 jj_dirty_hash=$(sha256sum app.sh)
+mkdir -p 'src/routes/[...rest]'
+printf '#!/usr/bin/env bash\nprintf "rest\\n"\n' > 'src/routes/[...rest]/+page.sh'
 "$KIT_ROOT/bin/substrate" bootstrap --checkpoint --repo-only > "$T/jj-maintenance.out" 2>&1 \
     || { cat "$T/jj-maintenance.out" >&2; fail "Jujutsu maintenance failed"; }
 jj_receipt=.git/substrate/maintenance-receipt.json
 jq -e '.repository.status == "committed" and .repository.vcs == "jj" and .noPush == true' "$jj_receipt" >/dev/null \
     || fail "Jujutsu receipt is incomplete"
 [ "$jj_dirty_hash" = "$(sha256sum app.sh)" ] || fail "Jujutsu maintenance changed unrelated work"
+jj diff --name-only | grep -qxF 'src/routes/[...rest]/+page.sh' \
+    || fail "Jujutsu maintenance did not preserve a pending rest-parameter route"
 assert_exact_commit "$jj_receipt" || fail "Jujutsu maintenance commit differs from its receipt"
 substrate-engine maintenance receipt-matches \
     || fail "Jujutsu exact receipt rejected preserved dirty work"

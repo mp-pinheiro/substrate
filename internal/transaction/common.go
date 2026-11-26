@@ -28,7 +28,7 @@ func ValidateSafePath(path string) error {
 	if filepath.IsAbs(path) {
 		return fmt.Errorf("absolute path not allowed: %s", path)
 	}
-	if strings.Contains(path, "..") {
+	if vcs.HasParentSegment(path) {
 		return fmt.Errorf("path contains ..: %s", path)
 	}
 	return nil

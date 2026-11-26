@@ -209,7 +209,7 @@ func executeRestructure(ctx context.Context, repo *vcs.Repo, repoRoot, metadataD
 			return fmt.Errorf("split requires --path")
 		}
 		childrenBefore, _ := childrenChanges(ctx, repo, targetChange)
-		res, err := xshell.RunIn(ctx, repo.Root, "jj", append([]string{"split", "-r", targetChange, "-m", opts.message, "--"}, opts.paths...)...)
+		res, err := xshell.RunIn(ctx, repo.Root, "jj", append([]string{"split", "-r", targetChange, "-m", opts.message, "--"}, vcs.JJPrefixPatterns(opts.paths)...)...)
 		if err != nil || res.Code != 0 {
 			rollback(ctx, repo, opBefore)
 			return fmt.Errorf("jj split rejected the transaction")

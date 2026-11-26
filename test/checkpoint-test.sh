@@ -11,6 +11,20 @@ mkdir -p "$HOME" "$T/git-repo"
 
 fail() { printf 'checkpoint-test FAIL: %s\n' "$1" >&2; exit 1; }
 lifecycle() { printf '{"session_id":"%s","stop_hook_active":false}\n' "$2" | substrate-engine hook agent-lifecycle "$1"; }
+ROUTES=('src/routes/(app)/admin/+page.sh' 'src/routes/[...rest]/+page.sh' 'src/routes/blog/[slug]/+page.sh')
+SIBLING_ROUTE='src/routes/blog/s/+page.sh'
+ROUTE_PATHS=()
+for route in "${ROUTES[@]}"; do
+    ROUTE_PATHS+=(--path "$route")
+done
+write_routes() {
+    local route
+    for route in "${ROUTES[@]}" "$SIBLING_ROUTE"; do
+        mkdir -p "$(dirname -- "$route")"
+        printf '#!/usr/bin/env bash\nprintf "route\\n"\n' > "$route"
+        chmod +x "$route"
+    done
+}
 
 cd "$T/git-repo" || exit 9
 git init -q --initial-branch=main
@@ -185,6 +199,20 @@ git show --name-only --pretty=format: HEAD | grep -qx CLAUDE.md && fail "CLAUDE.
 git checkout -q -- CLAUDE.md
 lifecycle end ask-auto >/dev/null
 
+write_routes
+git add src/routes
+git commit -qm 'feat(routes): add route scripts'
+for route in "${ROUTES[@]}" "$SIBLING_ROUTE"; do
+    printf 'printf "edit\\n"\n' >> "$route"
+done
+substrate-engine checkpoint --message 'fix(routes): edit route scripts' "${ROUTE_PATHS[@]}" > "$T/routes.out" 2>&1 \
+    || fail "Git checkpoint rejected route-style paths: $(cat "$T/routes.out")"
+[ "$(git show --name-only --pretty=format: HEAD | grep '^src/routes/')" = "$(printf '%s\n' "${ROUTES[@]}")" ] \
+    || fail "Git route checkpoint committed the wrong paths"
+[ "$(git status --porcelain=v1 --untracked-files=all)" = " M $SIBLING_ROUTE" ] \
+    || fail "Git route checkpoint staged or committed the unowned sibling route"
+git checkout -q -- "$SIBLING_ROUTE"
+
 mkdir -p "$T/jj-repo"
 cd "$T/jj-repo" || exit 9
 jj config set --user user.name substrate >/dev/null 2>&1
@@ -205,5 +233,13 @@ substrate-engine checkpoint --message 'fix(shell): checkpoint jj work' --path ow
 commit=$(jj log -r @- --no-graph -T commit_id)
 jq -e --arg commit "$commit" '.commit == $commit and .vcs == "jj" and .reusable == true' \
     .git/substrate/gate-receipt.json >/dev/null || fail "Jujutsu checkpoint receipt is not reusable"
+
+write_routes
+substrate-engine checkpoint --message 'feat(routes): add route scripts' "${ROUTE_PATHS[@]}" > "$T/routes.out" 2>&1 \
+    || fail "Jujutsu checkpoint rejected route-style paths: $(cat "$T/routes.out")"
+[ "$(jj diff -r @- --name-only | grep '^src/routes/')" = "$(printf '%s\n' "${ROUTES[@]}")" ] \
+    || fail "Jujutsu route checkpoint committed the wrong paths"
+[ "$(jj diff --name-only)" = "$SIBLING_ROUTE" ] \
+    || fail "Jujutsu route checkpoint did not leave exactly the unowned sibling route pending"
 
 printf 'checkpoint-test: lifecycle, ownership, governed paths, Git, Jujutsu green\n'

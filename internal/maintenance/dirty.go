@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/mp-pinheiro/substrate/internal/canonjson"
+	"github.com/mp-pinheiro/substrate/internal/vcs"
 	"github.com/mp-pinheiro/substrate/internal/xshell"
 )
 
@@ -131,7 +132,7 @@ func validatePath(p string) error {
 	if p == "" || filepath.IsAbs(p) {
 		return fmt.Errorf("validate path: invalid path: %s", p)
 	}
-	if strings.Contains(p, "..") {
+	if vcs.HasParentSegment(p) {
 		return fmt.Errorf("validate path: path contains ..: %s", p)
 	}
 	if strings.Contains(p, "\t") || strings.Contains(p, "\n") {

@@ -2,6 +2,24 @@ package vcs
 
 import "strings"
 
+var jjStringEscaper = strings.NewReplacer(`\`, `\\`, `"`, `\"`)
+
+func JJFilePatterns(paths []string) []string {
+	return jjPatterns("file", paths)
+}
+
+func JJPrefixPatterns(paths []string) []string {
+	return jjPatterns("cwd", paths)
+}
+
+func jjPatterns(kind string, paths []string) []string {
+	patterns := make([]string, len(paths))
+	for i, path := range paths {
+		patterns[i] = kind + `:"` + jjStringEscaper.Replace(path) + `"`
+	}
+	return patterns
+}
+
 func UnquotePath(s string) string {
 	if len(s) < 2 || s[0] != '"' || s[len(s)-1] != '"' {
 		return s

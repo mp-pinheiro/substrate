@@ -78,6 +78,23 @@ jj diff -r "$remainder_change" --name-only | grep -qx 'one.sh' || fail "squash r
 jj diff -r "$remainder_change" --name-only | grep -qx 'two.sh' || fail "squash result lost two.sh"
 [ -z "$(jj diff --name-only)" ] || fail "squash left the working copy dirty"
 
+mkdir -p 'src/routes/(app)/admin' 'src/routes/blog/[slug]'
+printf '#!/usr/bin/env bash\nset -euo pipefail\nprintf "admin\\n"\n' > 'src/routes/(app)/admin/+page.sh'
+printf '#!/usr/bin/env bash\nset -euo pipefail\nprintf "slug\\n"\n' > 'src/routes/blog/[slug]/+page.sh'
+printf '#!/usr/bin/env bash\nset -euo pipefail\nprintf "three\\n"\n' > three.sh
+chmod +x 'src/routes/(app)/admin/+page.sh' 'src/routes/blog/[slug]/+page.sh' three.sh
+substrate-engine checkpoint --message 'feat(shell): add route scripts' \
+    --path 'src/routes/(app)/admin/+page.sh' --path 'src/routes/blog/[slug]/+page.sh' --path three.sh >/dev/null \
+    || fail "checkpoint of the route split fixture failed"
+route_change=$(jj log -r @- --no-graph -T 'change_id')
+substrate-engine restructure --op split --revision "$route_change" \
+    --path 'src/routes/(app)/admin' --path 'src/routes/blog/[slug]/+page.sh' \
+    --message 'refactor(shell): isolate routes' --allow-change "$route_change" > "$T/out" 2>&1 \
+    || fail "split rejected route-style paths: $(cat "$T/out")"
+[ "$(jj diff -r "$route_change" --name-only)" = "$(printf '%s\n' \
+    'src/routes/(app)/admin/+page.sh' 'src/routes/blog/[slug]/+page.sh')" ] \
+    || fail "route split selected the wrong paths"
+
 printf '{"session_id":"restructure-session"}\n' | substrate-engine hook agent-lifecycle start >/dev/null
 printf '#!/usr/bin/env bash\nset -euo pipefail\nprintf "cli\\n"\n' > cli.sh
 chmod +x cli.sh
