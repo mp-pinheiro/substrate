@@ -194,13 +194,13 @@ cmd_doctor() {
             warn "jj trunk auto-advance does not include configured trunk $trunk — rerun init"
         fi
         bookmarks=$(jj bookmark list 2>/dev/null) || bookmarks=""
-        if printf '%s\n' "$bookmarks" | grep -q "^$trunk:"; then
+        if grep -q "^$trunk:" <<< "$bookmarks"; then
             success "jj local trunk bookmark exists ($trunk)"
         else
             warn "jj local trunk bookmark missing ($trunk) — create it after the first commit"
         fi
         remotes=$(jj bookmark list --all-remotes 2>/dev/null) || remotes=""
-        if printf '%s\n' "$remotes" | grep -q "^$trunk@origin:"; then
+        if grep -q "^$trunk@origin:" <<< "$remotes"; then
             success "jj trunk tracks origin ($trunk@origin)"
         else
             warn "jj trunk tracking is missing ($trunk@origin)"

@@ -354,7 +354,7 @@ wire_jj_runtime() {
     command -v jj >/dev/null 2>&1 || { warn ".jj present but jj not installed — jj wiring skipped"; return 1; }
     local trunk=main bookmarks
     bookmarks=$(jj bookmark list 2>/dev/null) || { warn "jj bookmark list failed"; return 1; }
-    if printf '%s\n' "$bookmarks" | grep -q '^master:' && ! printf '%s\n' "$bookmarks" | grep -q '^main:'; then
+    if grep -q '^master:' <<< "$bookmarks" && ! grep -q '^main:' <<< "$bookmarks"; then
         trunk=master
     fi
     jj config get aliases.tug >/dev/null 2>&1 \
@@ -378,12 +378,12 @@ wire_jj_runtime() {
             || { warn "jj auto-advance opt-out failed"; return 1; }
         wired="$trunk auto-advance disabled via substrate.json"
     fi
-    if ! printf '%s\n' "$bookmarks" | grep -q "^$trunk:"; then
+    if ! grep -q "^$trunk:" <<< "$bookmarks"; then
         jj bookmark create "$trunk" -r @- 2>/dev/null \
             || { warn "trunk bookmark $trunk creation failed"; return 1; }
         success "trunk bookmark $trunk created at @-"
     fi
-    if printf '%s\n' "$(jj bookmark list --all-remotes 2>/dev/null)" | grep -q "^$trunk@origin:"; then
+    if grep -q "^$trunk@origin:" <<< "$(jj bookmark list --all-remotes 2>/dev/null)"; then
         jj bookmark track "$trunk" --remote=origin 2>/dev/null \
             || { warn "jj bookmark tracking failed for $trunk@origin"; return 1; }
     fi
