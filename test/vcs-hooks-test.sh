@@ -50,7 +50,7 @@ mkdir -p "$T/git-repo"
     jq '.push_gate = false' substrate.json > "$T/push-gate-optout.json"
     mv "$T/push-gate-optout.json" substrate.json
     git push -q origin main 2>/dev/null && fail "git: push not blocked by red gate (unclaimed source)"
-    git ls-remote --heads "$T/git-origin.git" | grep -q main && fail "git: ref reached remote despite red gate"
+    grep -q main < <(git ls-remote --heads "$T/git-origin.git") && fail "git: ref reached remote despite red gate"
     git restore -- substrate.json
 
     git rm -q orphan.xyz
@@ -59,7 +59,7 @@ mkdir -p "$T/git-repo"
     grep -q 'green receipt recorded' <<< "$out" || fail "git: receipt seed was not recorded: $out"
     out=$(git push origin main 2>&1) || fail "git: push blocked despite green gate: $out"
     grep -q 'exact-state receipt accepted' <<< "$out" || fail "git: push did not reuse its exact receipt: $out"
-    git ls-remote --heads "$T/git-origin.git" | grep -q main || fail "git: green push produced no remote ref"
+    grep -q main < <(git ls-remote --heads "$T/git-origin.git") || fail "git: green push produced no remote ref"
 ) || exit 1
 
 # Existing hooks must make bootstrap incomplete rather than silently shipping without enforcement.
@@ -125,7 +125,7 @@ mkdir -p "$T/jj-repo"
     rc=$?
     [ "$rc" -ne 0 ] || fail "jj: push not blocked by red gate"
     grep -q 'push blocked' <<< "$out" || fail "jj: block message missing: $out"
-    git ls-remote --heads "$T/jj-origin.git" | grep -q main && fail "jj: ref reached remote despite red gate"
+    grep -q main < <(git ls-remote --heads "$T/jj-origin.git") && fail "jj: ref reached remote despite red gate"
 
     cp "$T/jj-substrate.json" substrate.json
     rm orphan.xyz

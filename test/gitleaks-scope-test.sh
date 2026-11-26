@@ -14,7 +14,7 @@ scan_red() {
     if out=$(.substrate/checks.d/50-gitleaks.sh 2>&1); then
         fail "$label was not detected"
     fi
-    printf '%s\n' "$out" | grep -Fq "$expected" || fail "$label report did not name $expected"
+    grep -Fq "$expected" <<< "$out" || fail "$label report did not name $expected"
 }
 scan_green() {
     local label="$1" out
@@ -94,7 +94,7 @@ git show-ref --verify --quiet refs/remotes/origin/main \
 if ! out=$("$KIT_ROOT/bin/substrate" bootstrap --profile base --vcs git --checkpoint --accept-baseline --repo-only 2>&1); then
     fail "maintenance candidate rejected the unchanged seed: $out"
 fi
-if printf '%s\n' "$out" | grep -Fq 'legacy.txt'; then
+if grep -Fq 'legacy.txt' <<< "$out"; then
     fail "maintenance candidate reported unchanged legacy.txt"
 fi
 dirty_canary='ghp_'
@@ -105,9 +105,9 @@ mv "$T/substrate.json" substrate.json
 if out=$("$KIT_ROOT/bin/substrate" bootstrap --repo-only 2>&1); then
     fail "maintenance candidate missed dirty substrate.json secret"
 fi
-printf '%s\n' "$out" | grep -Fq 'substrate.json' \
+grep -Fq 'substrate.json' <<< "$out" \
     || fail "dirty substrate.json finding was not reported"
-printf '%s\n' "$out" | grep -Fq 'potential secrets in pending work' \
+grep -Fq 'potential secrets in pending work' <<< "$out" \
     || fail "pending secret failure was not reported"
 
 printf 'gitleaks-scope-test: Git tracked, staged, untracked and Jujutsu pending coverage green\n'

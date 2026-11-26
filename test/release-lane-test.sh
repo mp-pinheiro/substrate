@@ -87,12 +87,12 @@ git commit -q --allow-empty -m next || fail "second commit"
 head_sha=$(git rev-parse HEAD)
 
 identity workflow_dispatch "" && fail "re-cutting a published stable from a new revision must be refused"
-ann | grep -q 'already points at' || fail "refusal must name the collision: $(ann)"
+grep -q 'already points at' < <(ann) || fail "refusal must name the collision: $(ann)"
 ok "re-cutting a published stable from a new revision is refused"
 
 identity workflow_dispatch "" "$first_sha" || fail "resuming the same revision must be allowed: $(ann)"
 [ "$(field skip)" = false ] || fail "resume must not skip: $(cat "$T/out")"
-ann | grep -q 'resuming publication' || fail "resume must be announced: $(ann)"
+grep -q 'resuming publication' < <(ann) || fail "resume must be announced: $(ann)"
 ok "re-running at the published revision resumes instead of failing"
 
 git tag -a v0.3.0-nightly.20260101 -m nightly || fail "nightly tag"
@@ -100,7 +100,7 @@ echo third > CHANGES && git add CHANGES && git commit -qm third || fail "third c
 head_sha=$(git rev-parse HEAD)
 identity schedule "" || fail "cron collision must not fail the run: $(ann)"
 [ "$(field skip)" = true ] || fail "cron collision must skip: $(cat "$T/out")"
-ann | grep -q 'nothing to cut' || fail "skip must be announced: $(ann)"
+grep -q 'nothing to cut' < <(ann) || fail "skip must be announced: $(ann)"
 ok "cron re-hitting today's nightly skips instead of reding the run"
 
 identity workflow_dispatch nightly && fail "manual re-dispatch of an existing nightly must be refused"
@@ -114,7 +114,7 @@ ok "cron with no tag for today proceeds to a fresh nightly"
 git tag -a v0.3.0-nightly.20251231 -m nightly || fail "yesterday's nightly tag"
 identity schedule "" || fail "unchanged cron exited $?: $(ann)"
 [ "$(field skip)" = true ] || fail "a cron with no changes since the last cut must skip: $(cat "$T/out")"
-ann | grep -q 'no changes since v0.3.0-nightly.20251231' || fail "the no-diff skip must name the last cut: $(ann)"
+grep -q 'no changes since v0.3.0-nightly.20251231' < <(ann) || fail "the no-diff skip must name the last cut: $(ann)"
 ok "cron with no changes since yesterday's nightly skips"
 
 git commit -q --allow-empty -m empty || fail "empty commit"
@@ -152,7 +152,7 @@ printf '{"object":{"sha":"%s","type":"commit"}}' "$mirror_commit" \
     > "$T/api/obj-tagobject00000000000000000000000000000000"
 cd "$mirror" || fail "cannot enter the mirror repo"
 identity workflow_dispatch "" "$mirror_commit" || fail "annotated deref via API failed: $(ann)"
-ann | grep -q 'resuming publication' \
+grep -q 'resuming publication' < <(ann) \
     || fail "an annotated tag from the API must compare by its commit, not its tag object: $(ann)"
 identity workflow_dispatch "" tagobject00000000000000000000000000000000 \
     && fail "the tag object sha must not be mistaken for the released commit"
@@ -160,7 +160,7 @@ ok "annotated tags from the mirror API dereference to the commit, not the tag ob
 
 echo 500 > "$T/api/force-code"
 identity workflow_dispatch "" && fail "a 500 from the mirror must not be read as an absent tag"
-ann | grep -q 'HTTP 500' || fail "the failure must name the status: $(ann)"
+grep -q 'HTTP 500' < <(ann) || fail "the failure must name the status: $(ann)"
 [ "$(ann | grep -c '^::error::')" = 1 ] \
     || fail "an outage must log one honest annotation, not a misleading follow-up: $(ann)"
 echo 401 > "$T/api/force-code"
@@ -172,7 +172,7 @@ env RELEASE_EVENT=workflow_dispatch RELEASE_HEAD_SHA="$mirror_commit" RELEASE_DA
     RELEASE_MIRROR_TOKEN= MIRROR_TOKEN= RELEASE_OUTPUT="$T/out" \
     bash "$KIT_ROOT/core/release-identity.sh" > "$T/ann" 2>&1 \
     && fail "a missing mirror token must not silently skip the collision check"
-ann | grep -q 'no mirror token' || fail "the missing token must be named: $(ann)"
+grep -q 'no mirror token' < <(ann) || fail "the missing token must be named: $(ann)"
 ok "a missing mirror token fails closed rather than publishing unchecked"
 
 
@@ -202,7 +202,7 @@ ok "tomorrow's cron against the real VERSION and a published v$real_base cuts $e
 cd "$repo" || fail "cannot re-enter the scratch repo"
 : > VERSION
 identity workflow_dispatch "" && fail "an empty VERSION must be refused, not published as v"
-ann | grep -q 'missing or empty' || fail "empty VERSION must be named: $(ann)"
+grep -q 'missing or empty' < <(ann) || fail "empty VERSION must be named: $(ann)"
 ok "an empty VERSION file is refused before anything is tagged"
 
 mirror_tag() {
@@ -216,7 +216,7 @@ tag_sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 printf '{"sha":"%s"}' "$tag_sha" > "$T/api/commit-$tag_sha"
 echo 201 > "$T/api/tag-code"
 mirror_tag v9.9.9 "$tag_sha" || fail "creating a fresh mirror tag exited $?: $(ann)"
-ann | grep -q "created v9.9.9 on the mirror" || fail "creation must be announced: $(ann)"
+grep -q "created v9.9.9 on the mirror" < <(ann) || fail "creation must be announced: $(ann)"
 ok "a fresh mirror tag is created at the released revision"
 
 echo 422 > "$T/api/tag-code"
@@ -226,25 +226,25 @@ printf '{"object":{"sha":"%s","type":"commit"}}' "$tag_sha" \
     > "$T/api/obj-tagobject11111111111111111111111111111111"
 mirror_tag v9.9.9 "$tag_sha" \
     || fail "an annotated mirror tag at the released commit must resume, not abort: $(ann)"
-ann | grep -q 'already present on the mirror' || fail "resume must be announced: $(ann)"
+grep -q 'already present on the mirror' < <(ann) || fail "resume must be announced: $(ann)"
 ok "a 422 on an annotated mirror tag dereferences instead of falsely aborting"
 
 other_sha=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 printf '{"sha":"%s"}' "$other_sha" > "$T/api/commit-$other_sha"
 mirror_tag v9.9.9 bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb \
     && fail "a mirror tag pointing elsewhere must abort the publication"
-ann | grep -q 'already exists on the mirror at' || fail "the collision must be named: $(ann)"
+grep -q 'already exists on the mirror at' < <(ann) || fail "the collision must be named: $(ann)"
 ok "a mirror tag at a different revision aborts instead of being overwritten"
 
 echo 500 > "$T/api/tag-code"
 mirror_tag v9.9.9 "$tag_sha" && fail "an unexpected status must not be treated as success"
-ann | grep -q 'HTTP 500' || fail "the status must be named: $(ann)"
+grep -q 'HTTP 500' < <(ann) || fail "the status must be named: $(ann)"
 rm -f "$T/api/tag-code" "$T/api/ref-v9.9.9"
 ok "an unexpected mirror status aborts with the status named"
 
 mirror_tag v9.9.9 cccccccccccccccccccccccccccccccccccccccc \
     && fail "a revision absent from the mirror must abort before tagging"
-ann | grep -q 'has not reached the GitHub mirror' || fail "the wait failure must be named: $(ann)"
+grep -q 'has not reached the GitHub mirror' < <(ann) || fail "the wait failure must be named: $(ann)"
 ok "a revision that never reaches the mirror aborts instead of tagging the wrong commit"
 
 notes="$T/notes.md"
@@ -296,7 +296,7 @@ pruned=$(env -u GH_TOKEN -u GITHUB_TOKEN SUBSTRATE_FORGE_DRYRUN=1 \
     || fail "prune must select only the aged nightly for this base, got: $pruned"
 ok "prune deletes only aged prereleases of its own base, sparing stables and other bases"
 
-printf '%s' "$pruned" | grep -q undated \
+grep -q undated <<< "$pruned" \
     && fail "a release with no created_at must never be selected for deletion"
 ok "a prerelease with a missing timestamp is spared instead of deleted"
 
@@ -344,7 +344,7 @@ publish_plan v0.3.0-nightly.20260921 true 0.2.0 0.3.0 abc123 \
 plan_out=$(cat "$T/plan2")
 [ "$(printf '%s\n' "$plan_out" | grep -c '^DRYRUN upload-asset')" = 3 ] \
     || fail "every artifact plus SHA256SUMS must be uploaded: $plan_out"
-printf '%s\n' "$plan_out" | grep -q 'DRYRUN create-release .*tag=v0.3.0-nightly.20260921 prerelease=true target=abc123' \
+grep -q 'DRYRUN create-release .*tag=v0.3.0-nightly.20260921 prerelease=true target=abc123' <<< "$plan_out" \
     || fail "the release must be created at the given target: $plan_out"
 [ "$(printf '%s\n' "$plan_out" | grep -c 'DRYRUN prune')" = 2 ] \
     || fail "a bumped nightly base must prune both its own and the previous base: $plan_out"

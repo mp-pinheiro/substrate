@@ -153,7 +153,7 @@ mkdir -p "$T/jj-repo"
     jj commit -m 'chore: post-battery state' >/dev/null 2>&1
     mv components/x.sh components/renamed.sh
     printf '# we narrate after the rename\n# and we keep narrating here\n' >> components/renamed.sh
-    jj diff --summary --no-pager | grep -q ' => ' || fail "jj emitted no rename summary — brace parser untested"
+    grep -q ' => ' < <(jj diff --summary --no-pager) || fail "jj emitted no rename summary, so the brace parser is untested"
     err=$(mktemp)
     run_scan "$err"
     grep -q 'components/renamed.sh' "$err" || fail "jj: renamed path not resolved from brace summary: $(cat "$err")"

@@ -14,7 +14,7 @@ if [ "$rc" -eq 3 ]; then
     printf '%s\n' "$out" >&2
     exit 3
 fi
-if printf '%s' "$out" | grep -q "$2"; then
+if grep -q "$2" <<< "$out"; then
     exit 0
 fi
 printf '%s\n' "$out" >&2

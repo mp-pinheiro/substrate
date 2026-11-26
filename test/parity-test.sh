@@ -212,7 +212,7 @@ jq -e '.dirtySubset.details.status == "passed" and (.dirtySubset.content[0].text
     || fail "OMP path-scoped checkpoint wrote the wrong commit"
 [ -n "$(git -C "$T/dirty-repo" status --porcelain=v1 -- owned.sh)" ] \
     || fail "OMP path-scoped checkpoint consumed the unowned pre-existing edit"
-git -C "$T/dirty-repo" show --name-only --pretty=format: HEAD | grep -qx 'owned.sh' \
+grep -qx 'owned.sh' < <(git -C "$T/dirty-repo" show --name-only --pretty=format: HEAD) \
     && fail "unowned owned.sh leaked into the OMP path-scoped commit"
 jq -e 'any(.pushBlocks[]; .block == true and (.reason | contains("push guard rejected")))' \
     <<< "$omp_results" >/dev/null || fail "OMP red push was not blocked: $omp_results"
@@ -450,7 +450,7 @@ jq -e 'any(.warned[]; .additionalContext == "Substrate warning: stub warning") a
     || fail "OMP did not surface a warn decision: $ask"
 jq -e 'any(.unreadable[]; .block == true and (.reason | contains("unreadable policy decision")))' <<< "$ask" >/dev/null \
     || fail "OMP accepted an unreadable decision: $ask"
-git -C "$T/ask-repo" show --name-only --pretty=format: HEAD | grep -qx CLAUDE.md && fail "CLAUDE.md leaked into the OMP auto-checkpoint"
+grep -qx CLAUDE.md < <(git -C "$T/ask-repo" show --name-only --pretty=format: HEAD) && fail "CLAUDE.md leaked into the OMP auto-checkpoint"
 [ -n "$(git -C "$T/ask-repo" status --porcelain=v1 -- CLAUDE.md)" ] || fail "OMP auto-checkpoint consumed the CLAUDE.md edit"
 
 printf 'parity-test: structural mirrors, lifecycle, checkpoint, command, push, and ask parity green\n'

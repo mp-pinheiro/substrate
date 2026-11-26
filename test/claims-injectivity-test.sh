@@ -28,6 +28,6 @@ rc=$?
 if [ "$rc" -ne 3 ]; then
     fail "expected exit 3 for 0x1F path, got $rc. Output: $out"
 fi
-printf '%s\n' "$out" | grep -q '0x1F byte in path' \
+grep -q '0x1F byte in path' <<< "$out" \
     || fail "missing '0x1F byte in path' in output: $out"
 ok "0x1F path triggers die_infra exit 3"

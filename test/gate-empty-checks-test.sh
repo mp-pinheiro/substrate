@@ -25,6 +25,6 @@ rc=$?
 if [ "$rc" -ne 3 ]; then
     fail "empty checks.d expected exit 3, got $rc. Output: $out"
 fi
-printf '%s\n' "$out" | grep -q 'no checks in' \
+grep -q 'no checks in' <<< "$out" \
     || fail "missing 'no checks in' guard message: $out"
 ok "empty checks.d exits 3 with guard message"

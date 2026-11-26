@@ -55,8 +55,8 @@ remainder_change=$(jq -r '.newChangeIds[0]' <<< "$receipt")
 [ "$(jj log -r "$remainder_change" --no-graph -T 'description.first_line()')" = 'refactor(shell): keep two' ] \
     || fail "split remainder has the wrong message"
 [ "$(jj diff -r "$target_change" --name-only)" = 'one.sh' ] || fail "split selected commit carries the wrong paths"
-jj diff -r "$remainder_change" --name-only | grep -qx 'two.sh' || fail "split remainder lost two.sh"
-jj diff -r "$remainder_change" --name-only | grep -qx 'one.sh' && fail "split remainder still carries one.sh"
+grep -qx 'two.sh' < <(jj diff -r "$remainder_change" --name-only) || fail "split remainder lost two.sh"
+grep -qx 'one.sh' < <(jj diff -r "$remainder_change" --name-only) && fail "split remainder still carries one.sh"
 [ -z "$(jj diff --name-only)" ] || fail "split left the working copy dirty"
 jq -e '.operation == "restructure"' "$(git rev-parse --git-common-dir)/substrate/restructure-receipt.json" >/dev/null \
     || fail "restructure receipt file missing"
@@ -74,8 +74,8 @@ substrate-engine restructure --op squash --revision "$target_change" --into "$re
     || fail "squash transaction failed"
 [ "$(jj log -r "$remainder_change" --no-graph -T 'description.first_line()')" = 'refactor(shell): merge halves' ] \
     || fail "squash did not apply the combined message"
-jj diff -r "$remainder_change" --name-only | grep -qx 'one.sh' || fail "squash result lost one.sh"
-jj diff -r "$remainder_change" --name-only | grep -qx 'two.sh' || fail "squash result lost two.sh"
+grep -qx 'one.sh' < <(jj diff -r "$remainder_change" --name-only) || fail "squash result lost one.sh"
+grep -qx 'two.sh' < <(jj diff -r "$remainder_change" --name-only) || fail "squash result lost two.sh"
 [ -z "$(jj diff --name-only)" ] || fail "squash left the working copy dirty"
 
 mkdir -p 'src/routes/(app)/admin' 'src/routes/blog/[slug]'

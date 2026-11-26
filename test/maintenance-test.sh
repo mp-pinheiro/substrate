@@ -262,7 +262,7 @@ jj_receipt=.git/substrate/maintenance-receipt.json
 jq -e '.repository.status == "committed" and .repository.vcs == "jj" and .noPush == true' "$jj_receipt" >/dev/null \
     || fail "Jujutsu receipt is incomplete"
 [ "$jj_dirty_hash" = "$(sha256sum app.sh)" ] || fail "Jujutsu maintenance changed unrelated work"
-jj diff --name-only | grep -qxF 'src/routes/[...rest]/+page.sh' \
+grep -qxF 'src/routes/[...rest]/+page.sh' < <(jj diff --name-only) \
     || fail "Jujutsu maintenance did not preserve a pending rest-parameter route"
 assert_exact_commit "$jj_receipt" || fail "Jujutsu maintenance commit differs from its receipt"
 substrate-engine maintenance receipt-matches \

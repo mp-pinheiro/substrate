@@ -71,8 +71,8 @@ substrate-engine checkpoint --message 'feat(x): grow' --path owned.sh --accept-r
     || fail "keyed accept-regression checkpoint failed: $(cat "$T/accept.out")"
 jq -e '.metrics["probe:alpha"] == 20' substrate-baseline.json >/dev/null \
     || fail "accepted regression did not persist the new floor"
-git show --name-only --pretty= HEAD | grep -qx 'owned.sh' || fail "owned.sh missing from accepted-regression commit"
-git show --name-only --pretty= HEAD | grep -qx 'substrate-baseline.json' || fail "baseline was not co-committed with the accepted regression"
+grep -qx 'owned.sh' < <(git show --name-only --pretty= HEAD) || fail "owned.sh missing from accepted-regression commit"
+grep -qx 'substrate-baseline.json' < <(git show --name-only --pretty= HEAD) || fail "baseline was not co-committed with the accepted regression"
 [ -z "$(git status --porcelain=v1 --untracked-files=all)" ] || fail "accepted-regression checkpoint left pending work"
 jq -e '.acceptedRegressions == ["probe:alpha"]' .git/substrate/gate-receipt.json >/dev/null \
     || fail "accepted regression key missing from the gate receipt"
@@ -115,8 +115,8 @@ before=$(git rev-parse HEAD)
 substrate-engine checkpoint --session dirty-session --message 'fix(shell): checkpoint owned beside unowned' > "$T/checkpoint.out" 2>&1 \
     || fail "path-scoped checkpoint did not commit owned work beside unowned changes"
 [ "$before" != "$(git rev-parse HEAD)" ] || fail "path-scoped checkpoint did not advance HEAD"
-git show --name-only --pretty=format: HEAD | grep -qx 'owned.sh' || fail "owned.sh missing from path-scoped commit"
-git show --name-only --pretty=format: HEAD | grep -qx 'user.sh' && fail "unowned user.sh leaked into the agent commit"
+grep -qx 'owned.sh' < <(git show --name-only --pretty=format: HEAD) || fail "owned.sh missing from path-scoped commit"
+grep -qx 'user.sh' < <(git show --name-only --pretty=format: HEAD) && fail "unowned user.sh leaked into the agent commit"
 [ -n "$(git status --porcelain=v1 -- user.sh)" ] || fail "unowned user.sh vanished after path-scoped checkpoint"
 grep -q 'unowned pending paths in place' "$T/checkpoint.out" || fail "leftover paths were not surfaced"
 jq -e '.reusable == false' .git/substrate/gate-receipt.json >/dev/null \
@@ -134,7 +134,7 @@ grep -q 'not pending working-copy changes' "$T/checkpoint.out" || fail "not-pend
 substrate-engine checkpoint --message 'fix(shell): checkpoint explicit subset' --path owned.sh > "$T/checkpoint.out" 2>&1 \
     || fail "explicit-path subset checkpoint failed"
 [ -n "$(git status --porcelain=v1 -- user.sh)" ] || fail "explicit subset consumed unowned user.sh"
-git show --name-only --pretty=format: HEAD | grep -qx 'owned.sh' || fail "owned.sh missing from explicit subset commit"
+grep -qx 'owned.sh' < <(git show --name-only --pretty=format: HEAD) || fail "owned.sh missing from explicit subset commit"
 git checkout -q -- user.sh
 
 jq '.metrics.protected_probe = 1' substrate-baseline.json > baseline.tmp 
@@ -151,10 +151,10 @@ printf 'Approved rule\n' > CLAUDE.md
 lifecycle observe ask-mixed >/dev/null
 substrate-engine checkpoint --session ask-mixed --message 'fix(shell): checkpoint beside a guide edit' > "$T/mixed.out" 2>&1 \
     || fail "checkpoint refused owned work beside an ask-level path: $(cat "$T/mixed.out")"
-git show --name-only --pretty=format: HEAD | grep -qx owned.sh || fail "owned.sh missing from the checkpoint commit"
-git show --name-only --pretty=format: HEAD | grep -qx CLAUDE.md && fail "CLAUDE.md leaked into the agent commit"
+grep -qx owned.sh < <(git show --name-only --pretty=format: HEAD) || fail "owned.sh missing from the checkpoint commit"
+grep -qx CLAUDE.md < <(git show --name-only --pretty=format: HEAD) && fail "CLAUDE.md leaked into the agent commit"
 [ -n "$(git status --porcelain=v1 -- CLAUDE.md)" ] || fail "the approved CLAUDE.md edit vanished"
-grep -A1 'for the user to review and commit' "$T/mixed.out" | grep -q 'CLAUDE.md' \
+grep -q 'CLAUDE.md' < <(grep -A1 'for the user to review and commit' "$T/mixed.out") \
     || fail "checkpoint did not name the handed-off path: $(cat "$T/mixed.out")"
 grep -q 'unowned pending paths' "$T/mixed.out" && fail "handed-off path was reported as unowned: $(cat "$T/mixed.out")"
 lifecycle stop ask-mixed > "$T/stop.out" 2>&1 || fail "stop stayed blocked after the handoff checkpoint: $(cat "$T/stop.out")"
@@ -169,8 +169,8 @@ before=$(git rev-parse HEAD)
 if substrate-engine checkpoint --session ask-only --message 'docs: agent guide' --json > "$T/only.out" 2>&1; then
     fail "checkpoint committed an ask-level path"
 fi
-jq -Rn '[inputs | fromjson? | select(.code == "checkpoint.handoff" and .owner == "user" and (.details | index("AGENTS.md")))] | length == 1' \
-    < "$T/only.out" | grep -qx true || fail "ask-only checkpoint did not hand off to the user: $(cat "$T/only.out")"
+jq -Rne '[inputs | fromjson? | select(.code == "checkpoint.handoff" and .owner == "user" and (.details | index("AGENTS.md")))] | length == 1' \
+    < "$T/only.out" >/dev/null || fail "ask-only checkpoint did not hand off to the user: $(cat "$T/only.out")"
 [ "$before" = "$(git rev-parse HEAD)" ] || fail "refused ask-only checkpoint advanced HEAD"
 lifecycle stop ask-only > "$T/stop.out" 2>&1 || fail "stop blocked on a path only the user can commit: $(cat "$T/stop.out")"
 grep -q 'hand to user' "$T/stop.out" || fail "stop did not hand the ask-level path to the user: $(cat "$T/stop.out")"
@@ -194,7 +194,7 @@ lifecycle observe ask-auto >/dev/null
 lifecycle stop ask-auto > "$T/auto.out" 2>&1 || fail "stop did not auto-checkpoint beside an ask-level path: $(cat "$T/auto.out")"
 jq -e '.systemMessage | contains("auto-checkpoint") and contains("Left for the user to review and commit: CLAUDE.md")' "$T/auto.out" >/dev/null \
     || fail "auto-checkpoint did not report the handoff: $(cat "$T/auto.out")"
-git show --name-only --pretty=format: HEAD | grep -qx CLAUDE.md && fail "CLAUDE.md leaked into the auto-checkpoint"
+grep -qx CLAUDE.md < <(git show --name-only --pretty=format: HEAD) && fail "CLAUDE.md leaked into the auto-checkpoint"
 [ -n "$(git status --porcelain=v1 -- CLAUDE.md)" ] || fail "auto-checkpoint consumed the CLAUDE.md edit"
 git checkout -q -- CLAUDE.md
 lifecycle end ask-auto >/dev/null

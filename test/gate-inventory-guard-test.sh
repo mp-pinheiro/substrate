@@ -25,6 +25,6 @@ rc=$?
 if [ "$rc" -ne 3 ]; then
     fail "expected exit 3 for empty scoped inventory, got $rc"
 fi
-printf '%s\n' "$out" | grep -q 'SUBSTRATE_FILE_LIST is empty' \
+grep -q 'SUBSTRATE_FILE_LIST is empty' <<< "$out" \
     || fail "missing 'SUBSTRATE_FILE_LIST is empty' in output: $out"
 ok "empty scoped inventory exits 3 with guard message"

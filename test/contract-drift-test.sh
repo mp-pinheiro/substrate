@@ -30,8 +30,8 @@ git add -A
 git commit -qm seed
 
 out=$(env -u CI substrate-engine gate 2>&1)
-printf '%s' "$out" | grep -q "45-contract-drift" || fail "gate output never names the drift check"
-printf '%s' "$out" | grep -q "drifted from its source" || fail "stale gen/ not reported as drift"
+grep -q "45-contract-drift" <<< "$out" || fail "gate output never names the drift check"
+grep -q "drifted from its source" <<< "$out" || fail "stale gen/ not reported as drift"
 [ "$(cat gen/out.txt)" = "v1" ] || fail "gate mutated the working tree during regen"
 
 ./gen.sh
@@ -44,18 +44,18 @@ git add -A && git commit -qm break-gen
 out=$(env CI=1 substrate-engine gate 2>&1)
 rc=$?
 [ "$rc" -ne 0 ] || fail "missing generator passed under CI"
-printf '%s' "$out" | grep -qi "not installed\|missing in CI\|cannot pass blind" || fail "missing generator not reported as infra: $out"
+grep -qi "not installed\|missing in CI\|cannot pass blind" <<< "$out" || fail "missing generator not reported as infra: $out"
 jq '.contracts[0].regen = "./gen.sh"' substrate.json > s.tmp && mv s.tmp substrate.json
 
 hook_out=$(printf '{"tool_input": {"file_path": "gen/sub/nested.txt"}}' | substrate-engine hook protect-paths 2>&1)
 hook_rc=$?
 [ "$hook_rc" -eq 2 ] || fail "hook did not block a nested generated path (rc=$hook_rc)"
-printf '%s' "$hook_out" | grep -q "generated from a contract" || fail "hook block message wrong: $hook_out"
+grep -q "generated from a contract" <<< "$hook_out" || fail "hook block message wrong: $hook_out"
 
 jq '.contracts = [{"name": "bad", "regen": "./gen.sh", "paths": "gen"}]' substrate.json > s.tmp && mv s.tmp substrate.json
 hook_out=$(printf '{"tool_input": {"file_path": "anything.txt"}}' | substrate-engine hook protect-paths 2>&1)
 hook_rc=$?
 [ "$hook_rc" -eq 2 ] || fail "hook did not fail closed on malformed contracts (rc=$hook_rc)"
-printf '%s' "$hook_out" | grep -q "contracts entries need" || fail "malformed-contracts block message wrong (syntax-error rc=2 also lands here): $hook_out"
+grep -q "contracts entries need" <<< "$hook_out" || fail "malformed-contracts block message wrong (syntax-error rc=2 also lands here): $hook_out"
 
 printf 'contract-drift-test: 5 cases green\n'

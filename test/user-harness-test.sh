@@ -184,7 +184,7 @@ probe_abs=$(printf '{"tool_input": {"file_path": "%s"}}' "$T/repo/substrate-base
 out=$(cd "$T/nowhere" && printf '%s' "$probe_abs" | CLAUDE_PROJECT_DIR="$T/nowhere" bash "$LAUNCH" protect-paths.sh 2>&1)
 rc=$?
 [ "$rc" -eq 2 ] || fail "cross-repo dispatch failed despite inert project wiring (rc=$rc: $out)"
-printf '%s' "$out" | grep -q 'baseline' || fail "cross-repo verdict lost: $out"
+grep -q 'baseline' <<< "$out" || fail "cross-repo verdict lost: $out"
 
 # Target routing starts at lexical parents, even before they exist.
 probe_missing=$(printf '{"tool_input": {"file_path": "%s"}}' "$T/repo/missing/deep/substrate-baseline.json")
@@ -192,7 +192,7 @@ out=$(cd "$T/nowhere" && printf '%s' "$probe_missing" \
     | CLAUDE_PROJECT_DIR="$T/nowhere" bash "$LAUNCH" protect-paths.sh 2>&1)
 rc=$?
 [ "$rc" -eq 2 ] || fail "missing-parent target bypassed launcher routing (rc=$rc: $out)"
-printf '%s' "$out" | grep -q 'is a governed baseline path' \
+grep -q 'is a governed baseline path' <<< "$out" \
 	|| fail "missing-parent verdict lost the nested-lookalike distinction (a root-baseline message here misleads): $out"
 
 # subdirectory + relative payload path: upward walk from the target
@@ -216,7 +216,7 @@ printf '#!/usr/bin/env bash\nls\n# now we check the thing\nls\n' > "$T/repo/comp
 out=$(cd "$T/repo" && printf '{"tool_input": {"command": "true"}}' | CLAUDE_PROJECT_DIR="$T/repo" bash "$LAUNCH" changed-files-scan.sh 2>&1)
 rc=$?
 [ "$rc" -eq 2 ] || fail "gap-fill dispatch not observable (rc=$rc: $out)"
-printf '%s' "$out" | grep -q 'components/gapfill.sh' || fail "gap-fill scan verdict lost: $out"
+grep -q 'components/gapfill.sh' <<< "$out" || fail "gap-fill scan verdict lost: $out"
 jq -e --arg command 'substrate-engine hook changed-files-scan' '
     [(.hooks.PreToolUse // [])[], (.hooks.PostToolUse // [])[]]
     | any(.[] | .hooks[]?; .command == $command)
