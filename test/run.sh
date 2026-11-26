@@ -16,12 +16,13 @@ export SUBSTRATE_ENGINE_BIN="$KIT_ROOT/build/substrate-engine"
 
 # Explicit, never a glob: test/ also holds capture-*.sh, which REWRITE frozen vectors.
 SUITES=(
-    ab-hooks-test ab-stop-test baseline-test battery-path-test bootstrap-test changed-scan-test
-    checkpoint-test claims-table-test contract-drift-test doctor-attestation-test
-    engine-rollback-test gitleaks-deep-test gitleaks-scope-test golden-ledger-test
+    ab-hooks-test ab-stop-test baseline-floor-test baseline-test battery-path-test bootstrap-test changed-scan-test
+    checkpoint-test claims-table-test comment-colon-test contract-drift-test doctor-attestation-test
+    engine-rollback-test gate-empty-checks-test gitleaks-deep-test gitleaks-scope-test golden-ledger-test
     golden-vectors-test import-linter-packaging-test init-idempotent-test kit-embed-test maintenance-test parity-test
     profile-workspace-test ratchet-tolerance-test receipt-cross-engine-test receipt-test release-bump-test release-lane-test
-    release-wait-gate-test restructure-test toolchain-parity-test vcs-hooks-test vendor-drift-test vendor-source-test
+    release-wait-gate-test restructure-test toolchain-parity-test transaction-ab-test vcs-hooks-test vendor-drift-test
+    vendor-source-test
 )
 
 KEEP_GITLEAKS=" gitleaks-deep-test gitleaks-scope-test golden-vectors-test claims-table-test baseline-test "
