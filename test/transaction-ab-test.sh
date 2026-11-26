@@ -147,8 +147,8 @@ run_ok "accept-regression" run_checkpoint \
 printf '\n[6/14] checkpoint with session\n'
 d="$WORK/jj-session-checkpoint"
 setup_jj_repo "$d"
-printf 'printf "changed\\n"\n' >> "$d/owned.sh"
 printf '{"session_id":"ab-session"}\n' | (cd "$d" && substrate-engine hook agent-lifecycle start) >/dev/null 2>&1
+printf 'printf "changed\\n"\n' >> "$d/owned.sh"
 printf '{"session_id":"ab-session"}\n' | (cd "$d" && substrate-engine hook agent-lifecycle observe) >/dev/null 2>&1
 run_ok "session-checkpoint" run_checkpoint \
     --session ab-session --message 'chore(agent): session checkpoint'
@@ -195,9 +195,9 @@ run_ok "restructure-squash" run_restructure \
 printf '\n[10/14] restructure with session\n'
 d="$WORK/jj-restructure-session"
 setup_jj_repo "$d"
+printf '{"session_id":"restructure-ab-session"}\n' | (cd "$d" && substrate-engine hook agent-lifecycle start) >/dev/null 2>&1
 printf 'printf "session-file\\n"\n' > "$d/s.sh"
 chmod +x "$d/s.sh"
-printf '{"session_id":"restructure-ab-session"}\n' | (cd "$d" && substrate-engine hook agent-lifecycle start) >/dev/null 2>&1
 printf '{"session_id":"restructure-ab-session"}\n' | (cd "$d" && substrate-engine hook agent-lifecycle observe) >/dev/null 2>&1
 (cd "$d" && substrate-engine checkpoint --session restructure-ab-session --message 'feat(shell): session file') >/dev/null 2>&1
 session_change=$(cd "$d" && jq -r '.sessionChanges[0] // empty' "$(git rev-parse --git-common-dir)/substrate/agent-sessions/restructure-ab-session.json")
