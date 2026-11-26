@@ -16,7 +16,7 @@ export SUBSTRATE_ENGINE_BIN="$KIT_ROOT/build/substrate-engine"
 
 # Explicit, never a glob: test/ also holds capture-*.sh, which REWRITE frozen vectors.
 SUITES=(
-    ab-hooks-test ab-stop-test baseline-test bootstrap-test changed-scan-test
+    ab-hooks-test ab-stop-test baseline-test battery-path-test bootstrap-test changed-scan-test
     checkpoint-test claims-table-test contract-drift-test doctor-attestation-test
     engine-rollback-test gitleaks-deep-test gitleaks-scope-test golden-ledger-test
     golden-vectors-test import-linter-packaging-test init-idempotent-test kit-embed-test maintenance-test parity-test
@@ -58,14 +58,17 @@ shim="$run_dir/stub-bin"
 mkdir -p "$shim" || exit 2
 fixture_path=""
 IFS=: read -r -a path_parts <<< "$PATH"
-for d in "${path_parts[@]}"; do
+for i in "${!path_parts[@]}"; do
+    d="${path_parts[$i]}"
     if [ -x "$d/gitleaks" ]; then
+        mirror="$run_dir/path-$i"
+        mkdir -p "$mirror" || exit 2
         for f in "$d"/*; do
             b=$(basename "$f")
             [ "$b" = gitleaks ] && continue
-            [ -x "$f" ] && [ ! -e "$shim/$b" ] && ln -s "$f" "$shim/$b"
+            [ -x "$f" ] && ln -s "$f" "$mirror/$b"
         done
-        continue
+        d="$mirror"
     fi
     fixture_path="${fixture_path:+$fixture_path:}$d"
 done

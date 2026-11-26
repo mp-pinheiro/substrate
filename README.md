@@ -127,8 +127,7 @@ bin/substrate selftest
 test/matrix.sh             # every profile, scratch-repo oracle
 ```
 
-`just battery` ([`test/run.sh`](test/run.sh)) shadows `gitleaks` for suites that are not about secret scanning:
-it costs ~4.7s of fixed rule compilation per invocation regardless of repo size, and every fixture gate pays it.
+`just battery` ([`test/run.sh`](test/run.sh)) shadows `gitleaks` for suites that are not about secret scanning, because it costs ~4.7s of fixed rule compilation per invocation regardless of repo size and every fixture gate pays it. Each directory on `PATH` that holds `gitleaks` is mirrored in place without it, so every other tool resolves as it does in your shell and the checkout's own `build/substrate-engine` comes first.
 
 ## Contributing and security
 

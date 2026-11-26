@@ -257,6 +257,7 @@
   "comments:test/audit-test.sh": 0,
   "comments:test/baseline-floor-test.sh": 0,
   "comments:test/baseline-test.sh": 0,
+  "comments:test/battery-path-test.sh": 0,
   "comments:test/bootstrap-test.sh": 0,
   "comments:test/capture-golden-ledger.sh": 0,
   "comments:test/capture-golden-vectors.sh": 0,
@@ -322,7 +323,7 @@
   "comments:test/vendor-drift-test.sh": 0,
   "comments:test/vendor-source-test.sh": 0,
   "dead_code": 0,
-  "dup_pct": 1.680438472025151,
+  "dup_pct": 1.6789437109103542,
   "oversized_files": 0
 },
   "direction": {
@@ -583,6 +584,7 @@
   "comments:test/audit-test.sh": "lo",
   "comments:test/baseline-floor-test.sh": "lo",
   "comments:test/baseline-test.sh": "lo",
+  "comments:test/battery-path-test.sh": "lo",
   "comments:test/bootstrap-test.sh": "lo",
   "comments:test/capture-golden-ledger.sh": "lo",
   "comments:test/capture-golden-vectors.sh": "lo",
