@@ -10,6 +10,8 @@ source "$LIB_DIR/engine-fixture.sh"
 TMPDIR="${TMPDIR:-/tmp}"
 WORK=$(mktemp -d "$TMPDIR/transaction-ab.XXXXXX")
 trap 'rm -rf "$WORK"' EXIT
+export HOME="$WORK/home"
+mkdir -p "$HOME" || exit 9
 
 pass=0
 fail=0
