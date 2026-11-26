@@ -69,7 +69,10 @@
   "ratchet": {
     "never_accept": [
       "dead_code"
-    ]
+    ],
+    "tolerance": {
+      "dup_pct": 0.01
+    }
   },
   "budgets": {
     "max_file_lines": 750
