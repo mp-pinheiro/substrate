@@ -6,12 +6,14 @@ import (
 	"math"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 )
 
 type RatchetResult struct {
 	AcceptedNow    []string
 	Worse          []string
+	Tolerated      []string
 	Better         int
 	BudgetWarn     []string
 	FailureDetails []string
@@ -37,6 +39,13 @@ func RunRatchet(metricsOut, baselinePath, configPath string, flags PreflightFlag
 	activeProfiles := make(map[string]bool, len(config.Profiles))
 	for _, profile := range config.Profiles {
 		activeProfiles[profile] = true
+	}
+	tolerance, err := parseTolerance(config.Ratchet.Tolerance)
+	if err != nil {
+		detail := fmt.Sprintf("ratchet: %v in substrate.json", err)
+		warn("%s", detail)
+		result.FailureDetails = []string{detail}
+		return result, 1
 	}
 
 	if _, err := os.Stat(baselinePath); os.IsNotExist(err) {
@@ -73,7 +82,7 @@ func RunRatchet(metricsOut, baselinePath, configPath string, flags PreflightFlag
 		return result, 1
 	}
 
-	var worse []string
+	var worse, tolerated []string
 	for name, cur := range currentMetrics {
 		if name == "max_file_lines" {
 			continue
@@ -89,10 +98,15 @@ func RunRatchet(metricsOut, baselinePath, configPath string, flags PreflightFlag
 		if !ok {
 			base = Number{Sign: 0, Digits: "0", Exp: 0}
 		}
+		slack := 0.0
+		if ok {
+			slack = tolerance[name]
+		}
 		curF := cur.Float64()
 		baseF := base.Float64()
 		budget := budgets[name]
 		regressed := false
+		drifted := false
 		capMsg := ""
 
 		if budget > 0 && dir != "hi" {
@@ -103,9 +117,11 @@ func RunRatchet(metricsOut, baselinePath, configPath string, flags PreflightFlag
 				capMsg = fmt.Sprintf(", hard cap %.0f — %.0f under cap", budget, budget-curF)
 			}
 		} else if dir == "hi" {
-			regressed = curF < baseF-1e-9
+			regressed = curF < baseF-slack-1e-9
+			drifted = curF < baseF-1e-9
 		} else {
-			regressed = curF > baseF+1e-9
+			regressed = curF > baseF+slack+1e-9
+			drifted = curF > baseF+1e-9
 		}
 		if regressed {
 			bestText := string(base.Raw)
@@ -116,9 +132,14 @@ func RunRatchet(metricsOut, baselinePath, configPath string, flags PreflightFlag
 				bestText = fmt.Sprintf("%.0f", budget)
 			}
 			worse = append(worse, fmt.Sprintf("%s: %s (best %s%s)", name, string(cur.Raw), bestText, capMsg))
+		} else if drifted {
+			result.Tolerated = append(result.Tolerated, name)
+			tolerated = append(tolerated, fmt.Sprintf("%s: %s (best %s, tolerance %s)", name, string(cur.Raw), string(base.Raw), strconv.FormatFloat(slack, 'g', -1, 64)))
 		}
 	}
 	sort.Strings(worse)
+	sort.Strings(tolerated)
+	sort.Strings(result.Tolerated)
 	result.Worse = append([]string(nil), worse...)
 	result.FailureDetails = append([]string(nil), worse...)
 
@@ -172,6 +193,12 @@ func RunRatchet(metricsOut, baselinePath, configPath string, flags PreflightFlag
 	}
 	if len(budgetWarn) > 0 {
 		warn("ratchet: budget metric(s) at 80%%+ of cap — consider refactoring")
+	}
+	for _, line := range tolerated {
+		fmt.Println(line)
+	}
+	if len(tolerated) > 0 {
+		info("ratchet: %d metric(s) worse than baseline but within ratchet.tolerance (reported, not failing)", len(tolerated))
 	}
 
 	if len(worse) > 0 {
@@ -252,7 +279,7 @@ func RunRatchet(metricsOut, baselinePath, configPath string, flags PreflightFlag
 
 	} else if better > 0 {
 		info("ratchet: %d metric(s) improved on baseline — checkpoint locks them in automatically", better)
-	} else {
+	} else if len(tolerated) == 0 {
 		successMsg("ratchet: all metrics at or better than baseline")
 	}
 
@@ -270,7 +297,8 @@ type ratchetConfig struct {
 	Profiles []string           `json:"profiles"`
 	Budgets  map[string]float64 `json:"budgets"`
 	Ratchet  struct {
-		NeverAccept []string `json:"never_accept"`
+		NeverAccept []string        `json:"never_accept"`
+		Tolerance   json.RawMessage `json:"tolerance"`
 	} `json:"ratchet"`
 }
 
@@ -284,6 +312,30 @@ func loadRatchetConfig(path string) ratchetConfig {
 		return ratchetConfig{}
 	}
 	return config
+}
+
+func parseTolerance(raw json.RawMessage) (map[string]float64, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil, nil
+	}
+	var entries map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &entries); err != nil {
+		return nil, fmt.Errorf("ratchet.tolerance must map metric keys to non-negative numbers")
+	}
+	keys := make([]string, 0, len(entries))
+	for key := range entries {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	tolerance := make(map[string]float64, len(entries))
+	for _, key := range keys {
+		var value float64
+		if err := json.Unmarshal(entries[key], &value); err != nil || value < 0 {
+			return nil, fmt.Errorf("ratchet.tolerance.%s must be a non-negative number", key)
+		}
+		tolerance[key] = value
+	}
+	return tolerance, nil
 }
 
 func metricProfileOwner(name string) string {

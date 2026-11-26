@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func WriteBaseline(baselinePath, metricsOut, configPath string, flags PreflightFlags, acceptedNow []string) int {
+func WriteBaseline(baselinePath, metricsOut, configPath string, flags PreflightFlags, acceptedNow, tolerated []string) int {
 	if flags.TightenBaseline {
 		if _, err := os.Stat(baselinePath); os.IsNotExist(err) {
 			warn("baseline absent — establish initial debt explicitly with: substrate baseline")
@@ -35,10 +35,14 @@ func WriteBaseline(baselinePath, metricsOut, configPath string, flags PreflightF
 		delete(oldMetrics, "max_file_lines")
 		delete(oldDir, "max_file_lines")
 
+		toleratedSet := make(map[string]bool, len(tolerated))
+		for _, k := range tolerated {
+			toleratedSet[k] = true
+		}
 		acceptSet := make(map[string]bool)
 		for _, k := range strings.Split(flags.AcceptKeys, ",") {
 			k = strings.TrimSpace(k)
-			if k != "" {
+			if k != "" && !toleratedSet[k] {
 				acceptSet[k] = true
 			}
 		}

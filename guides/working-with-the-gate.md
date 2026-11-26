@@ -85,7 +85,7 @@ substrate update --apply --force --checkpoint --message '<=50 chars' \
 
 `substrate_checkpoint` takes an optional `acceptRegression: ["<metric>"]` array and a required `acceptRegressionReason` string for the same purpose; `substrate_update` takes the same pair for a vendor transaction whose candidate gate reported a regression. Both open a confirm prompt that names the metrics and the reason, and a session without a UI is refused, so the review always reaches a person. The same holds for the shell forms: the Bash hook asks before a standalone `substrate` or `substrate-engine` command carrying `--accept-regression`, `--update-baseline` or `--tighten` runs, and blocks the flags anywhere else (chained, piped, redirected, substituted, or on another program).
 
-When `substrate-baseline.json` exists, an absent metric key means zero tolerance — new debt categories start at zero. `ratchet.never_accept` in `substrate.json` can forbid acceptance of specific metrics outright.
+When `substrate-baseline.json` exists, an absent metric key means zero tolerance, so new debt categories start at zero. `ratchet.never_accept` in `substrate.json` can forbid acceptance of specific metrics outright. `ratchet.tolerance` gives a ratio metric such as `dup_pct` an absolute slack above its best, so deleting unrelated lines no longer reads as a regression.
 
 ## Accept or refactor
 

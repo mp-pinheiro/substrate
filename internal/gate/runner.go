@@ -200,7 +200,7 @@ func Run(ctx context.Context, args []string, version string) int {
 			if ctxRun.Failures > 0 {
 				warn("refusing to update baseline with %d failing check(s) — fix detector failures; use --accept-regression only for metric regressions", ctxRun.Failures)
 			} else {
-				if WriteBaseline(baselinePath, metricsPath, configPath, flags, ratchetResult.AcceptedNow) != 0 {
+				if WriteBaseline(baselinePath, metricsPath, configPath, flags, ratchetResult.AcceptedNow, ratchetResult.Tolerated) != 0 {
 					ctxRun.Failures++
 				}
 			}
