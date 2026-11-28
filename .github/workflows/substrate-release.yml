@@ -58,7 +58,7 @@ jobs:
           RELEASE_CHANNEL: ${{ inputs.channel || github.event.inputs.channel }}
           RELEASE_HEAD_SHA: ${{ github.sha }}
         run: .substrate/release-identity.sh
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         if: steps.gate-status.outputs.status == 'success' && steps.identity.outputs.skip != 'true'
         with:
           go-version-file: go.mod
